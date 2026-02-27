@@ -516,6 +516,74 @@ pub fn use_invitation_code(
     Ok(())
 }
 
+pub fn count_active_invitation_codes(db: &Database) -> Result<usize, AppError> {
+    let conn = db.get_connection()?;
+    let now = chrono::Utc::now().timestamp();
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM invitation_codes
+             WHERE use_count < max_uses AND (expires_at IS NULL OR expires_at > ?1)",
+            params![now],
+            |row| row.get(0),
+        )
+        .map_err(|e| {
+            AppError::DatabaseError(format!("Failed to count active invitation codes: {}", e))
+        })?;
+    Ok(count as usize)
+}
+
+pub fn revoke_invitation_code(db: &Database, code: &str) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    let rows = conn
+        .execute(
+            "UPDATE invitation_codes SET max_uses = use_count WHERE code = ?1",
+            params![code],
+        )
+        .map_err(|e| {
+            AppError::DatabaseError(format!("Failed to revoke invitation code: {}", e))
+        })?;
+    if rows == 0 {
+        return Err(AppError::NotFound(format!(
+            "Invitation code not found: {}",
+            code
+        )));
+    }
+    Ok(())
+}
+
+pub fn list_active_invitation_codes(db: &Database) -> Result<Vec<InvitationCode>, AppError> {
+    let conn = db.get_connection()?;
+    let now = chrono::Utc::now().timestamp();
+    let mut stmt = conn
+        .prepare(
+            "SELECT code, created_at, expires_at, used_by, used_at, max_uses, use_count, label
+             FROM invitation_codes
+             WHERE use_count < max_uses AND (expires_at IS NULL OR expires_at > ?1)",
+        )
+        .map_err(|e| AppError::DatabaseError(format!("Failed to prepare statement: {}", e)))?;
+
+    let codes = stmt
+        .query_map(params![now], |row| {
+            Ok(InvitationCode {
+                code: row.get(0)?,
+                created_at: row.get(1)?,
+                expires_at: row.get(2)?,
+                used_by: row.get(3)?,
+                used_at: row.get(4)?,
+                max_uses: row.get(5)?,
+                use_count: row.get(6)?,
+                label: row.get(7)?,
+            })
+        })
+        .map_err(|e| {
+            AppError::DatabaseError(format!("Failed to query active invitation codes: {}", e))
+        })?;
+
+    codes
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| AppError::DatabaseError(format!("Failed to collect invitation codes: {}", e)))
+}
+
 // -------------------------------------------------------------------------
 // Global Policy CRUD
 // -------------------------------------------------------------------------
@@ -570,6 +638,73 @@ pub fn get_global_policy(db: &Database) -> Result<Option<GlobalPolicy>, AppError
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(AppError::DatabaseError(format!(
             "Failed to get global policy: {}",
+            e
+        ))),
+    }
+}
+
+// -------------------------------------------------------------------------
+// Global Spending Ledger CRUD
+// -------------------------------------------------------------------------
+
+pub fn upsert_global_spending_ledger(
+    db: &Database,
+    period: &str,
+    amount: &str,
+    updated_at: i64,
+) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    conn.execute_batch("BEGIN EXCLUSIVE")
+        .map_err(|e| AppError::DatabaseError(format!("Failed to begin transaction: {}", e)))?;
+
+    let result = conn.execute(
+        "INSERT INTO global_spending_ledger (period, total, tx_count, updated_at)
+         VALUES (?1, ?2, 1, ?3)
+         ON CONFLICT(period) DO UPDATE SET
+           total = CAST((CAST(global_spending_ledger.total AS REAL) + CAST(?2 AS REAL)) AS TEXT),
+           tx_count = global_spending_ledger.tx_count + 1,
+           updated_at = ?3",
+        params![period, amount, updated_at],
+    );
+
+    match result {
+        Ok(_) => {
+            conn.execute_batch("COMMIT")
+                .map_err(|e| AppError::DatabaseError(format!("Failed to commit: {}", e)))?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(AppError::DatabaseError(format!(
+                "Failed to upsert global spending ledger: {}",
+                e
+            )))
+        }
+    }
+}
+
+pub fn get_global_spending_for_period(
+    db: &Database,
+    period: &str,
+) -> Result<Option<GlobalSpendingLedger>, AppError> {
+    let conn = db.get_connection()?;
+    match conn.query_row(
+        "SELECT period, total, tx_count, updated_at
+         FROM global_spending_ledger WHERE period = ?1",
+        params![period],
+        |row| {
+            Ok(GlobalSpendingLedger {
+                period: row.get(0)?,
+                total: row.get(1)?,
+                tx_count: row.get(2)?,
+                updated_at: row.get(3)?,
+            })
+        },
+    ) {
+        Ok(ledger) => Ok(Some(ledger)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(AppError::DatabaseError(format!(
+            "Failed to get global spending ledger: {}",
             e
         ))),
     }

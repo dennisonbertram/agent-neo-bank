@@ -41,6 +41,18 @@ pub enum AppError {
     #[error("Agent suspended: {0}")]
     AgentSuspended(String),
 
+    #[error("Invalid invitation code")]
+    InvalidInvitationCode,
+
+    #[error("Invitation code expired")]
+    InvitationCodeExpired,
+
+    #[error("Maximum active invitation codes reached")]
+    MaxActiveCodesReached,
+
+    #[error("Rate limited")]
+    RateLimited,
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
