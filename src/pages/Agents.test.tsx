@@ -5,19 +5,9 @@ import { Agents } from "./Agents";
 import { mockInvoke, createMockAgent } from "@/test/helpers";
 import { renderWithRouter } from "@/test/render";
 
-const mockNavigate = vi.fn();
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual("react-router-dom");
-  return {
-    ...actual,
-    useNavigate: () => mockNavigate,
-  };
-});
-
 describe("Agents", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    mockNavigate.mockReset();
   });
 
   it("renders agent cards with data", async () => {
@@ -44,8 +34,6 @@ describe("Agents", () => {
     expect(screen.getByText("Research Agent")).toBeInTheDocument();
     expect(screen.getByText("Handles payments")).toBeInTheDocument();
     expect(screen.getByText("Performs research tasks")).toBeInTheDocument();
-    expect(screen.getByText("Type: payment")).toBeInTheDocument();
-    expect(screen.getByText("Type: research")).toBeInTheDocument();
   });
 
   it("shows correct status badges", async () => {
@@ -79,20 +67,16 @@ describe("Agents", () => {
     await screen.findByText("Active Agent");
 
     const activeBadge = screen.getByTestId("status-badge-a1");
-    expect(activeBadge).toHaveTextContent("active");
-    expect(activeBadge).toHaveClass("bg-green-100");
+    expect(activeBadge).toHaveTextContent("Active");
 
     const pendingBadge = screen.getByTestId("status-badge-a2");
-    expect(pendingBadge).toHaveTextContent("pending");
-    expect(pendingBadge).toHaveClass("bg-yellow-100");
+    expect(pendingBadge).toHaveTextContent("Pending");
 
     const suspendedBadge = screen.getByTestId("status-badge-a3");
-    expect(suspendedBadge).toHaveTextContent("suspended");
-    expect(suspendedBadge).toHaveClass("bg-orange-100");
+    expect(suspendedBadge).toHaveTextContent("Suspended");
 
     const revokedBadge = screen.getByTestId("status-badge-a4");
-    expect(revokedBadge).toHaveTextContent("revoked");
-    expect(revokedBadge).toHaveClass("bg-red-100");
+    expect(revokedBadge).toHaveTextContent("Revoked");
   });
 
   it("shows empty state when no agents", async () => {
@@ -100,9 +84,7 @@ describe("Agents", () => {
 
     renderWithRouter(<Agents />);
 
-    expect(
-      await screen.findByText("No agents registered")
-    ).toBeInTheDocument();
+    expect(await screen.findByText("No agents yet")).toBeInTheDocument();
   });
 
   it("shows loading state initially", async () => {
@@ -130,12 +112,63 @@ describe("Agents", () => {
 
     await screen.findByText("Clickable Agent");
 
-    const user = userEvent.setup();
     const card = screen.getByTestId("agent-card-agent-click-test");
-    await user.click(card);
+    expect(card.closest("a")).toHaveAttribute(
+      "href",
+      "/agents/agent-click-test"
+    );
+  });
 
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith("/agents/agent-click-test");
+  it("filters agents by search", async () => {
+    const agent1 = createMockAgent({
+      id: "a1",
+      name: "Payment Bot",
+      status: "active",
     });
+    const agent2 = createMockAgent({
+      id: "a2",
+      name: "Research Agent",
+      status: "active",
+    });
+
+    await mockInvoke({ list_agents: [agent1, agent2] });
+
+    renderWithRouter(<Agents />);
+
+    await screen.findByText("Payment Bot");
+
+    const user = userEvent.setup();
+    const searchInput = screen.getByPlaceholderText("Search agents...");
+    await user.type(searchInput, "Payment");
+
+    expect(screen.getByText("Payment Bot")).toBeInTheDocument();
+    expect(screen.queryByText("Research Agent")).not.toBeInTheDocument();
+  });
+
+  it("filters agents by tab", async () => {
+    const activeAgent = createMockAgent({
+      id: "a1",
+      name: "Active Agent",
+      status: "active",
+    });
+    const pendingAgent = createMockAgent({
+      id: "a2",
+      name: "Pending Agent",
+      status: "pending",
+    });
+
+    await mockInvoke({ list_agents: [activeAgent, pendingAgent] });
+
+    renderWithRouter(<Agents />);
+
+    await screen.findByText("Active Agent");
+
+    const user = userEvent.setup();
+    // Click the "Active" tab button
+    const activeTabBtn = screen.getByRole("button", { name: /Active/i });
+    await user.click(activeTabBtn);
+
+    expect(screen.getByText("Active Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Pending Agent")).not.toBeInTheDocument();
   });
 });

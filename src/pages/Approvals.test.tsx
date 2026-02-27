@@ -74,7 +74,7 @@ describe("Approvals", () => {
     expect(screen.getByText(/100/)).toBeInTheDocument();
     expect(screen.getByText(/USDC/)).toBeInTheDocument();
 
-    // Verify approval type badges
+    // Verify approval type badges (shown as rounded pills)
     expect(screen.getByText("transaction")).toBeInTheDocument();
     expect(screen.getByText("limit_increase")).toBeInTheDocument();
   });
@@ -88,7 +88,7 @@ describe("Approvals", () => {
     renderWithRouter(<Approvals />);
 
     expect(
-      await screen.findByText("No pending approvals")
+      await screen.findByText("No pending approvals right now.")
     ).toBeInTheDocument();
   });
 

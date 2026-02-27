@@ -1,14 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { InvitationCode } from "../../types";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -17,16 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
 
 function getCodeStatus(
   code: InvitationCode
@@ -91,107 +73,118 @@ export function InvitationCodes() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Invitation Codes</CardTitle>
-          <Button onClick={() => setIsDialogOpen(true)}>Generate Code</Button>
-        </div>
-        <CardDescription>
-          Manage invitation codes for agent registration
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {!isLoading && codes.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">
-            No invitation codes
-          </p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Label</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Uses</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+    <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="text-base font-semibold text-[#1A1A1A]">Invitation Codes</h2>
+        <button
+          type="button"
+          onClick={() => setIsDialogOpen(true)}
+          className="rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white hover:bg-[#4338CA]"
+        >
+          Generate Code
+        </button>
+      </div>
+      <p className="text-sm text-[#6B7280] mb-6">
+        Manage invitation codes for agent registration
+      </p>
+
+      {!isLoading && codes.length === 0 ? (
+        <p className="text-[#6B7280] text-center py-8 text-sm">
+          No invitation codes
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#F0EDE8]">
+                <th className="py-3 pr-4 text-left text-xs font-medium text-[#9CA3AF] uppercase tracking-wider">Code</th>
+                <th className="py-3 pr-4 text-left text-xs font-medium text-[#9CA3AF] uppercase tracking-wider">Label</th>
+                <th className="py-3 pr-4 text-left text-xs font-medium text-[#9CA3AF] uppercase tracking-wider">Status</th>
+                <th className="py-3 pr-4 text-left text-xs font-medium text-[#9CA3AF] uppercase tracking-wider">Uses</th>
+                <th className="py-3 pr-4 text-left text-xs font-medium text-[#9CA3AF] uppercase tracking-wider">Created</th>
+                <th className="py-3 text-left text-xs font-medium text-[#9CA3AF] uppercase tracking-wider" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#F0EDE8]">
               {codes.map((code) => {
                 const status = getCodeStatus(code);
                 const config = statusConfig[status];
                 return (
-                  <TableRow key={code.code}>
-                    <TableCell className="font-mono">{code.code}</TableCell>
-                    <TableCell>{code.label}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
+                  <tr key={code.code}>
+                    <td className="py-3 pr-4 font-mono text-[#1A1A1A]">{code.code}</td>
+                    <td className="py-3 pr-4 text-[#374151]">{code.label}</td>
+                    <td className="py-3 pr-4">
+                      <span
                         data-testid={`status-badge-${code.code}`}
-                        className={config.className}
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${config.className}`}
                       >
                         {config.label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 text-[#6B7280]">
                       {code.use_count} / {code.max_uses}
-                    </TableCell>
-                    <TableCell>{formatDate(code.created_at)}</TableCell>
-                    <TableCell>
+                    </td>
+                    <td className="py-3 pr-4 text-[#6B7280]">{formatDate(code.created_at)}</td>
+                    <td className="py-3">
                       {status === "active" && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
+                        <button
+                          type="button"
                           onClick={() => handleRevoke(code.code)}
+                          className="rounded-lg border border-[#EF4444] px-3 py-1.5 text-xs font-medium text-[#EF4444] hover:bg-[#FEF2F2]"
                         >
                           Revoke
-                        </Button>
+                        </button>
                       )}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 );
               })}
-            </TableBody>
-          </Table>
-        )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Generate Invitation Code</DialogTitle>
-              <DialogDescription>
-                Create a new invitation code for agent registration.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label htmlFor="code-label" className="text-sm font-medium">
-                  Label
-                </label>
-                <Input
-                  id="code-label"
-                  placeholder="Label for this code"
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                />
-              </div>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generate Invitation Code</DialogTitle>
+            <DialogDescription>
+              Create a new invitation code for agent registration.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label htmlFor="code-label" className="text-sm font-medium text-[#374151]">
+                Label
+              </label>
+              <input
+                id="code-label"
+                placeholder="Label for this code"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                className="block w-full rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#1A1A1A] placeholder:text-[#9CA3AF] focus:border-[#4F46E5] focus:outline-none focus:ring-1 focus:ring-[#4F46E5]"
+              />
             </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleGenerate} disabled={!label.trim()}>
-                Generate
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setIsDialogOpen(false)}
+              className="rounded-lg border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-medium text-[#374151] hover:bg-[#F9FAFB]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={!label.trim()}
+              className="rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white hover:bg-[#4338CA] disabled:opacity-50"
+            >
+              Generate
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

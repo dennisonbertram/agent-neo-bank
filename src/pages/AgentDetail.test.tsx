@@ -39,16 +39,16 @@ describe("AgentDetail", () => {
       get_agent: agent,
       get_agent_spending_policy: policy,
       get_agent_transactions: [],
+      get_agent_budget_summaries: [],
     });
 
     renderAgentDetail();
 
     await waitFor(() => {
-      expect(screen.getByText("Claude Agent")).toBeInTheDocument();
+      expect(screen.getAllByText("Claude Agent").length).toBeGreaterThan(0);
     });
-    expect(screen.getByText("AI tasks")).toBeInTheDocument();
-    expect(screen.getByText("autonomous")).toBeInTheDocument();
-    expect(screen.getByText("active")).toBeInTheDocument();
+    expect(screen.getByText(/AI tasks/)).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
   });
 
   it("renders spending limits", async () => {
@@ -56,6 +56,7 @@ describe("AgentDetail", () => {
       get_agent: agent,
       get_agent_spending_policy: policy,
       get_agent_transactions: [],
+      get_agent_budget_summaries: [],
     });
 
     renderAgentDetail();
@@ -63,10 +64,10 @@ describe("AgentDetail", () => {
     await waitFor(() => {
       expect(screen.getByText("Spending Limits")).toBeInTheDocument();
     });
-    expect(screen.getByText("50")).toBeInTheDocument();
-    expect(screen.getByText("500")).toBeInTheDocument();
-    expect(screen.getByText("2000")).toBeInTheDocument();
-    expect(screen.getByText("8000")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $50")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $500")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $2000")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $8000")).toBeInTheDocument();
   });
 
   it("edit limits saves updated policy", async () => {
@@ -74,6 +75,7 @@ describe("AgentDetail", () => {
       get_agent: agent,
       get_agent_spending_policy: policy,
       get_agent_transactions: [],
+      get_agent_budget_summaries: [],
       update_agent_spending_policy: undefined,
     });
 
@@ -93,7 +95,7 @@ describe("AgentDetail", () => {
     await user.type(perTxInput, "75");
 
     // Click Save
-    await user.click(screen.getByRole("button", { name: "Save Limits" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       const updateCalls = invokeMock.mock.calls.filter(
@@ -108,6 +110,7 @@ describe("AgentDetail", () => {
       get_agent: agent,
       get_agent_spending_policy: policy,
       get_agent_transactions: [],
+      get_agent_budget_summaries: [],
       suspend_agent: undefined,
     });
 
@@ -115,10 +118,10 @@ describe("AgentDetail", () => {
     const user = userEvent.setup();
 
     await waitFor(() => {
-      expect(screen.getByText("Claude Agent")).toBeInTheDocument();
+      expect(screen.getAllByText("Claude Agent").length).toBeGreaterThan(0);
     });
 
-    await user.click(screen.getByRole("button", { name: "Suspend" }));
+    await user.click(screen.getByRole("button", { name: /Suspend Agent/ }));
 
     await waitFor(() => {
       const suspendCalls = invokeMock.mock.calls.filter(
@@ -148,17 +151,18 @@ describe("AgentDetail", () => {
       get_agent: agent,
       get_agent_spending_policy: policy,
       get_agent_transactions: transactions,
+      get_agent_budget_summaries: [],
     });
 
     renderAgentDetail();
 
     await waitFor(() => {
-      expect(screen.getByText("Recent Activity")).toBeInTheDocument();
+      expect(screen.getByText("Activity")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("25.00")).toBeInTheDocument();
+    expect(screen.getByText("$25.00")).toBeInTheDocument();
     expect(screen.getByText("API call payment")).toBeInTheDocument();
-    expect(screen.getByText("10.50")).toBeInTheDocument();
+    expect(screen.getByText("$10.50")).toBeInTheDocument();
     expect(screen.getByText("Service subscription")).toBeInTheDocument();
   });
 });

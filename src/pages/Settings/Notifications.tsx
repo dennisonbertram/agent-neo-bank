@@ -1,15 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { NotificationPreferences } from "../../types";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 
 export function Notifications() {
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
@@ -77,19 +68,18 @@ export function Notifications() {
   ];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Notification Preferences</CardTitle>
-        <CardDescription>
-          Choose which events trigger OS notifications
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+      <h2 className="text-base font-semibold text-[#1A1A1A] mb-1">Notification Preferences</h2>
+      <p className="text-sm text-[#6B7280] mb-6">
+        Choose which events trigger OS notifications
+      </p>
+
+      <div className="space-y-1">
         {toggleItems.map(({ key, label, description }) => (
-          <div key={key} className="flex items-center justify-between py-2">
+          <div key={key} className="flex items-center justify-between py-3">
             <div>
-              <p className="text-sm font-medium">{label}</p>
-              <p className="text-xs text-muted-foreground">{description}</p>
+              <p className="text-sm font-medium text-[#1A1A1A]">{label}</p>
+              <p className="text-xs text-[#9CA3AF]">{description}</p>
             </div>
             <button
               type="button"
@@ -97,7 +87,7 @@ export function Notifications() {
               aria-checked={Boolean(prefs[key])}
               onClick={() => handleToggle(key)}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                prefs[key] ? "bg-primary" : "bg-muted"
+                prefs[key] ? "bg-[#4F46E5]" : "bg-[#D1D5DB]"
               }`}
             >
               <span
@@ -108,30 +98,35 @@ export function Notifications() {
             </button>
           </div>
         ))}
+      </div>
 
-        {prefs.on_large_tx && (
-          <div className="pt-2">
-            <label className="text-sm font-medium" htmlFor="threshold">
-              Large Transaction Threshold (USDC)
-            </label>
-            <Input
-              id="threshold"
-              type="number"
-              value={prefs.large_tx_threshold}
-              onChange={(e) =>
-                setPrefs({ ...prefs, large_tx_threshold: e.target.value })
-              }
-              className="mt-1 w-32"
-            />
-          </div>
-        )}
-
-        <div className="pt-4">
-          <Button onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "Saving..." : "Save Preferences"}
-          </Button>
+      {prefs.on_large_tx && (
+        <div className="mt-4">
+          <label className="text-sm font-medium text-[#374151]" htmlFor="threshold">
+            Large Transaction Threshold (USDC)
+          </label>
+          <input
+            id="threshold"
+            type="number"
+            value={prefs.large_tx_threshold}
+            onChange={(e) =>
+              setPrefs({ ...prefs, large_tx_threshold: e.target.value })
+            }
+            className="mt-1 block w-32 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#1A1A1A] focus:border-[#4F46E5] focus:outline-none focus:ring-1 focus:ring-[#4F46E5]"
+          />
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      <div className="mt-6">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving}
+          className="rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white hover:bg-[#4338CA] disabled:opacity-50"
+        >
+          {isSaving ? "Saving..." : "Save Preferences"}
+        </button>
+      </div>
+    </div>
   );
 }

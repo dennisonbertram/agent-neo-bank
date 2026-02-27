@@ -1,14 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { ApprovalRequest, Agent } from "../types";
-import { Button } from "../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
+import { Bot, Check, X, CheckCircle } from "lucide-react";
 
 interface TransactionPayload {
   tx_id?: string;
@@ -36,30 +29,22 @@ function parsePayload(payload: string): ParsedPayload {
   }
 }
 
-function formatTimeRemaining(expiresAt: number): string {
+function formatTimeAgo(timestamp: number): string {
   const now = Math.floor(Date.now() / 1000);
-  const remaining = expiresAt - now;
-  if (remaining <= 0) return "Expired";
-  const hours = Math.floor(remaining / 3600);
-  const minutes = Math.floor((remaining % 3600) / 60);
-  if (hours > 24) {
-    const days = Math.floor(hours / 24);
-    return `${days}d ${hours % 24}h remaining`;
-  }
-  if (hours > 0) return `${hours}h ${minutes}m remaining`;
-  return `${minutes}m remaining`;
+  const diff = now - timestamp;
+  if (diff < 60) return "Just now";
+  const minutes = Math.floor(diff / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
-function formatDate(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleString();
+function truncateAddress(address: string): string {
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
-
-const statusConfig = {
-  pending: { label: "Pending", className: "bg-yellow-100 text-yellow-800" },
-  approved: { label: "Approved", className: "bg-green-100 text-green-800" },
-  denied: { label: "Denied", className: "bg-red-100 text-red-800" },
-  expired: { label: "Expired", className: "bg-gray-100 text-gray-800" },
-} as const;
 
 export function Approvals() {
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
@@ -112,16 +97,22 @@ export function Approvals() {
     }
   };
 
+  const pendingCount = approvals.filter((a) => a.status === "pending").length;
+
   const renderPayloadDetails = (approval: ApprovalRequest) => {
     const data = parsePayload(approval.payload);
 
     if (approval.request_type === "transaction") {
       return (
-        <div className="text-sm text-muted-foreground space-y-1">
-          {data.to && <p>To: <span className="font-mono">{data.to}</span></p>}
+        <div className="mt-4">
           {data.amount && data.asset && (
-            <p>
-              Amount: {data.amount} {data.asset}
+            <p className="text-xl font-semibold text-[#1A1A1A]">
+              {data.amount} {data.asset}
+            </p>
+          )}
+          {data.to && (
+            <p className="mt-1 text-sm font-mono text-[#6B7280]">
+              {truncateAddress(data.to)}
             </p>
           )}
         </div>
@@ -130,10 +121,16 @@ export function Approvals() {
 
     if (approval.request_type === "limit_increase") {
       return (
-        <div className="text-sm text-muted-foreground space-y-1">
-          {data.proposed_daily && <p>Proposed daily limit: {data.proposed_daily}</p>}
+        <div className="mt-4 space-y-1">
+          {data.proposed_daily && (
+            <p className="text-sm text-[#6B7280]">
+              Proposed daily limit: <span className="font-semibold text-[#1A1A1A]">{data.proposed_daily}</span>
+            </p>
+          )}
           {data.proposed_monthly && (
-            <p>Proposed monthly limit: {data.proposed_monthly}</p>
+            <p className="text-sm text-[#6B7280]">
+              Proposed monthly limit: <span className="font-semibold text-[#1A1A1A]">{data.proposed_monthly}</span>
+            </p>
           )}
         </div>
       );
@@ -141,8 +138,12 @@ export function Approvals() {
 
     if (approval.request_type === "registration") {
       return (
-        <div className="text-sm text-muted-foreground">
-          {data.agent_name && <p>Agent: {data.agent_name}</p>}
+        <div className="mt-4">
+          {data.agent_name && (
+            <p className="text-sm text-[#6B7280]">
+              Agent: <span className="font-semibold text-[#1A1A1A]">{data.agent_name}</span>
+            </p>
+          )}
         </div>
       );
     }
@@ -153,75 +154,95 @@ export function Approvals() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Approvals</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-[#1A1A1A]">Approvals</h1>
+          <p className="mt-1 text-sm text-[#F59E0B] font-medium">{pendingCount} pending</p>
+        </div>
         <div className="flex gap-2">
-          <Button
-            variant={filter === "pending" ? "default" : "outline"}
-            size="sm"
+          <button
+            type="button"
             onClick={() => setFilter("pending")}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              filter === "pending"
+                ? "bg-[#4F46E5] text-white"
+                : "border border-[#F0EDE8] bg-white text-[#6B7280] hover:bg-[#F9FAFB]"
+            }`}
           >
             Pending
-          </Button>
-          <Button
-            variant={filter === "all" ? "default" : "outline"}
-            size="sm"
+          </button>
+          <button
+            type="button"
             onClick={() => setFilter("all")}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              filter === "all"
+                ? "bg-[#4F46E5] text-white"
+                : "border border-[#F0EDE8] bg-white text-[#6B7280] hover:bg-[#F9FAFB]"
+            }`}
           >
             All
-          </Button>
+          </button>
         </div>
       </div>
 
       {!isLoading && approvals.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">No pending approvals</p>
+        <div className="flex flex-col items-center py-16 text-center">
+          <div className="flex size-16 items-center justify-center rounded-full bg-[#ECFDF5]">
+            <CheckCircle className="size-8 text-[#10B981]" />
+          </div>
+          <h3 className="mt-4 text-lg font-medium text-[#1A1A1A]">All caught up!</h3>
+          <p className="mt-1 text-sm text-[#6B7280]">No pending approvals right now.</p>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {approvals.map((approval) => {
-            const config = statusConfig[approval.status];
-            return (
-              <Card key={approval.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">
+        <div className="space-y-4">
+          {approvals.map((approval) => (
+            <div
+              key={approval.id}
+              className="rounded-xl border border-[#F0EDE8] bg-white p-6"
+              style={{ borderLeft: "3px solid #F59E0B" }}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-full bg-[#EEF2FF]">
+                    <Bot className="size-5 text-[#4F46E5]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#1A1A1A]">
                       {getAgentName(approval.agent_id)}
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{approval.request_type}</Badge>
-                      <Badge variant="outline" className={config.className}>
-                        {config.label}
-                      </Badge>
-                    </div>
+                    </p>
+                    <p className="text-xs text-[#9CA3AF]">
+                      {formatTimeAgo(approval.created_at)}
+                    </p>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {renderPayloadDetails(approval)}
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Created: {formatDate(approval.created_at)}</span>
-                    <span>{formatTimeRemaining(approval.expires_at)}</span>
-                  </div>
-                  {approval.status === "pending" && (
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleResolve(approval.id, "approved")}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleResolve(approval.id, "denied")}
-                      >
-                        Deny
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+                </div>
+                <span className="rounded-full bg-[#FEF3C7] px-2.5 py-0.5 text-xs font-medium text-[#92400E]">
+                  {approval.request_type}
+                </span>
+              </div>
+
+              {renderPayloadDetails(approval)}
+
+              {approval.status === "pending" && (
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleResolve(approval.id, "approved")}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#10B981] px-4 py-2 text-sm font-medium text-white hover:bg-[#059669]"
+                  >
+                    <Check className="size-4" />
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResolve(approval.id, "denied")}
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#EF4444] px-4 py-2 text-sm font-medium text-[#EF4444] hover:bg-[#FEF2F2]"
+                  >
+                    <X className="size-4" />
+                    Deny
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
