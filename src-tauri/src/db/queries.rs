@@ -275,6 +275,30 @@ pub fn get_transaction(db: &Database, id: &str) -> Result<Transaction, AppError>
     })
 }
 
+pub fn list_transactions_for_agent(
+    db: &Database,
+    agent_id: &str,
+    limit: i64,
+) -> Result<Vec<Transaction>, AppError> {
+    let conn = db.get_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, agent_id, tx_type, amount, asset, recipient, sender, chain_tx_hash,
+             status, category, memo, description, service_name, service_url, reason,
+             webhook_url, error_message, period_daily, period_weekly, period_monthly,
+             created_at, updated_at
+             FROM transactions WHERE agent_id = ?1 ORDER BY created_at DESC LIMIT ?2",
+        )
+        .map_err(|e| AppError::DatabaseError(format!("Failed to prepare statement: {}", e)))?;
+
+    let txs = stmt
+        .query_map(params![agent_id, limit], |row| row_to_transaction(row))
+        .map_err(|e| AppError::DatabaseError(format!("Failed to query transactions: {}", e)))?;
+
+    txs.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| AppError::DatabaseError(format!("Failed to collect transactions: {}", e)))
+}
+
 pub fn list_transactions_by_agent(
     db: &Database,
     agent_id: &str,

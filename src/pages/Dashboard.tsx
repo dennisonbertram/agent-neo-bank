@@ -1,11 +1,41 @@
+import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useBalance } from "@/hooks/useBalance";
 import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { AgentBudgets } from "@/components/dashboard/AgentBudgets";
+import { GlobalBudget } from "@/components/dashboard/GlobalBudget";
 import { Bot, ArrowUpDown } from "lucide-react";
+import type { AgentBudgetSummary, GlobalBudgetSummary } from "@/types";
 
 export function Dashboard() {
   const { balance, isLoading } = useBalance();
+  const [agentBudgets, setAgentBudgets] = useState<AgentBudgetSummary[]>([]);
+  const [globalBudget, setGlobalBudget] = useState<GlobalBudgetSummary | null>(
+    null,
+  );
+  const [budgetLoading, setBudgetLoading] = useState(true);
+
+  const fetchBudgets = useCallback(async () => {
+    setBudgetLoading(true);
+    try {
+      const [agents, global] = await Promise.all([
+        invoke<AgentBudgetSummary[]>("get_agent_budget_summaries"),
+        invoke<GlobalBudgetSummary>("get_global_budget_summary"),
+      ]);
+      setAgentBudgets(agents);
+      setGlobalBudget(global);
+    } catch {
+      // Budget data is non-critical, fail silently
+    } finally {
+      setBudgetLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBudgets();
+  }, [fetchBudgets]);
 
   return (
     <div className="p-6 space-y-6">
@@ -24,6 +54,32 @@ export function Dashboard() {
             </span>
           ) : (
             <span className="text-muted-foreground">--</span>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Global Budget Utilization</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {budgetLoading ? (
+            <span className="text-muted-foreground">Loading...</span>
+          ) : (
+            <GlobalBudget summary={globalBudget} />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Agent Budgets</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {budgetLoading ? (
+            <span className="text-muted-foreground">Loading...</span>
+          ) : (
+            <AgentBudgets summaries={agentBudgets} />
           )}
         </CardContent>
       </Card>

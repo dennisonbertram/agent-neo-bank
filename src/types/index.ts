@@ -122,6 +122,27 @@ export interface SpendingLedger {
   updated_at: number;
 }
 
+export interface AgentBudgetSummary {
+  agent_id: string;
+  agent_name: string;
+  daily_spent: string;
+  daily_cap: string;
+  weekly_spent: string;
+  weekly_cap: string;
+  monthly_spent: string;
+  monthly_cap: string;
+}
+
+export interface GlobalBudgetSummary {
+  daily_spent: string;
+  daily_cap: string;
+  weekly_spent: string;
+  weekly_cap: string;
+  monthly_spent: string;
+  monthly_cap: string;
+  kill_switch_active: boolean;
+}
+
 export interface BalanceResponse {
   balance: string;
   asset: string;

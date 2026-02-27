@@ -51,6 +51,12 @@ pub fn run() {
             commands::transactions::list_transactions,
             commands::transactions::get_transaction,
             commands::agents::list_agents,
+            commands::agents::get_agent,
+            commands::agents::get_agent_spending_policy,
+            commands::agents::update_agent_spending_policy,
+            commands::agents::suspend_agent,
+            commands::agents::revoke_agent,
+            commands::agents::get_agent_transactions,
             commands::approvals::list_approvals,
             commands::approvals::resolve_approval,
             commands::approvals::get_approval,
@@ -59,6 +65,11 @@ pub fn run() {
             commands::invitation_codes::revoke_invitation_code,
             commands::notifications::get_notification_preferences,
             commands::notifications::update_notification_preferences,
+            commands::settings::get_global_policy,
+            commands::settings::update_global_policy,
+            commands::settings::toggle_kill_switch,
+            commands::budget::get_agent_budget_summaries,
+            commands::budget::get_global_budget_summary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
