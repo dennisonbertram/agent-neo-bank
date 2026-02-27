@@ -1,0 +1,6 @@
+{
+  "identifier": "agent-api",
+  "description": "Capability for the agent REST API",
+  "windows": [],
+  "permissions": []
+}

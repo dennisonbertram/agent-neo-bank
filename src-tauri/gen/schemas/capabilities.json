@@ -1,0 +1,1 @@
+{"agent-api":{"identifier":"agent-api","description":"Capability for the agent REST API","local":true,"permissions":[]},"default":{"identifier":"default","description":"Default capabilities for the main window","local":true,"windows":["main"],"permissions":["core:default","notification:default","clipboard-manager:default"]}}
