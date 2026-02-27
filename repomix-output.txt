@@ -1,0 +1,4158 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: src/pages/*.tsx, src/components/layout/*.tsx, src/components/shared/*.tsx, src/components/onboarding/*.tsx, src/index.css, src/main.tsx, src/App.tsx
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+
+================================================================
+Directory Structure
+================================================================
+src/
+  components/
+    layout/
+      Header.test.tsx
+      Header.tsx
+      Shell.test.tsx
+      Shell.tsx
+      Sidebar.test.tsx
+      Sidebar.tsx
+    onboarding/
+      EmailStep.test.tsx
+      EmailStep.tsx
+      FundStep.test.tsx
+      FundStep.tsx
+      OtpStep.test.tsx
+      OtpStep.tsx
+      WelcomeStep.test.tsx
+      WelcomeStep.tsx
+    shared/
+      CurrencyDisplay.tsx
+      EmptyState.tsx
+      GradientCard.test.tsx
+      GradientCard.tsx
+      MonoAddress.test.tsx
+      MonoAddress.tsx
+      ProgressBar.test.tsx
+      ProgressBar.tsx
+      StatusBadge.test.tsx
+      StatusBadge.tsx
+  pages/
+    AgentDetail.test.tsx
+    AgentDetail.tsx
+    Agents.test.tsx
+    Agents.tsx
+    Approvals.test.tsx
+    Approvals.tsx
+    Dashboard.test.tsx
+    Dashboard.tsx
+    Fund.test.tsx
+    Fund.tsx
+    Onboarding.test.tsx
+    Onboarding.tsx
+    Settings.tsx
+    Transactions.test.tsx
+    Transactions.tsx
+  App.tsx
+  index.css
+  main.tsx
+
+================================================================
+Files
+================================================================
+
+================
+File: src/components/layout/Header.test.tsx
+================
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { Header } from "./Header";
+
+const mockUseBalance = vi.fn();
+
+vi.mock("@/hooks/useBalance", () => ({
+  useBalance: () => mockUseBalance(),
+}));
+
+describe("Header", () => {
+  beforeEach(() => {
+    mockUseBalance.mockReset();
+  });
+
+  it("displays Agent Neo Bank title", () => {
+    mockUseBalance.mockReturnValue({ balance: null, isLoading: false, error: null, refetch: vi.fn() });
+    render(<Header />);
+    expect(screen.getByText("Agent Neo Bank")).toBeInTheDocument();
+  });
+
+  it("shows balance when loaded", () => {
+    mockUseBalance.mockReturnValue({ balance: "1247.83", isLoading: false, error: null, refetch: vi.fn() });
+    render(<Header />);
+    expect(screen.getByText("$1,247.83")).toBeInTheDocument();
+  });
+
+  it("shows loading state when balance loading", () => {
+    mockUseBalance.mockReturnValue({ balance: null, isLoading: true, error: null, refetch: vi.fn() });
+    render(<Header />);
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+  });
+});
+
+================
+File: src/components/layout/Shell.test.tsx
+================
+import { describe, it, expect } from "vitest";
+import { screen } from "@testing-library/react";
+import { Routes, Route } from "react-router-dom";
+import { Shell } from "./Shell";
+import { renderWithRouter } from "@/test/render";
+
+describe("Shell", () => {
+  it("renders sidebar", () => {
+    renderWithRouter(
+      <Routes>
+        <Route element={<Shell />}>
+          <Route path="/" element={<div>Dashboard Content</div>} />
+        </Route>
+      </Routes>
+    );
+    expect(screen.getByRole("navigation")).toBeInTheDocument();
+  });
+
+  it("renders header", () => {
+    renderWithRouter(
+      <Routes>
+        <Route element={<Shell />}>
+          <Route path="/" element={<div>Dashboard Content</div>} />
+        </Route>
+      </Routes>
+    );
+    expect(screen.getByRole("banner")).toBeInTheDocument();
+  });
+
+  it("renders content outlet", () => {
+    renderWithRouter(
+      <Routes>
+        <Route element={<Shell />}>
+          <Route path="/" element={<div>Dashboard Content</div>} />
+        </Route>
+      </Routes>
+    );
+    expect(screen.getByText("Dashboard Content")).toBeInTheDocument();
+  });
+});
+
+================
+File: src/components/onboarding/FundStep.test.tsx
+================
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { FundStep } from "./FundStep";
+
+describe("FundStep", () => {
+  it("displays wallet address", () => {
+    render(<FundStep address="0x1234567890abcdef1234567890abcdef12345678" onNext={() => {}} />);
+    expect(screen.getByText(/0x1234/)).toBeInTheDocument();
+  });
+
+  it("has copy button", () => {
+    render(<FundStep address="0x1234567890abcdef1234567890abcdef12345678" onNext={() => {}} />);
+    expect(screen.getByRole("button", { name: /copy/i })).toBeInTheDocument();
+  });
+});
+
+================
+File: src/components/shared/GradientCard.test.tsx
+================
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { GradientCard } from "./GradientCard";
+
+describe("GradientCard", () => {
+  it("renders children inside the card", () => {
+    render(
+      <GradientCard>
+        <span>Card Content</span>
+      </GradientCard>
+    );
+    expect(screen.getByText("Card Content")).toBeInTheDocument();
+  });
+});
+
+================
+File: src/components/shared/GradientCard.tsx
+================
+import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
+
+interface GradientCardProps {
+  children: ReactNode;
+  className?: string;
+}
+
+export function GradientCard({ children, className }: GradientCardProps) {
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-2xl p-6 text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl",
+        className
+      )}
+      style={{
+        background: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 50%, #6366F1 100%)",
+      }}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent" />
+      <div className="relative">{children}</div>
+    </div>
+  );
+}
+
+================
+File: src/components/shared/MonoAddress.test.tsx
+================
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { MonoAddress } from "./MonoAddress";
+
+describe("MonoAddress", () => {
+  const testAddress = "0x1234567890abcdef";
+
+  it("truncates address by default", () => {
+    render(<MonoAddress address={testAddress} />);
+    expect(screen.getByText("0x1234...cdef")).toBeInTheDocument();
+  });
+
+  it("shows full address when full=true", () => {
+    render(<MonoAddress address={testAddress} full />);
+    expect(screen.getByText(testAddress)).toBeInTheDocument();
+  });
+});
+
+================
+File: src/components/shared/MonoAddress.tsx
+================
+import { useState, useCallback } from "react";
+import { Copy, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface MonoAddressProps {
+  address: string;
+  className?: string;
+  full?: boolean;
+}
+
+export function MonoAddress({ address, className, full = false }: MonoAddressProps) {
+  const [copied, setCopied] = useState(false);
+  const displayAddress = full ? address : `${address.slice(0, 6)}...${address.slice(-4)}`;
+
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [address]);
+
+  return (
+    <span className={cn("inline-flex items-center gap-1.5", className)}>
+      <code className="font-mono text-sm" style={{ fontFeatureSettings: '"tnum"' }}>{displayAddress}</code>
+      <button
+        onClick={handleCopy}
+        className="inline-flex size-5 items-center justify-center rounded text-[#9CA3AF] transition-colors hover:text-[#4F46E5]"
+        title={copied ? "Copied!" : "Copy address"}
+      >
+        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      </button>
+    </span>
+  );
+}
+
+================
+File: src/components/shared/ProgressBar.test.tsx
+================
+import { describe, it, expect } from "vitest";
+import { render } from "@testing-library/react";
+import { ProgressBar } from "./ProgressBar";
+
+describe("ProgressBar", () => {
+  function getInnerBar(container: HTMLElement) {
+    // The outer div is the track, the inner div is the fill bar
+    const outer = container.firstElementChild as HTMLElement;
+    return outer.firstElementChild as HTMLElement;
+  }
+
+  it("renders with value=50 and max=100", () => {
+    const { container } = render(<ProgressBar value={50} max={100} />);
+    const inner = getInnerBar(container);
+    expect(inner.style.width).toBe("50%");
+  });
+
+  it("does not crash when max=0", () => {
+    const { container } = render(<ProgressBar value={0} max={0} />);
+    const inner = getInnerBar(container);
+    expect(inner.style.width).toBe("0%");
+  });
+
+  it("caps at 100% when value exceeds max", () => {
+    const { container } = render(<ProgressBar value={150} max={100} />);
+    const inner = getInnerBar(container);
+    expect(inner.style.width).toBe("100%");
+  });
+});
+
+================
+File: src/components/shared/ProgressBar.tsx
+================
+import { cn } from "@/lib/utils";
+
+interface ProgressBarProps {
+  value: number;
+  max: number;
+  color?: "indigo" | "green" | "amber" | "red";
+  className?: string;
+}
+
+const colorMap = {
+  indigo: "bg-[#4F46E5]",
+  green: "bg-[#10B981]",
+  amber: "bg-[#F59E0B]",
+  red: "bg-[#EF4444]",
+};
+
+export function ProgressBar({ value, max, color = "indigo", className }: ProgressBarProps) {
+  const percentage = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  return (
+    <div className={cn("h-1.5 w-full overflow-hidden rounded-full bg-[#F0EDE8]", className)}>
+      <div
+        className={cn("h-full rounded-full transition-all duration-300", colorMap[color])}
+        style={{ width: `${percentage}%` }}
+      />
+    </div>
+  );
+}
+
+================
+File: src/components/shared/StatusBadge.test.tsx
+================
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { StatusBadge } from "./StatusBadge";
+
+describe("StatusBadge", () => {
+  it("renders active status with correct label", () => {
+    render(<StatusBadge status="active" />);
+    expect(screen.getByText("Active")).toBeInTheDocument();
+  });
+
+  it("renders pending status with correct label", () => {
+    render(<StatusBadge status="pending" />);
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+  });
+
+  it("renders suspended status with correct label", () => {
+    render(<StatusBadge status="suspended" />);
+    expect(screen.getByText("Suspended")).toBeInTheDocument();
+  });
+
+  it("renders revoked status with correct label", () => {
+    render(<StatusBadge status="revoked" />);
+    expect(screen.getByText("Revoked")).toBeInTheDocument();
+  });
+});
+
+================
+File: src/pages/Fund.test.tsx
+================
+import { render, screen, fireEvent } from "@testing-library/react";
+import { BrowserRouter } from "react-router-dom";
+import { describe, it, expect } from "vitest";
+import { Fund } from "./Fund";
+
+function renderFund() {
+  return render(
+    <BrowserRouter>
+      <Fund />
+    </BrowserRouter>
+  );
+}
+
+describe("Fund", () => {
+  it("renders page title", () => {
+    renderFund();
+    expect(screen.getByText("Fund Wallet")).toBeInTheDocument();
+  });
+
+  it("shows Buy Crypto tab by default", () => {
+    renderFund();
+    expect(screen.getByText("Buy crypto with Coinbase")).toBeInTheDocument();
+  });
+
+  it("switches to Deposit tab", () => {
+    renderFund();
+    fireEvent.click(screen.getByText("Deposit"));
+    expect(screen.getByText("Your Wallet Address")).toBeInTheDocument();
+  });
+});
+
+================
+File: src/pages/Fund.tsx
+================
+import { useState } from "react";
+import { Wallet, CreditCard, QrCode } from "lucide-react";
+
+export function Fund() {
+  const [activeTab, setActiveTab] = useState<"buy" | "deposit">("buy");
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Fund Wallet</h1>
+        <p className="mt-1 text-sm text-[#6B7280]">Add funds to your wallet</p>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-[#F0EDE8]">
+        <button
+          onClick={() => setActiveTab("buy")}
+          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
+            activeTab === "buy"
+              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              : "text-[#6B7280] hover:text-[#1A1A1A]"
+          }`}
+        >
+          Buy Crypto
+        </button>
+        <button
+          onClick={() => setActiveTab("deposit")}
+          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
+            activeTab === "deposit"
+              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              : "text-[#6B7280] hover:text-[#1A1A1A]"
+          }`}
+        >
+          Deposit
+        </button>
+      </div>
+
+      {activeTab === "buy" ? (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8">
+          <div className="flex flex-col items-center text-center">
+            <div className="flex size-16 items-center justify-center rounded-2xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
+              <CreditCard className="size-8 text-[#9CA3AF]" />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold text-[#1A1A1A]">Buy crypto with Coinbase</h2>
+            <p className="mt-2 max-w-sm text-sm text-[#6B7280]">
+              Purchase USDC, ETH, or WETH using your credit card, debit card, or bank transfer.
+            </p>
+            <button className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-6 py-3 text-sm font-medium text-white hover:bg-[#4338CA]">
+              Continue to Coinbase
+            </button>
+            <p className="mt-3 text-xs text-[#9CA3AF]">Coming soon — will be available in Phase 3</p>
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4 border-t border-[#F0EDE8] pt-6">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-[#6B7280]">Supported tokens:</span>
+              {["USDC", "ETH", "WETH"].map(token => (
+                <span key={token} className="rounded-full bg-[#F9FAFB] px-2.5 py-1 text-xs font-medium text-[#1A1A1A]">{token}</span>
+              ))}
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-medium text-[#10B981]">
+              <span className="size-1.5 rounded-full bg-[#10B981]" />
+              Base Sepolia
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8">
+          <div className="flex flex-col items-center text-center">
+            <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Wallet Address</h2>
+
+            <div className="mt-4 flex w-full max-w-md items-center gap-2 rounded-lg border border-[#E8E5E0] bg-[#F9FAFB] px-4 py-3">
+              <code className="flex-1 truncate text-sm font-mono text-[#1A1A1A]">0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4</code>
+              <button className="rounded-md bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-[#4F46E5] hover:bg-[#4F46E5] hover:text-white">
+                Copy
+              </button>
+            </div>
+
+            <div className="mt-6 flex size-[200px] items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
+              <div className="text-center">
+                <QrCode className="mx-auto size-12 text-[#9CA3AF]" />
+                <p className="mt-2 text-xs text-[#9CA3AF]">QR Code</p>
+              </div>
+            </div>
+
+            <p className="mt-4 max-w-sm text-sm text-[#6B7280]">
+              Scan this QR code or copy the address above to send funds
+            </p>
+
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              {["USDC", "ETH", "WETH"].map(token => (
+                <span key={token} className="rounded-full bg-[#F9FAFB] px-2.5 py-1 text-xs font-medium text-[#1A1A1A]">{token}</span>
+              ))}
+            </div>
+
+            <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-medium text-[#10B981]">
+              <span className="size-1.5 rounded-full bg-[#10B981]" />
+              Base Sepolia
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+================
+File: src/components/layout/Sidebar.test.tsx
+================
+import { describe, it, expect } from "vitest";
+import { screen } from "@testing-library/react";
+import { Sidebar } from "./Sidebar";
+import { renderWithRouter } from "@/test/render";
+
+describe("Sidebar", () => {
+  it("renders all 6 nav links", () => {
+    renderWithRouter(<Sidebar />);
+    expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /agents/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /transactions/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /approvals/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /fund/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /settings/i })).toBeInTheDocument();
+  });
+
+  it("renders logo text", () => {
+    renderWithRouter(<Sidebar />);
+    expect(screen.getByText("Agent Neo Bank")).toBeInTheDocument();
+  });
+
+  it("renders user profile section", () => {
+    renderWithRouter(<Sidebar />);
+    expect(screen.getByText("dennison")).toBeInTheDocument();
+    expect(screen.getByText("Connected")).toBeInTheDocument();
+  });
+
+  it("highlights active route", () => {
+    renderWithRouter(<Sidebar />, { route: "/" });
+    const dashboardLink = screen.getByRole("link", { name: /dashboard/i });
+    expect(dashboardLink.className).toMatch(/bg-\[#EEF2FF\]/);
+  });
+});
+
+================
+File: src/components/onboarding/EmailStep.test.tsx
+================
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { EmailStep } from "./EmailStep";
+
+describe("EmailStep", () => {
+  it("renders email input", () => {
+    render(<EmailStep onNext={vi.fn()} onBack={vi.fn()} />);
+    expect(screen.getByPlaceholderText(/you@example\.com/i)).toBeInTheDocument();
+  });
+
+  it("shows validation error for invalid email", async () => {
+    render(<EmailStep onNext={vi.fn()} onBack={vi.fn()} />);
+    const input = screen.getByPlaceholderText(/you@example\.com/i);
+    await userEvent.type(input, "notanemail");
+    await userEvent.click(screen.getByRole("button", { name: /send verification code/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/valid email/i)).toBeInTheDocument();
+    });
+  });
+
+  it("calls onNext with email when form submitted", async () => {
+    const onNext = vi.fn();
+    render(<EmailStep onNext={onNext} onBack={vi.fn()} />);
+    const input = screen.getByPlaceholderText(/you@example\.com/i);
+    await userEvent.type(input, "test@example.com");
+    await userEvent.click(screen.getByRole("button", { name: /send verification code/i }));
+    await waitFor(() => {
+      expect(onNext).toHaveBeenCalledWith("test@example.com");
+    });
+  });
+});
+
+================
+File: src/components/onboarding/OtpStep.test.tsx
+================
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { OtpStep } from "./OtpStep";
+
+describe("OtpStep", () => {
+  it("renders 6 digit inputs", () => {
+    render(<OtpStep onNext={vi.fn()} onBack={vi.fn()} />);
+    const inputs = screen.getAllByRole("textbox");
+    expect(inputs).toHaveLength(6);
+  });
+
+  it("shows error on invalid OTP", async () => {
+    render(<OtpStep onNext={vi.fn()} onBack={vi.fn()} />);
+    // Only type into first input, leaving rest empty
+    const inputs = screen.getAllByRole("textbox");
+    await userEvent.type(inputs[0]!, "1");
+    await userEvent.click(screen.getByRole("button", { name: /verify/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/6 digits/i)).toBeInTheDocument();
+    });
+  });
+});
+
+================
+File: src/components/onboarding/WelcomeStep.test.tsx
+================
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { WelcomeStep } from "./WelcomeStep";
+
+describe("WelcomeStep", () => {
+  it("renders welcome text", () => {
+    render(<WelcomeStep onNext={vi.fn()} />);
+    expect(screen.getByText(/give your ai agents spending power/i)).toBeInTheDocument();
+  });
+
+  it("renders continue button", () => {
+    render(<WelcomeStep onNext={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /get started/i })).toBeInTheDocument();
+  });
+
+  it("calls onNext when button clicked", async () => {
+    const onNext = vi.fn();
+    render(<WelcomeStep onNext={onNext} />);
+    await userEvent.click(screen.getByRole("button", { name: /get started/i }));
+    expect(onNext).toHaveBeenCalledOnce();
+  });
+});
+
+================
+File: src/components/shared/CurrencyDisplay.tsx
+================
+interface CurrencyDisplayProps {
+  amount: string;
+  asset?: string;
+}
+
+export function CurrencyDisplay({ amount }: CurrencyDisplayProps) {
+  const num = parseFloat(amount);
+  const formatted = isNaN(num)
+    ? amount
+    : `$${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return <span className="font-mono">{formatted}</span>;
+}
+
+================
+File: src/components/shared/EmptyState.tsx
+================
+import type { LucideIcon } from "lucide-react";
+
+interface EmptyStateProps {
+  title: string;
+  description?: string;
+  icon?: LucideIcon;
+}
+
+export function EmptyState({ title, description, icon: Icon }: EmptyStateProps) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      {Icon && <Icon className="mb-3 size-10 text-muted-foreground" />}
+      <h3 className="text-lg font-medium">{title}</h3>
+      {description && (
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      )}
+    </div>
+  );
+}
+
+================
+File: src/pages/AgentDetail.test.tsx
+================
+import { describe, it, expect } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Routes, Route } from "react-router-dom";
+import { renderWithRouter } from "../test/render";
+import {
+  mockInvoke,
+  createMockAgent,
+  createMockSpendingPolicy,
+  createMockTransaction,
+} from "../test/helpers";
+import { AgentDetail } from "./AgentDetail";
+
+function renderAgentDetail(agentId = "test-agent-id") {
+  return renderWithRouter(
+    <Routes>
+      <Route path="/agents/:id" element={<AgentDetail />} />
+    </Routes>,
+    { route: `/agents/${agentId}` },
+  );
+}
+
+describe("AgentDetail", () => {
+  const agent = createMockAgent({
+    name: "Claude Agent",
+    purpose: "AI tasks",
+    agent_type: "autonomous",
+    status: "active",
+  });
+  const policy = createMockSpendingPolicy({
+    per_tx_max: "50",
+    daily_cap: "500",
+    weekly_cap: "2000",
+    monthly_cap: "8000",
+  });
+
+  it("renders agent detail with profile info", async () => {
+    await mockInvoke({
+      get_agent: agent,
+      get_agent_spending_policy: policy,
+      get_agent_transactions: [],
+      get_agent_budget_summaries: [],
+    });
+
+    renderAgentDetail();
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Claude Agent").length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText(/AI tasks/)).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
+  });
+
+  it("renders spending limits", async () => {
+    await mockInvoke({
+      get_agent: agent,
+      get_agent_spending_policy: policy,
+      get_agent_transactions: [],
+      get_agent_budget_summaries: [],
+    });
+
+    renderAgentDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Spending Limits")).toBeInTheDocument();
+    });
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $50")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $500")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $2000")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $8000")).toBeInTheDocument();
+  });
+
+  it("edit limits saves updated policy", async () => {
+    const invokeMock = await mockInvoke({
+      get_agent: agent,
+      get_agent_spending_policy: policy,
+      get_agent_transactions: [],
+      get_agent_budget_summaries: [],
+      update_agent_spending_policy: undefined,
+    });
+
+    renderAgentDetail();
+    const user = userEvent.setup();
+
+    await waitFor(() => {
+      expect(screen.getByText("Spending Limits")).toBeInTheDocument();
+    });
+
+    // Click Edit button
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    // Change per_tx_max value
+    const perTxInput = screen.getByLabelText("Per Transaction Max");
+    await user.clear(perTxInput);
+    await user.type(perTxInput, "75");
+
+    // Click Save
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      const updateCalls = invokeMock.mock.calls.filter(
+        (call) => call[0] === "update_agent_spending_policy",
+      );
+      expect(updateCalls.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("suspend button calls suspend command", async () => {
+    const invokeMock = await mockInvoke({
+      get_agent: agent,
+      get_agent_spending_policy: policy,
+      get_agent_transactions: [],
+      get_agent_budget_summaries: [],
+      suspend_agent: undefined,
+    });
+
+    renderAgentDetail();
+    const user = userEvent.setup();
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Claude Agent").length).toBeGreaterThan(0);
+    });
+
+    await user.click(screen.getByRole("button", { name: /Suspend Agent/ }));
+
+    await waitFor(() => {
+      const suspendCalls = invokeMock.mock.calls.filter(
+        (call) => call[0] === "suspend_agent",
+      );
+      expect(suspendCalls.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("renders recent transactions", async () => {
+    const transactions = [
+      createMockTransaction({
+        id: "tx-1",
+        amount: "25.00",
+        description: "API call payment",
+        status: "confirmed",
+      }),
+      createMockTransaction({
+        id: "tx-2",
+        amount: "10.50",
+        description: "Service subscription",
+        status: "pending",
+      }),
+    ];
+
+    await mockInvoke({
+      get_agent: agent,
+      get_agent_spending_policy: policy,
+      get_agent_transactions: transactions,
+      get_agent_budget_summaries: [],
+    });
+
+    renderAgentDetail();
+
+    await waitFor(() => {
+      expect(screen.getByText("Activity")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("$25.00")).toBeInTheDocument();
+    expect(screen.getByText("API call payment")).toBeInTheDocument();
+    expect(screen.getByText("$10.50")).toBeInTheDocument();
+    expect(screen.getByText("Service subscription")).toBeInTheDocument();
+  });
+});
+
+================
+File: src/pages/Agents.test.tsx
+================
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Agents } from "./Agents";
+import { mockInvoke, createMockAgent } from "@/test/helpers";
+import { renderWithRouter } from "@/test/render";
+
+describe("Agents", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders agent cards with data", async () => {
+    const agent1 = createMockAgent({
+      id: "agent-1",
+      name: "Payment Bot",
+      purpose: "Handles payments",
+      agent_type: "payment",
+      status: "active",
+    });
+    const agent2 = createMockAgent({
+      id: "agent-2",
+      name: "Research Agent",
+      purpose: "Performs research tasks",
+      agent_type: "research",
+      status: "pending",
+    });
+
+    await mockInvoke({ list_agents: [agent1, agent2] });
+
+    renderWithRouter(<Agents />);
+
+    expect(await screen.findByText("Payment Bot")).toBeInTheDocument();
+    expect(screen.getByText("Research Agent")).toBeInTheDocument();
+    expect(screen.getByText("Handles payments")).toBeInTheDocument();
+    expect(screen.getByText("Performs research tasks")).toBeInTheDocument();
+  });
+
+  it("shows correct status badges", async () => {
+    const activeAgent = createMockAgent({
+      id: "a1",
+      name: "Active Agent",
+      status: "active",
+    });
+    const pendingAgent = createMockAgent({
+      id: "a2",
+      name: "Pending Agent",
+      status: "pending",
+    });
+    const suspendedAgent = createMockAgent({
+      id: "a3",
+      name: "Suspended Agent",
+      status: "suspended",
+    });
+    const revokedAgent = createMockAgent({
+      id: "a4",
+      name: "Revoked Agent",
+      status: "revoked",
+    });
+
+    await mockInvoke({
+      list_agents: [activeAgent, pendingAgent, suspendedAgent, revokedAgent],
+    });
+
+    renderWithRouter(<Agents />);
+
+    await screen.findByText("Active Agent");
+
+    const activeBadge = screen.getByTestId("status-badge-a1");
+    expect(activeBadge).toHaveTextContent("Active");
+
+    const pendingBadge = screen.getByTestId("status-badge-a2");
+    expect(pendingBadge).toHaveTextContent("Pending");
+
+    const suspendedBadge = screen.getByTestId("status-badge-a3");
+    expect(suspendedBadge).toHaveTextContent("Suspended");
+
+    const revokedBadge = screen.getByTestId("status-badge-a4");
+    expect(revokedBadge).toHaveTextContent("Revoked");
+  });
+
+  it("shows empty state when no agents", async () => {
+    await mockInvoke({ list_agents: [] });
+
+    renderWithRouter(<Agents />);
+
+    expect(await screen.findByText("No agents yet")).toBeInTheDocument();
+  });
+
+  it("shows loading state initially", async () => {
+    // Use a never-resolving promise to keep loading state
+    const mod = await import("@tauri-apps/api/core");
+    vi.mocked(mod).invoke.mockImplementation(
+      () => new Promise(() => {}) // never resolves
+    );
+
+    renderWithRouter(<Agents />);
+
+    expect(screen.getByText("Loading agents...")).toBeInTheDocument();
+  });
+
+  it("clicking agent card navigates to detail", async () => {
+    const agent = createMockAgent({
+      id: "agent-click-test",
+      name: "Clickable Agent",
+      status: "active",
+    });
+
+    await mockInvoke({ list_agents: [agent] });
+
+    renderWithRouter(<Agents />);
+
+    await screen.findByText("Clickable Agent");
+
+    const card = screen.getByTestId("agent-card-agent-click-test");
+    expect(card.closest("a")).toHaveAttribute(
+      "href",
+      "/agents/agent-click-test"
+    );
+  });
+
+  it("filters agents by search", async () => {
+    const agent1 = createMockAgent({
+      id: "a1",
+      name: "Payment Bot",
+      status: "active",
+    });
+    const agent2 = createMockAgent({
+      id: "a2",
+      name: "Research Agent",
+      status: "active",
+    });
+
+    await mockInvoke({ list_agents: [agent1, agent2] });
+
+    renderWithRouter(<Agents />);
+
+    await screen.findByText("Payment Bot");
+
+    const user = userEvent.setup();
+    const searchInput = screen.getByPlaceholderText("Search agents...");
+    await user.type(searchInput, "Payment");
+
+    expect(screen.getByText("Payment Bot")).toBeInTheDocument();
+    expect(screen.queryByText("Research Agent")).not.toBeInTheDocument();
+  });
+
+  it("filters agents by tab", async () => {
+    const activeAgent = createMockAgent({
+      id: "a1",
+      name: "Active Agent",
+      status: "active",
+    });
+    const pendingAgent = createMockAgent({
+      id: "a2",
+      name: "Pending Agent",
+      status: "pending",
+    });
+
+    await mockInvoke({ list_agents: [activeAgent, pendingAgent] });
+
+    renderWithRouter(<Agents />);
+
+    await screen.findByText("Active Agent");
+
+    const user = userEvent.setup();
+    // Click the "Active" tab button
+    const activeTabBtn = screen.getByRole("button", { name: /Active/i });
+    await user.click(activeTabBtn);
+
+    expect(screen.getByText("Active Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Pending Agent")).not.toBeInTheDocument();
+  });
+});
+
+================
+File: src/pages/Approvals.test.tsx
+================
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Approvals } from "./Approvals";
+import { mockInvoke, createMockAgent } from "@/test/helpers";
+import { renderWithRouter } from "@/test/render";
+import type { ApprovalRequest } from "@/types";
+
+function createMockApproval(
+  overrides: Partial<ApprovalRequest> = {}
+): ApprovalRequest {
+  return {
+    id: "approval-1",
+    agent_id: "agent-1",
+    request_type: "transaction",
+    payload: JSON.stringify({
+      tx_id: "tx-1",
+      to: "0xRecipient",
+      amount: "50",
+      asset: "USDC",
+    }),
+    status: "pending",
+    tx_id: "tx-1",
+    expires_at: Math.floor(Date.now() / 1000) + 86400,
+    created_at: Math.floor(Date.now() / 1000) - 3600,
+    resolved_at: null,
+    resolved_by: null,
+    ...overrides,
+  };
+}
+
+describe("Approvals", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders pending approvals with agent context", async () => {
+    const approval1 = createMockApproval({
+      id: "approval-1",
+      agent_id: "agent-1",
+      payload: JSON.stringify({
+        tx_id: "tx-1",
+        to: "0xAlice",
+        amount: "100",
+        asset: "USDC",
+      }),
+    });
+    const approval2 = createMockApproval({
+      id: "approval-2",
+      agent_id: "agent-2",
+      request_type: "limit_increase",
+      payload: JSON.stringify({
+        proposed_daily: "5000",
+        proposed_monthly: "50000",
+      }),
+      tx_id: null,
+    });
+
+    const agent1 = createMockAgent({ id: "agent-1", name: "Payment Bot" });
+    const agent2 = createMockAgent({ id: "agent-2", name: "Treasury Agent" });
+
+    await mockInvoke({
+      list_approvals: [approval1, approval2],
+      list_agents: [agent1, agent2],
+    });
+
+    renderWithRouter(<Approvals />);
+
+    // Verify agent names appear
+    expect(await screen.findByText("Payment Bot")).toBeInTheDocument();
+    expect(screen.getByText("Treasury Agent")).toBeInTheDocument();
+
+    // Verify transaction details from payload
+    expect(screen.getByText(/100/)).toBeInTheDocument();
+    expect(screen.getByText(/USDC/)).toBeInTheDocument();
+
+    // Verify approval type badges (shown as rounded pills)
+    expect(screen.getByText("transaction")).toBeInTheDocument();
+    expect(screen.getByText("limit_increase")).toBeInTheDocument();
+  });
+
+  it("shows empty state when no pending approvals", async () => {
+    await mockInvoke({
+      list_approvals: [],
+      list_agents: [],
+    });
+
+    renderWithRouter(<Approvals />);
+
+    expect(
+      await screen.findByText("No pending approvals right now.")
+    ).toBeInTheDocument();
+  });
+
+  it("approve button calls resolve_approval with correct args", async () => {
+    const approval = createMockApproval({ id: "approval-xyz" });
+    const agent = createMockAgent({ id: "agent-1", name: "Test Agent" });
+
+    const invoker = await mockInvoke({
+      list_approvals: [approval],
+      list_agents: [agent],
+      resolve_approval: undefined,
+    });
+
+    renderWithRouter(<Approvals />);
+
+    await screen.findByText("Test Agent");
+
+    const user = userEvent.setup();
+    const approveButton = screen.getByRole("button", { name: /approve/i });
+    await user.click(approveButton);
+
+    await waitFor(() => {
+      expect(invoker).toHaveBeenCalledWith("resolve_approval", {
+        approval_id: "approval-xyz",
+        decision: "approved",
+      });
+    });
+  });
+
+  it("deny button calls resolve_approval with correct args", async () => {
+    const approval = createMockApproval({ id: "approval-deny-me" });
+    const agent = createMockAgent({ id: "agent-1", name: "Test Agent" });
+
+    const invoker = await mockInvoke({
+      list_approvals: [approval],
+      list_agents: [agent],
+      resolve_approval: undefined,
+    });
+
+    renderWithRouter(<Approvals />);
+
+    await screen.findByText("Test Agent");
+
+    const user = userEvent.setup();
+    const denyButton = screen.getByRole("button", { name: /deny/i });
+    await user.click(denyButton);
+
+    await waitFor(() => {
+      expect(invoker).toHaveBeenCalledWith("resolve_approval", {
+        approval_id: "approval-deny-me",
+        decision: "denied",
+      });
+    });
+  });
+
+  it("filter tabs switch between pending and all", async () => {
+    const pendingApproval = createMockApproval({ id: "approval-pending" });
+    const agent = createMockAgent({ id: "agent-1", name: "Test Agent" });
+
+    const invoker = await mockInvoke({
+      list_approvals: [pendingApproval],
+      list_agents: [agent],
+    });
+
+    renderWithRouter(<Approvals />);
+
+    // Wait for initial load
+    await screen.findByText("Test Agent");
+
+    const user = userEvent.setup();
+
+    // Click "All" filter button
+    const allButton = screen.getByRole("button", { name: /^all$/i });
+    await user.click(allButton);
+
+    // Verify list_approvals was called again (for "all" filter, no status arg)
+    await waitFor(() => {
+      expect(invoker).toHaveBeenCalledWith("list_approvals", {});
+    });
+  });
+});
+
+================
+File: src/pages/Transactions.test.tsx
+================
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, within, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Transactions } from "./Transactions";
+import { mockInvoke, createMockTransaction, createMockAgent } from "@/test/helpers";
+
+describe("Transactions", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders transaction table with data", async () => {
+    const tx1 = createMockTransaction({
+      id: "tx-1",
+      agent_id: "agent-1",
+      amount: "5.00",
+      recipient: "0x1234567890abcdef1234567890abcdef12345678",
+      status: "confirmed",
+      description: "API payment",
+      created_at: 1740700800,
+    });
+    const tx2 = createMockTransaction({
+      id: "tx-2",
+      agent_id: "agent-2",
+      amount: "10.00",
+      recipient: "0xabcdef1234567890abcdef1234567890abcdef12",
+      status: "executing",
+      description: "Service fee",
+      created_at: 1740614400,
+    });
+
+    const agent1 = createMockAgent({ id: "agent-1", name: "Claude" });
+    const agent2 = createMockAgent({ id: "agent-2", name: "GPT" });
+
+    await mockInvoke({
+      list_transactions: { transactions: [tx1, tx2], total: 2 },
+      list_agents: [agent1, agent2],
+    });
+
+    render(<Transactions />);
+
+    // Table column headers
+    expect(await screen.findByText("Date")).toBeInTheDocument();
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.getByText("Amount")).toBeInTheDocument();
+    expect(screen.getByText("Recipient")).toBeInTheDocument();
+    expect(screen.getByText("Status")).toBeInTheDocument();
+    expect(screen.getByText("Description")).toBeInTheDocument();
+
+    // Transaction data (amounts now have +/- prefix)
+    expect(screen.getByText(/5\.00 USDC/)).toBeInTheDocument();
+    expect(screen.getByText(/10\.00 USDC/)).toBeInTheDocument();
+    expect(screen.getByText("API payment")).toBeInTheDocument();
+    expect(screen.getByText("Service fee")).toBeInTheDocument();
+
+    // Agent names resolved — appears in both table and dropdown, so use getAllByText
+    const claudeElements = screen.getAllByText("Claude");
+    expect(claudeElements.length).toBeGreaterThanOrEqual(1);
+    const gptElements = screen.getAllByText("GPT");
+    expect(gptElements.length).toBeGreaterThanOrEqual(1);
+
+    // Truncated addresses
+    expect(screen.getByText("0x1234...5678")).toBeInTheDocument();
+    expect(screen.getByText("0xabcd...ef12")).toBeInTheDocument();
+  });
+
+  it("shows empty state when no transactions", async () => {
+    await mockInvoke({
+      list_transactions: { transactions: [], total: 0 },
+      list_agents: [],
+    });
+
+    render(<Transactions />);
+
+    expect(await screen.findByText("No transactions yet")).toBeInTheDocument();
+  });
+
+  it("pagination controls work", async () => {
+    const transactions = Array.from({ length: 20 }, (_, i) =>
+      createMockTransaction({ id: `tx-${i}`, description: `Tx ${i}` })
+    );
+
+    const invoker = await mockInvoke({
+      list_transactions: { transactions, total: 47 },
+      list_agents: [],
+    });
+
+    render(<Transactions />);
+
+    // Wait for data
+    expect(await screen.findByText("Showing 1-20 of 47")).toBeInTheDocument();
+
+    // Click Next
+    const user = userEvent.setup();
+    const nextButton = screen.getByRole("button", { name: /next/i });
+    await user.click(nextButton);
+
+    // Verify invoke was called with offset 20
+    await waitFor(() => {
+      expect(invoker).toHaveBeenCalledWith(
+        "list_transactions",
+        expect.objectContaining({ offset: 20 })
+      );
+    });
+  });
+
+  it("status filter changes displayed transactions", async () => {
+    const tx = createMockTransaction({ id: "tx-1", status: "confirmed" });
+
+    const invoker = await mockInvoke({
+      list_transactions: { transactions: [tx], total: 1 },
+      list_agents: [],
+    });
+
+    render(<Transactions />);
+
+    // Wait for initial render
+    await screen.findByText("Confirmed");
+
+    const user = userEvent.setup();
+
+    // Use selectOptions to change the native select element
+    const statusSelect = screen.getByTestId("status-filter");
+    await user.selectOptions(statusSelect, "confirmed");
+
+    // Verify invoke was called with status filter
+    await waitFor(() => {
+      expect(invoker).toHaveBeenCalledWith(
+        "list_transactions",
+        expect.objectContaining({ status: "confirmed" })
+      );
+    });
+  });
+
+  it("displays correct status badges", async () => {
+    const transactions = [
+      createMockTransaction({ id: "tx-1", status: "confirmed", description: "tx-confirmed" }),
+      createMockTransaction({ id: "tx-2", status: "executing", description: "tx-executing" }),
+      createMockTransaction({ id: "tx-3", status: "pending", description: "tx-pending" }),
+      createMockTransaction({ id: "tx-4", status: "failed", description: "tx-failed" }),
+      createMockTransaction({ id: "tx-5", status: "denied", description: "tx-denied" }),
+    ];
+
+    await mockInvoke({
+      list_transactions: { transactions, total: 5 },
+      list_agents: [],
+    });
+
+    render(<Transactions />);
+
+    // Wait for data to load
+    await screen.findByText("tx-confirmed");
+
+    // Check badge elements exist with correct color classes
+    const confirmedBadge = screen.getByTestId("status-badge-tx-1");
+    expect(confirmedBadge).toHaveAttribute("data-variant", "default");
+    expect(confirmedBadge).toHaveClass("bg-green-100");
+
+    const executingBadge = screen.getByTestId("status-badge-tx-2");
+    expect(executingBadge).toHaveClass("bg-blue-100");
+
+    const pendingBadge = screen.getByTestId("status-badge-tx-3");
+    expect(pendingBadge).toHaveClass("bg-yellow-100");
+
+    const failedBadge = screen.getByTestId("status-badge-tx-4");
+    expect(failedBadge).toHaveClass("bg-red-100");
+
+    const deniedBadge = screen.getByTestId("status-badge-tx-5");
+    expect(deniedBadge).toHaveClass("bg-red-100");
+  });
+});
+
+================
+File: src/components/layout/Header.tsx
+================
+import { useBalance } from "@/hooks/useBalance";
+import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
+
+export function Header() {
+  const { balance, isLoading } = useBalance();
+
+  return (
+    <header role="banner" className="flex h-14 items-center justify-between border-b border-[#E8E5E0] bg-[#FAFAF9] px-6">
+      <span className="text-sm font-semibold text-[#1A1A1A]">Agent Neo Bank</span>
+      <div className="text-sm text-[#1A1A1A]">
+        {isLoading ? (
+          <span>Loading...</span>
+        ) : balance ? (
+          <CurrencyDisplay amount={balance} />
+        ) : (
+          <span>--</span>
+        )}
+      </div>
+    </header>
+  );
+}
+
+================
+File: src/components/layout/Shell.tsx
+================
+import { Outlet } from "react-router-dom";
+import { Sidebar } from "./Sidebar";
+import { Header } from "./Header";
+
+export function Shell() {
+  return (
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar />
+      <div className="flex-1 overflow-y-auto bg-[#FAFAF9]">
+        <Header />
+        <main className="mx-auto max-w-[1200px] px-8 py-8">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
+
+================
+File: src/components/onboarding/FundStep.tsx
+================
+import { useState } from "react";
+import { Copy, Check, Wallet } from "lucide-react";
+
+interface FundStepProps {
+  address: string;
+  onNext: () => void;
+}
+
+export function FundStep({ address, onNext }: FundStepProps) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div>
+      <div className="text-center">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#EEF2FF]">
+          <Wallet className="size-6 text-[#4F46E5]" />
+        </div>
+        <h1 className="mt-4 text-2xl font-semibold text-[#1A1A1A]">
+          Fund your wallet
+        </h1>
+        <p className="mt-2 text-sm text-[#6B7280]">
+          Send USDC to your wallet address to get started
+        </p>
+      </div>
+
+      <div className="mt-8 rounded-xl border border-[#E8E5E0] bg-white p-4">
+        <p className="mb-2 text-xs font-medium text-[#6B7280]">
+          Your wallet address
+        </p>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 break-all text-sm font-mono text-[#1A1A1A]">
+            {address}
+          </code>
+          <button
+            onClick={handleCopy}
+            aria-label="Copy address"
+            className="flex size-9 items-center justify-center rounded-lg border border-[#E8E5E0] text-[#6B7280] transition-colors hover:bg-[#F5F5F4] hover:text-[#1A1A1A]"
+          >
+            {copied ? (
+              <Check className="size-4" />
+            ) : (
+              <Copy className="size-4" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      <button
+        onClick={onNext}
+        className="mt-6 w-full rounded-lg bg-[#4F46E5] px-6 py-3 text-base font-medium text-white transition-colors hover:bg-[#4338CA] active:scale-[0.98]"
+      >
+        Continue to Dashboard
+      </button>
+    </div>
+  );
+}
+
+================
+File: src/components/onboarding/WelcomeStep.tsx
+================
+import { Wallet } from "lucide-react";
+
+interface WelcomeStepProps {
+  onNext: () => void;
+}
+
+export function WelcomeStep({ onNext }: WelcomeStepProps) {
+  return (
+    <div className="text-center">
+      {/* Logo */}
+      <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-[#4F46E5]">
+        <Wallet className="size-6 text-white" />
+      </div>
+
+      <h1 className="mt-6 text-2xl font-semibold text-[#1A1A1A]">
+        Give your AI agents spending power
+      </h1>
+
+      <p className="mt-3 text-base text-[#6B7280]">
+        Set up a wallet, define budgets, and let your AI agents pay for services
+        autonomously — with guardrails you control.
+      </p>
+
+      <p className="mt-2 text-xs text-[#9CA3AF]">Set up in 2 minutes</p>
+
+      <button
+        onClick={onNext}
+        className="mt-8 w-full rounded-lg bg-[#4F46E5] px-6 py-3 text-base font-medium text-white transition-colors hover:bg-[#4338CA] active:scale-[0.98]"
+      >
+        Get Started
+      </button>
+
+      <p className="mt-6 text-xs text-[#9CA3AF]">
+        Powered by Coinbase Agent Wallet
+      </p>
+    </div>
+  );
+}
+
+================
+File: src/components/shared/StatusBadge.tsx
+================
+import { cn } from "@/lib/utils";
+
+interface StatusBadgeProps {
+  status: "active" | "pending" | "suspended" | "revoked";
+  className?: string;
+}
+
+const statusConfig = {
+  active: { dot: "bg-[#10B981]", text: "text-[#10B981]", bg: "bg-[#ECFDF5]", label: "Active" },
+  pending: { dot: "bg-[#F59E0B] animate-pulse", text: "text-[#F59E0B]", bg: "bg-[#FFFBEB]", label: "Pending" },
+  suspended: { dot: "bg-[#EF4444]", text: "text-[#EF4444]", bg: "bg-[#FEF2F2]", label: "Suspended" },
+  revoked: { dot: "bg-[#6B7280]", text: "text-[#6B7280]", bg: "bg-[#F9FAFB]", label: "Revoked" },
+};
+
+export function StatusBadge({ status, className }: StatusBadgeProps) {
+  const config = statusConfig[status];
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium", config.bg, config.text, className)}>
+      <span className={cn("size-1.5 rounded-full", config.dot)} />
+      {config.label}
+    </span>
+  );
+}
+
+================
+File: src/pages/AgentDetail.tsx
+================
+import { useState, useEffect, useCallback } from "react";
+import { useParams, Link } from "react-router-dom";
+import { invoke } from "@tauri-apps/api/core";
+import { ChevronRight, Bot, Pause, RefreshCw, X } from "lucide-react";
+import type { Agent, SpendingPolicy, Transaction, AgentBudgetSummary } from "../types";
+import { StatusBadge } from "../components/shared/StatusBadge";
+import { ProgressBar } from "../components/shared/ProgressBar";
+import { MonoAddress } from "../components/shared/MonoAddress";
+import { Input } from "../components/ui/input";
+
+export function AgentDetail() {
+  const { id } = useParams<{ id: string }>();
+  const [agent, setAgent] = useState<Agent | null>(null);
+  const [policy, setPolicy] = useState<SpendingPolicy | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [budget, setBudget] = useState<AgentBudgetSummary | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editPolicy, setEditPolicy] = useState<SpendingPolicy | null>(null);
+
+  const loadData = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    try {
+      const [agentData, policyData, txData, budgetSummaries] = await Promise.all([
+        invoke<Agent>("get_agent", { agentId: id }),
+        invoke<SpendingPolicy>("get_agent_spending_policy", { agentId: id }),
+        invoke<Transaction[]>("get_agent_transactions", {
+          agentId: id,
+          limit: 20,
+        }),
+        invoke<AgentBudgetSummary[]>("get_agent_budget_summaries").catch(() => [] as AgentBudgetSummary[]),
+      ]);
+      setAgent(agentData);
+      setPolicy(policyData);
+      setEditPolicy(policyData);
+      setTransactions(txData);
+      const agentBudget = budgetSummaries.find((b) => b.agent_id === id) ?? null;
+      setBudget(agentBudget);
+    } catch {
+      // Error loading data
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleSuspend = async () => {
+    if (!id) return;
+    await invoke("suspend_agent", { agentId: id });
+    await loadData();
+  };
+
+  const handleSaveLimits = async () => {
+    if (!editPolicy) return;
+    await invoke("update_agent_spending_policy", { policy: editPolicy });
+    setPolicy(editPolicy);
+    setIsEditing(false);
+  };
+
+  const handleEditChange = (field: keyof SpendingPolicy, value: string) => {
+    if (!editPolicy) return;
+    setEditPolicy({ ...editPolicy, [field]: value });
+  };
+
+  const toggleEdit = () => {
+    if (isEditing) {
+      handleSaveLimits();
+    } else {
+      setIsEditing(true);
+    }
+  };
+
+  const formatDate = (timestamp: number | null) => {
+    if (!timestamp) return "Never";
+    return new Date(timestamp * 1000).toLocaleDateString();
+  };
+
+  const formatTime = (timestamp: number | null) => {
+    if (!timestamp) return "";
+    const d = new Date(timestamp * 1000);
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getStatusDotColor = (status: string) => {
+    switch (status) {
+      case "confirmed":
+        return "bg-[#10B981]";
+      case "pending":
+      case "awaiting_approval":
+        return "bg-[#F59E0B]";
+      case "failed":
+      case "denied":
+        return "bg-[#EF4444]";
+      default:
+        return "bg-[#9CA3AF]";
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <p className="text-[#6B7280]">Loading agent details...</p>
+      </div>
+    );
+  }
+
+  if (!agent) {
+    return (
+      <div className="p-6">
+        <p className="text-[#6B7280]">Agent not found</p>
+      </div>
+    );
+  }
+
+  const policyRows = policy
+    ? [
+        {
+          label: "Per Transaction",
+          limit: parseFloat(policy.per_tx_max) || 0,
+          spent: 0,
+        },
+        {
+          label: "Daily",
+          limit: parseFloat(policy.daily_cap) || 0,
+          spent: budget ? parseFloat(budget.daily_spent) || 0 : 0,
+        },
+        {
+          label: "Weekly",
+          limit: parseFloat(policy.weekly_cap) || 0,
+          spent: budget ? parseFloat(budget.weekly_spent) || 0 : 0,
+        },
+        {
+          label: "Monthly",
+          limit: parseFloat(policy.monthly_cap) || 0,
+          spent: budget ? parseFloat(budget.monthly_spent) || 0 : 0,
+        },
+      ]
+    : [];
+
+  const getColor = (row: { spent: number; limit: number }): "indigo" | "green" | "amber" | "red" => {
+    if (row.limit === 0) return "indigo";
+    const ratio = row.spent / row.limit;
+    if (ratio >= 0.9) return "red";
+    if (ratio >= 0.7) return "amber";
+    return "indigo";
+  };
+
+  const recipients = policy?.allowlist ?? [];
+
+  return (
+    <div className="p-6 space-y-4">
+      {/* Breadcrumb + Header */}
+      <div className="space-y-4">
+        <nav className="flex items-center gap-2 text-sm text-[#6B7280]">
+          <Link to="/agents" className="hover:text-[#4F46E5]">
+            Agents
+          </Link>
+          <ChevronRight className="size-4" />
+          <span className="text-[#1A1A1A] font-medium">{agent.name}</span>
+        </nav>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex size-12 items-center justify-center rounded-full bg-[#EEF2FF]">
+              <Bot className="size-6 text-[#4F46E5]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-semibold text-[#1A1A1A]">{agent.name}</h1>
+                <StatusBadge status={agent.status} />
+              </div>
+              <p className="text-sm text-[#6B7280]">
+                {agent.purpose} · Created {formatDate(agent.created_at)}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {agent.status === "active" && (
+              <button
+                onClick={handleSuspend}
+                className="inline-flex items-center gap-2 rounded-lg border border-[#EF4444] px-4 py-2 text-sm font-medium text-[#EF4444] hover:bg-[#FEF2F2]"
+              >
+                <Pause className="size-4" />
+                Suspend Agent
+              </button>
+            )}
+            <button
+              disabled
+              title="Coming soon — available in Phase 4"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#E8E5E0] px-4 py-2 text-sm font-medium text-[#1A1A1A] opacity-50 cursor-not-allowed"
+            >
+              <RefreshCw className="size-4" />
+              Rotate Token
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Two-Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Card 1: Spending Limits */}
+          <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-base font-semibold text-[#1A1A1A]">Spending Limits</h2>
+              <button
+                onClick={toggleEdit}
+                className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
+              >
+                {isEditing ? "Save" : "Edit"}
+              </button>
+            </div>
+
+            {isEditing && editPolicy ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="per_tx_max" className="text-sm text-[#6B7280]">
+                      Per Transaction Max
+                    </label>
+                    <Input
+                      id="per_tx_max"
+                      value={editPolicy.per_tx_max}
+                      onChange={(e) => handleEditChange("per_tx_max", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="daily_cap" className="text-sm text-[#6B7280]">
+                      Daily Cap
+                    </label>
+                    <Input
+                      id="daily_cap"
+                      value={editPolicy.daily_cap}
+                      onChange={(e) => handleEditChange("daily_cap", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="weekly_cap" className="text-sm text-[#6B7280]">
+                      Weekly Cap
+                    </label>
+                    <Input
+                      id="weekly_cap"
+                      value={editPolicy.weekly_cap}
+                      onChange={(e) => handleEditChange("weekly_cap", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="monthly_cap" className="text-sm text-[#6B7280]">
+                      Monthly Cap
+                    </label>
+                    <Input
+                      id="monthly_cap"
+                      value={editPolicy.monthly_cap}
+                      onChange={(e) => handleEditChange("monthly_cap", e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {policyRows.map((row) => (
+                  <div key={row.label}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm text-[#6B7280]">{row.label}</span>
+                      <span className="text-sm font-medium font-mono text-[#1A1A1A]">
+                        ${row.spent} / ${row.limit}
+                      </span>
+                    </div>
+                    <ProgressBar value={row.spent} max={row.limit} color={getColor(row)} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Allowed Recipients */}
+          <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+            <h2 className="text-base font-semibold text-[#1A1A1A] mb-4">Allowed Recipients</h2>
+            {recipients.length > 0 ? (
+              <div className="space-y-3">
+                {recipients.map((addr) => (
+                  <div
+                    key={addr}
+                    className="flex items-center justify-between rounded-lg bg-[#F9FAFB] px-3 py-2"
+                  >
+                    <MonoAddress address={addr} />
+                    <button className="text-[#9CA3AF] hover:text-[#EF4444]">
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[#9CA3AF]">All recipients allowed</p>
+            )}
+          </div>
+        </div>
+
+        {/* Card 3: Activity Feed */}
+        <div>
+          <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+            <h2 className="text-base font-semibold text-[#1A1A1A] mb-4">Activity</h2>
+            {transactions.length === 0 ? (
+              <p className="text-sm text-[#9CA3AF]">No transactions</p>
+            ) : (
+              <div className="space-y-4">
+                {transactions.map((tx) => (
+                  <div key={tx.id} className="flex items-start gap-3">
+                    <div className={`mt-1 size-2 rounded-full ${getStatusDotColor(tx.status)}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-[#1A1A1A]">${tx.amount}</span>
+                        <span className="text-xs text-[#9CA3AF]">{formatTime(tx.created_at)}</span>
+                      </div>
+                      <p className="text-xs text-[#6B7280] truncate">
+                        {tx.description || tx.recipient}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+================
+File: src/pages/Agents.tsx
+================
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Link } from "react-router-dom";
+import { Search, Plus, Bot } from "lucide-react";
+import type { Agent } from "../types";
+import { StatusBadge } from "../components/shared/StatusBadge";
+
+export function Agents() {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<string>("all");
+
+  useEffect(() => {
+    invoke<Agent[]>("list_agents")
+      .then(setAgents)
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <p className="text-muted-foreground">Loading agents...</p>
+      </div>
+    );
+  }
+
+  const filteredAgents = agents.filter((agent) => {
+    const matchesTab = activeTab === "all" || agent.status === activeTab;
+    const matchesSearch =
+      !search || agent.name.toLowerCase().includes(search.toLowerCase());
+    return matchesTab && matchesSearch;
+  });
+
+  const getCount = (tab: string) => {
+    if (tab === "all") return agents.length;
+    return agents.filter((a) => a.status === tab).length;
+  };
+
+  return (
+    <div className="space-y-6 p-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Agents</h1>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9CA3AF]" />
+            <input
+              type="text"
+              placeholder="Search agents..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-10 rounded-lg border border-[#E8E5E0] bg-white pl-10 pr-4 text-sm text-[#1A1A1A] placeholder:text-[#9CA3AF] focus:border-[#4F46E5] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+            />
+          </div>
+          <Link
+            to="/settings"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#4338CA]"
+          >
+            <Plus className="size-4" />
+            Generate Invitation Code
+          </Link>
+        </div>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="flex gap-1 border-b border-[#F0EDE8]">
+        {[
+          { key: "all", label: "All" },
+          { key: "active", label: "Active" },
+          { key: "pending", label: "Pending" },
+          { key: "suspended", label: "Suspended" },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+                : "text-[#6B7280] hover:text-[#1A1A1A]"
+            }`}
+          >
+            {tab.label}
+            <span className="ml-1.5 rounded-full bg-[#F0EDE8] px-1.5 py-0.5 text-xs">
+              {getCount(tab.key)}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Agent Cards Grid or Empty State */}
+      {filteredAgents.length === 0 && agents.length === 0 ? (
+        <div className="flex flex-col items-center py-16 text-center">
+          <Bot className="size-12 text-[#9CA3AF]" />
+          <h3 className="mt-4 text-lg font-medium text-[#1A1A1A]">
+            No agents yet
+          </h3>
+          <p className="mt-1 text-sm text-[#6B7280]">
+            Generate an invitation code to let an AI agent connect to your
+            wallet.
+          </p>
+        </div>
+      ) : filteredAgents.length === 0 ? (
+        <div className="flex flex-col items-center py-16 text-center">
+          <Bot className="size-12 text-[#9CA3AF]" />
+          <h3 className="mt-4 text-lg font-medium text-[#1A1A1A]">
+            No matching agents
+          </h3>
+          <p className="mt-1 text-sm text-[#6B7280]">
+            Try adjusting your search or filter criteria.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredAgents.map((agent) => (
+            <Link
+              key={agent.id}
+              to={`/agents/${agent.id}`}
+              data-testid={`agent-card-${agent.id}`}
+              className="group rounded-xl border border-[#F0EDE8] bg-white p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-full bg-[#EEF2FF]">
+                    <Bot className="size-5 text-[#4F46E5]" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#1A1A1A]">
+                      {agent.name}
+                    </h3>
+                    <p className="max-w-[180px] truncate text-xs text-[#9CA3AF]">
+                      {agent.purpose || "General purpose agent"}
+                    </p>
+                  </div>
+                </div>
+                <span data-testid={`status-badge-${agent.id}`}>
+                  <StatusBadge status={agent.status} />
+                </span>
+              </div>
+            </Link>
+          ))}
+
+          {/* Add Agent card */}
+          <Link
+            to="/settings"
+            className="flex min-h-[140px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-white p-5 text-center transition-colors hover:border-[#4F46E5] hover:bg-[#EEF2FF]"
+          >
+            <Plus className="size-8 text-[#9CA3AF]" />
+            <span className="mt-2 text-sm font-medium text-[#6B7280]">
+              Add New Agent
+            </span>
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+================
+File: src/pages/Approvals.tsx
+================
+import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import type { ApprovalRequest, Agent } from "../types";
+import { Bot, Check, X, CheckCircle } from "lucide-react";
+
+interface TransactionPayload {
+  tx_id?: string;
+  to?: string;
+  amount?: string;
+  asset?: string;
+}
+
+interface LimitIncreasePayload {
+  proposed_daily?: string;
+  proposed_monthly?: string;
+}
+
+interface RegistrationPayload {
+  agent_name?: string;
+}
+
+type ParsedPayload = TransactionPayload & LimitIncreasePayload & RegistrationPayload;
+
+function parsePayload(payload: string): ParsedPayload {
+  try {
+    return JSON.parse(payload) as ParsedPayload;
+  } catch {
+    return {};
+  }
+}
+
+function formatTimeAgo(timestamp: number): string {
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - timestamp;
+  if (diff < 60) return "Just now";
+  const minutes = Math.floor(diff / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function truncateAddress(address: string): string {
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+export function Approvals() {
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [filter, setFilter] = useState<string>("pending");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadApprovals = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const args =
+        filter === "pending" ? { status: "pending" } : {};
+      const result = await invoke<ApprovalRequest[]>("list_approvals", args);
+      setApprovals(result);
+    } catch {
+      setError("Couldn't load approvals");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filter]);
+
+  const loadAgents = useCallback(async () => {
+    try {
+      const result = await invoke<Agent[]>("list_agents");
+      setAgents(result);
+    } catch {
+      // silently handle
+    }
+  }, []);
+
+  useEffect(() => {
+    loadApprovals();
+    loadAgents();
+  }, [loadApprovals, loadAgents]);
+
+  const getAgentName = (agentId: string): string => {
+    const agent = agents.find((a) => a.id === agentId);
+    return agent?.name ?? agentId;
+  };
+
+  const handleResolve = async (approvalId: string, decision: string) => {
+    try {
+      await invoke("resolve_approval", {
+        approval_id: approvalId,
+        decision,
+      });
+      await loadApprovals();
+    } catch {
+      // silently handle
+    }
+  };
+
+  const pendingCount = approvals.filter((a) => a.status === "pending").length;
+
+  const renderPayloadDetails = (approval: ApprovalRequest) => {
+    const data = parsePayload(approval.payload);
+
+    if (approval.request_type === "transaction") {
+      return (
+        <div className="mt-4">
+          {data.amount && data.asset && (
+            <p className="text-xl font-semibold text-[#1A1A1A]">
+              {data.amount} {data.asset}
+            </p>
+          )}
+          {data.to && (
+            <p className="mt-1 text-sm font-mono text-[#6B7280]">
+              {truncateAddress(data.to)}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (approval.request_type === "limit_increase") {
+      return (
+        <div className="mt-4 space-y-1">
+          {data.proposed_daily && (
+            <p className="text-sm text-[#6B7280]">
+              Proposed daily limit: <span className="font-semibold text-[#1A1A1A]">{data.proposed_daily}</span>
+            </p>
+          )}
+          {data.proposed_monthly && (
+            <p className="text-sm text-[#6B7280]">
+              Proposed monthly limit: <span className="font-semibold text-[#1A1A1A]">{data.proposed_monthly}</span>
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    if (approval.request_type === "registration") {
+      return (
+        <div className="mt-4">
+          {data.agent_name && (
+            <p className="text-sm text-[#6B7280]">
+              Agent: <span className="font-semibold text-[#1A1A1A]">{data.agent_name}</span>
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-[#1A1A1A]">Approvals</h1>
+          <p className="mt-1 text-sm text-[#F59E0B] font-medium">{pendingCount} pending</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setFilter("pending")}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              filter === "pending"
+                ? "bg-[#4F46E5] text-white"
+                : "border border-[#F0EDE8] bg-white text-[#6B7280] hover:bg-[#F9FAFB]"
+            }`}
+          >
+            Pending
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter("all")}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              filter === "all"
+                ? "bg-[#4F46E5] text-white"
+                : "border border-[#F0EDE8] bg-white text-[#6B7280] hover:bg-[#F9FAFB]"
+            }`}
+          >
+            All
+          </button>
+        </div>
+      </div>
+
+      {!isLoading && error ? (
+        <div className="flex flex-col items-center py-16 text-center">
+          <div className="flex size-16 items-center justify-center rounded-full bg-[#FEF2F2]">
+            <X className="size-8 text-[#EF4444]" />
+          </div>
+          <h3 className="mt-4 text-lg font-medium text-[#1A1A1A]">{error}</h3>
+          <button
+            type="button"
+            onClick={loadApprovals}
+            className="mt-4 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white hover:bg-[#4338CA]"
+          >
+            Retry
+          </button>
+        </div>
+      ) : !isLoading && approvals.length === 0 ? (
+        <div className="flex flex-col items-center py-16 text-center">
+          <div className="flex size-16 items-center justify-center rounded-full bg-[#ECFDF5]">
+            <CheckCircle className="size-8 text-[#10B981]" />
+          </div>
+          <h3 className="mt-4 text-lg font-medium text-[#1A1A1A]">All caught up!</h3>
+          <p className="mt-1 text-sm text-[#6B7280]">No pending approvals right now.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {approvals.map((approval) => (
+            <div
+              key={approval.id}
+              className="rounded-xl border border-[#F0EDE8] bg-white p-6"
+              style={{ borderLeft: "3px solid #F59E0B" }}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-full bg-[#EEF2FF]">
+                    <Bot className="size-5 text-[#4F46E5]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#1A1A1A]">
+                      {getAgentName(approval.agent_id)}
+                    </p>
+                    <p className="text-xs text-[#9CA3AF]">
+                      {formatTimeAgo(approval.created_at)}
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-full bg-[#FEF3C7] px-2.5 py-0.5 text-xs font-medium text-[#92400E]">
+                  {approval.request_type}
+                </span>
+              </div>
+
+              {renderPayloadDetails(approval)}
+
+              {approval.status === "pending" && (
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleResolve(approval.id, "approved")}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#10B981] px-4 py-2 text-sm font-medium text-white hover:bg-[#059669]"
+                  >
+                    <Check className="size-4" />
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResolve(approval.id, "denied")}
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#EF4444] px-4 py-2 text-sm font-medium text-[#EF4444] hover:bg-[#FEF2F2]"
+                  >
+                    <X className="size-4" />
+                    Deny
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+================
+File: src/pages/Dashboard.test.tsx
+================
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import { renderWithRouter } from "@/test/render";
+import { Dashboard } from "./Dashboard";
+
+vi.mock("@/hooks/useBalance", () => ({
+  useBalance: () => ({
+    balance: "1247.83",
+    balances: null,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}));
+
+// Mock invoke for budget commands
+const mockInvoke = vi.fn();
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
+
+beforeEach(() => {
+  mockInvoke.mockImplementation(async (cmd: string) => {
+    if (cmd === "get_agent_budget_summaries") {
+      return [];
+    }
+    if (cmd === "get_global_budget_summary") {
+      return {
+        daily_spent: "100",
+        daily_cap: "10000",
+        weekly_spent: "500",
+        weekly_cap: "50000",
+        monthly_spent: "2000",
+        monthly_cap: "200000",
+        kill_switch_active: false,
+      };
+    }
+    if (cmd === "get_balance") {
+      return { balance: "1247.83", asset: "USDC" };
+    }
+    throw new Error(`Unmocked invoke: ${cmd}`);
+  });
+});
+
+describe("Dashboard", () => {
+  it("renders balance in the hero card", () => {
+    renderWithRouter(<Dashboard />);
+    expect(screen.getByText("$1,247.83")).toBeInTheDocument();
+  });
+
+  it("shows empty state for agents when none registered", async () => {
+    renderWithRouter(<Dashboard />);
+    await waitFor(() => {
+      expect(screen.getByText("No agents yet")).toBeInTheDocument();
+    });
+  });
+
+  it("shows empty state for transactions", () => {
+    renderWithRouter(<Dashboard />);
+    expect(screen.getByText("No transactions yet")).toBeInTheDocument();
+  });
+
+  it("renders global budget utilization section", async () => {
+    renderWithRouter(<Dashboard />);
+    await waitFor(() => {
+      expect(screen.getByText("Global Budget Utilization")).toBeInTheDocument();
+    });
+  });
+
+  it("renders global budget progress bars after loading", async () => {
+    renderWithRouter(<Dashboard />);
+    await waitFor(() => {
+      expect(screen.getByText("Daily Global")).toBeInTheDocument();
+      expect(screen.getByText("Weekly Global")).toBeInTheDocument();
+      expect(screen.getByText("Monthly Global")).toBeInTheDocument();
+    });
+  });
+
+  it("renders quick action links", () => {
+    renderWithRouter(<Dashboard />);
+    expect(screen.getByText("Send")).toBeInTheDocument();
+    expect(screen.getByText("Fund")).toBeInTheDocument();
+    expect(screen.getByText("Invite Agent")).toBeInTheDocument();
+    expect(screen.getByText("Settings")).toBeInTheDocument();
+  });
+
+  it("renders page header", () => {
+    renderWithRouter(<Dashboard />);
+    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+  });
+
+  it("renders USDC label", () => {
+    renderWithRouter(<Dashboard />);
+    expect(screen.getByText("USDC")).toBeInTheDocument();
+  });
+
+  it("renders Fund Wallet link in hero card", () => {
+    renderWithRouter(<Dashboard />);
+    expect(screen.getByText("Fund Wallet")).toBeInTheDocument();
+  });
+
+  it("calls invoke for budget data on mount", async () => {
+    renderWithRouter(<Dashboard />);
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("get_agent_budget_summaries");
+      expect(mockInvoke).toHaveBeenCalledWith("get_global_budget_summary");
+    });
+  });
+
+  it("renders agent cards when agent budgets exist", async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_agent_budget_summaries") {
+        return [
+          {
+            agent_id: "a1",
+            agent_name: "Trading Bot",
+            daily_spent: "50",
+            daily_cap: "200",
+            weekly_spent: "150",
+            weekly_cap: "1000",
+            monthly_spent: "400",
+            monthly_cap: "5000",
+          },
+        ];
+      }
+      if (cmd === "get_global_budget_summary") {
+        return {
+          daily_spent: "100",
+          daily_cap: "10000",
+          weekly_spent: "500",
+          weekly_cap: "50000",
+          monthly_spent: "2000",
+          monthly_cap: "200000",
+          kill_switch_active: false,
+        };
+      }
+      throw new Error(`Unmocked invoke: ${cmd}`);
+    });
+
+    renderWithRouter(<Dashboard />);
+    await waitFor(() => {
+      expect(screen.getAllByText("Trading Bot").length).toBeGreaterThanOrEqual(1);
+    });
+    // Agent Budgets section should also appear for detailed view
+    await waitFor(() => {
+      expect(screen.getByText("Agent Budgets")).toBeInTheDocument();
+    });
+  });
+});
+
+================
+File: src/pages/Onboarding.test.tsx
+================
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Onboarding } from "./Onboarding";
+
+const mockInvoke = vi.fn();
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
+
+describe("Onboarding", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+  });
+
+  it("renders WelcomeStep initially", () => {
+    render(<Onboarding />);
+    expect(
+      screen.getByText(/give your ai agents spending power/i)
+    ).toBeInTheDocument();
+  });
+
+  it("advances through steps", async () => {
+    render(<Onboarding />);
+    // Step 0: Welcome
+    expect(
+      screen.getByText(/give your ai agents spending power/i)
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: /get started/i })
+    );
+    // Step 1: Email
+    expect(
+      screen.getByPlaceholderText(/you@example\.com/i)
+    ).toBeInTheDocument();
+  });
+
+  it("calls invoke('auth_login') when email is submitted", async () => {
+    mockInvoke.mockResolvedValueOnce({ status: "otp_sent", flow_id: "abc" });
+
+    render(<Onboarding />);
+    // Go to email step
+    await userEvent.click(
+      screen.getByRole("button", { name: /get started/i })
+    );
+
+    // Fill email and submit
+    const emailInput = screen.getByPlaceholderText(/you@example\.com/i);
+    await userEvent.type(emailInput, "test@example.com");
+    await userEvent.click(
+      screen.getByRole("button", { name: /send verification code/i })
+    );
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("auth_login", {
+        email: "test@example.com",
+      });
+    });
+
+    // Should advance to OTP step
+    await waitFor(() => {
+      expect(screen.getByText(/check your email/i)).toBeInTheDocument();
+    });
+  });
+
+  it("calls invoke('auth_verify') when OTP is submitted", async () => {
+    // First call: auth_login
+    mockInvoke.mockResolvedValueOnce({ status: "otp_sent", flow_id: "abc" });
+    // Second call: auth_verify
+    mockInvoke.mockResolvedValueOnce({ status: "verified" });
+    // Third call: auth_status (optional, may fail)
+    mockInvoke.mockRejectedValueOnce(new Error("not implemented"));
+
+    render(<Onboarding />);
+
+    // Go to email step
+    await userEvent.click(
+      screen.getByRole("button", { name: /get started/i })
+    );
+
+    // Submit email
+    const emailInput = screen.getByPlaceholderText(/you@example\.com/i);
+    await userEvent.type(emailInput, "test@example.com");
+    await userEvent.click(
+      screen.getByRole("button", { name: /send verification code/i })
+    );
+
+    // Wait for OTP step
+    await waitFor(() => {
+      expect(screen.getByText(/check your email/i)).toBeInTheDocument();
+    });
+
+    // Fill OTP digits
+    const digitInputs = screen.getAllByRole("textbox");
+    for (let i = 0; i < 6; i++) {
+      await userEvent.type(digitInputs[i], String(i + 1));
+    }
+
+    // Click verify
+    await userEvent.click(screen.getByRole("button", { name: /verify/i }));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("auth_verify", {
+        otp: "123456",
+      });
+    });
+
+    // Should advance to Fund step
+    await waitFor(() => {
+      expect(screen.getByText(/fund your wallet/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows error when auth_login fails", async () => {
+    mockInvoke.mockRejectedValueOnce("Invalid email domain");
+
+    render(<Onboarding />);
+
+    // Go to email step
+    await userEvent.click(
+      screen.getByRole("button", { name: /get started/i })
+    );
+
+    // Submit email
+    const emailInput = screen.getByPlaceholderText(/you@example\.com/i);
+    await userEvent.type(emailInput, "test@example.com");
+    await userEvent.click(
+      screen.getByRole("button", { name: /send verification code/i })
+    );
+
+    // Should show error
+    await waitFor(() => {
+      expect(screen.getByText("Invalid email domain")).toBeInTheDocument();
+    });
+  });
+
+  it("shows error when auth_verify fails", async () => {
+    // auth_login succeeds
+    mockInvoke.mockResolvedValueOnce({ status: "otp_sent", flow_id: "abc" });
+    // auth_verify fails
+    mockInvoke.mockRejectedValueOnce("Invalid OTP");
+
+    render(<Onboarding />);
+
+    // Navigate to OTP step
+    await userEvent.click(
+      screen.getByRole("button", { name: /get started/i })
+    );
+    const emailInput = screen.getByPlaceholderText(/you@example\.com/i);
+    await userEvent.type(emailInput, "test@example.com");
+    await userEvent.click(
+      screen.getByRole("button", { name: /send verification code/i })
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/check your email/i)).toBeInTheDocument();
+    });
+
+    // Fill OTP and verify
+    const digitInputs = screen.getAllByRole("textbox");
+    for (let i = 0; i < 6; i++) {
+      await userEvent.type(digitInputs[i], String(i + 1));
+    }
+    await userEvent.click(screen.getByRole("button", { name: /verify/i }));
+
+    // Should show error
+    await waitFor(() => {
+      expect(screen.getByText("Invalid OTP")).toBeInTheDocument();
+    });
+  });
+});
+
+================
+File: src/main.tsx
+================
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
+import "@fontsource/jetbrains-mono/400.css";
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import { App } from "./App";
+import "./index.css";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>,
+);
+
+================
+File: src/components/layout/Sidebar.tsx
+================
+import { NavLink } from "react-router-dom";
+import {
+  LayoutDashboard,
+  Bot,
+  ArrowUpDown,
+  CheckCircle,
+  Wallet,
+  Settings,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+interface NavItem {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+}
+
+const navItems: NavItem[] = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/agents", label: "Agents", icon: Bot },
+  { to: "/transactions", label: "Transactions", icon: ArrowUpDown },
+  { to: "/approvals", label: "Approvals", icon: CheckCircle },
+  { to: "/fund", label: "Fund", icon: Wallet },
+  { to: "/settings", label: "Settings", icon: Settings },
+];
+
+export function Sidebar() {
+  return (
+    <aside className="flex h-screen w-60 flex-col border-r border-[#E8E5E0] bg-white">
+      {/* Logo */}
+      <div className="flex items-center gap-2.5 px-5 pt-6 pb-5">
+        <div className="flex size-8 items-center justify-center rounded-lg bg-[#4F46E5]">
+          <Wallet className="size-4 text-white" />
+        </div>
+        <span className="text-lg font-semibold text-[#1A1A1A]">Agent Neo Bank</span>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex flex-1 flex-col gap-1 px-3">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                isActive
+                  ? "bg-[#EEF2FF] font-semibold text-[#4F46E5]"
+                  : "text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#1A1A1A]"
+              }`
+            }
+          >
+            <item.icon className="size-5" />
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* User Profile */}
+      <div className="border-t border-[#E8E5E0] px-4 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-8 items-center justify-center rounded-full bg-[#EEF2FF] text-sm font-medium text-[#4F46E5]">
+            D
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-[#1A1A1A]">dennison</p>
+            <p className="truncate text-xs text-[#9CA3AF]">Connected</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+================
+File: src/components/onboarding/EmailStep.tsx
+================
+import { useState } from "react";
+import { ArrowLeft } from "lucide-react";
+
+interface EmailStepProps {
+  onNext: (email: string) => void | Promise<void>;
+  onBack: () => void;
+  loading?: boolean;
+  serverError?: string | null;
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+export function EmailStep({ onNext, onBack, loading, serverError }: EmailStepProps) {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isValidEmail(email)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+    setError(null);
+    onNext(email);
+  }
+
+  return (
+    <div>
+      {/* Back button */}
+      <button
+        onClick={onBack}
+        className="mb-6 flex items-center gap-1 text-sm text-[#6B7280] hover:text-[#1A1A1A]"
+      >
+        <ArrowLeft className="size-4" />
+        Back
+      </button>
+
+      <h1 className="text-center text-2xl font-semibold text-[#1A1A1A]">
+        Connect your wallet
+      </h1>
+      <p className="mt-2 text-center text-sm text-[#6B7280]">
+        Enter your email to set up your Agent Wallet. We'll send you a
+        verification code.
+      </p>
+
+      <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-[#1A1A1A]">
+            Email address
+          </label>
+          <input
+            type="text"
+            inputMode="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (error) setError(null);
+            }}
+            className="w-full rounded-lg border border-[#E8E5E0] bg-white px-4 py-3 text-base text-[#1A1A1A] placeholder:text-[#9CA3AF] focus:border-[#4F46E5] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+            placeholder="you@example.com"
+          />
+          {error && <p className="mt-2 text-sm text-[#EF4444]">{error}</p>}
+          {serverError && (
+            <p className="mt-2 text-sm text-[#EF4444]">{serverError}</p>
+          )}
+        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-lg bg-[#4F46E5] px-6 py-3 text-base font-medium text-white transition-colors hover:bg-[#4338CA] disabled:opacity-50"
+        >
+          {loading ? "Sending..." : "Send Verification Code"}
+        </button>
+      </form>
+
+      <p className="mt-4 text-center text-xs text-[#9CA3AF]">
+        By continuing, you agree to the Coinbase Agent Wallet terms.
+      </p>
+    </div>
+  );
+}
+
+================
+File: src/components/onboarding/OtpStep.tsx
+================
+import { useState, useRef } from "react";
+import { ArrowLeft, Mail } from "lucide-react";
+
+interface OtpStepProps {
+  onNext: (otp: string) => void | Promise<void>;
+  onBack: () => void;
+  loading?: boolean;
+  serverError?: string | null;
+  email?: string;
+}
+
+export function OtpStep({ onNext, onBack, loading, serverError, email }: OtpStepProps) {
+  const [digits, setDigits] = useState(["", "", "", "", "", ""]);
+  const [error, setError] = useState<string | null>(null);
+  const refs = [
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+  ];
+
+  function handleDigitChange(index: number, value: string) {
+    const sanitized = value.replace(/\D/g, "");
+    if (!sanitized && !value) {
+      // Allow clearing
+      const next = [...digits];
+      next[index] = "";
+      setDigits(next);
+      return;
+    }
+    if (!sanitized) return;
+
+    const next = [...digits];
+    next[index] = sanitized.slice(-1);
+    setDigits(next);
+    if (error) setError(null);
+
+    // Auto-advance to next input
+    if (sanitized && index < 5) {
+      refs[index + 1]?.current?.focus();
+    }
+  }
+
+  function handleKeyDown(index: number, e: React.KeyboardEvent) {
+    if (e.key === "Backspace" && !digits[index] && index > 0) {
+      refs[index - 1]?.current?.focus();
+    }
+  }
+
+  function handleVerify() {
+    const otp = digits.join("");
+    if (!/^\d{6}$/.test(otp)) {
+      setError("Please enter exactly 6 digits");
+      return;
+    }
+    setError(null);
+    onNext(otp);
+  }
+
+  return (
+    <div>
+      <button
+        onClick={onBack}
+        className="mb-6 flex items-center gap-1 text-sm text-[#6B7280] hover:text-[#1A1A1A]"
+      >
+        <ArrowLeft className="size-4" />
+        Back
+      </button>
+
+      <div className="text-center">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#EEF2FF]">
+          <Mail className="size-6 text-[#4F46E5]" />
+        </div>
+        <h1 className="mt-4 text-2xl font-semibold text-[#1A1A1A]">
+          Check your email
+        </h1>
+        <p className="mt-2 text-sm text-[#6B7280]">
+          Enter the 6-digit code we sent{email ? ` to ${email}` : " you"}
+        </p>
+      </div>
+
+      {/* 6 digit inputs in a row */}
+      <div className="mt-8 flex justify-center gap-2">
+        {digits.map((digit, i) => (
+          <input
+            key={i}
+            ref={refs[i]}
+            type="text"
+            inputMode="numeric"
+            maxLength={1}
+            value={digit}
+            onChange={(e) => handleDigitChange(i, e.target.value)}
+            onKeyDown={(e) => handleKeyDown(i, e)}
+            aria-label={`Digit ${i + 1}`}
+            className="size-12 rounded-xl border-2 border-[#E8E5E0] bg-white text-center text-xl font-bold text-[#1A1A1A] focus:border-[#4F46E5] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+          />
+        ))}
+      </div>
+
+      {error && (
+        <p className="mt-3 text-center text-sm text-[#EF4444]">{error}</p>
+      )}
+      {serverError && (
+        <p className="mt-3 text-center text-sm text-[#EF4444]">{serverError}</p>
+      )}
+
+      <button
+        onClick={handleVerify}
+        disabled={loading}
+        className="mt-6 w-full rounded-lg bg-[#4F46E5] px-6 py-3 text-base font-medium text-white transition-colors hover:bg-[#4338CA] disabled:opacity-50"
+      >
+        {loading ? "Verifying..." : "Verify"}
+      </button>
+
+      <p className="mt-4 text-center text-sm text-[#6B7280]">
+        Didn't receive it?{" "}
+        <button className="text-[#4F46E5] hover:text-[#4338CA]">
+          Resend code
+        </button>
+      </p>
+    </div>
+  );
+}
+
+================
+File: src/pages/Dashboard.tsx
+================
+import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Link } from "react-router-dom";
+import { useBalance } from "@/hooks/useBalance";
+import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
+import { GradientCard } from "@/components/shared/GradientCard";
+import { MonoAddress } from "@/components/shared/MonoAddress";
+import { ProgressBar } from "@/components/shared/ProgressBar";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+import { GlobalBudget } from "@/components/dashboard/GlobalBudget";
+import { AgentBudgets } from "@/components/dashboard/AgentBudgets";
+import {
+  ArrowUpRight,
+  Wallet,
+  UserPlus,
+  Settings,
+  Plus,
+  Bot,
+  ArrowUpDown,
+} from "lucide-react";
+import type { AgentBudgetSummary, GlobalBudgetSummary } from "@/types";
+
+function formatBalance(amount: string): string {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return amount;
+  return num.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function getProgressColor(spent: number, cap: number): "green" | "amber" | "red" {
+  if (cap <= 0) return "green";
+  const pct = (spent / cap) * 100;
+  if (pct > 95) return "red";
+  if (pct > 80) return "amber";
+  return "green";
+}
+
+function AgentCard({ agent }: { agent: AgentBudgetSummary }) {
+  const dailySpent = parseFloat(agent.daily_spent) || 0;
+  const dailyCap = parseFloat(agent.daily_cap) || 0;
+
+  return (
+    <div className="flex flex-col rounded-xl border border-[#F0EDE8] bg-white p-5 transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-full bg-[#EEF2FF]">
+            <Bot className="size-5 text-[#4F46E5]" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[#1A1A1A]">{agent.agent_name}</p>
+            <p className="text-xs text-[#6B7280]">Agent</p>
+          </div>
+        </div>
+        <StatusBadge status="active" />
+      </div>
+      <div className="mt-4">
+        <ProgressBar
+          value={dailySpent}
+          max={dailyCap}
+          color={getProgressColor(dailySpent, dailyCap)}
+        />
+        <div className="mt-1.5 flex justify-between text-xs text-[#6B7280]">
+          <span>
+            <CurrencyDisplay amount={agent.daily_spent} /> spent
+          </span>
+          <span>
+            <CurrencyDisplay amount={agent.daily_cap} /> daily cap
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const quickActions = [
+  { label: "Send", icon: ArrowUpRight, to: "/transactions" },
+  { label: "Fund", icon: Wallet, to: "/fund" },
+  { label: "Invite Agent", icon: UserPlus, to: "/settings" },
+  { label: "Settings", icon: Settings, to: "/settings" },
+];
+
+export function Dashboard() {
+  const { balance, balances, isLoading } = useBalance();
+  const [agentBudgets, setAgentBudgets] = useState<AgentBudgetSummary[]>([]);
+  const [globalBudget, setGlobalBudget] = useState<GlobalBudgetSummary | null>(
+    null,
+  );
+  const [budgetLoading, setBudgetLoading] = useState(true);
+
+  const fetchBudgets = useCallback(async () => {
+    setBudgetLoading(true);
+    try {
+      const [agents, global] = await Promise.all([
+        invoke<AgentBudgetSummary[]>("get_agent_budget_summaries"),
+        invoke<GlobalBudgetSummary>("get_global_budget_summary"),
+      ]);
+      setAgentBudgets(agents);
+      setGlobalBudget(global);
+    } catch {
+      // Budget data is non-critical, fail silently
+    } finally {
+      setBudgetLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBudgets();
+  }, [fetchBudgets]);
+
+  // Build secondary balance text from balances map
+  const secondaryBalances = balances
+    ? Object.entries(balances)
+        .filter(([key]) => key !== "USDC")
+        .map(([key, val]) => `${val.formatted} ${key}`)
+        .join(" | ")
+    : null;
+
+  return (
+    <div className="space-y-8 p-6">
+      {/* Section 1: Page Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Dashboard</h1>
+      </div>
+
+      {/* Section 2: Balance Card (HERO) */}
+      {isLoading ? (
+        <div className="flex h-[220px] max-w-[480px] items-center justify-center rounded-2xl bg-[#F9FAFB]">
+          <span className="text-sm text-[#6B7280]">Loading...</span>
+        </div>
+      ) : (
+        <GradientCard className="max-w-[480px] min-h-[220px] rounded-2xl p-8">
+          {/* Top: wallet address */}
+          <div className="flex items-center gap-2 text-white/80">
+            <MonoAddress
+              address="0x72AE...C504B4"
+              className="text-xs text-white/80"
+            />
+          </div>
+
+          {/* Center: Hero balance */}
+          <div className="mt-6">
+            <div
+              className="text-5xl font-bold tracking-tight"
+              style={{ fontFeatureSettings: '"tnum"' }}
+            >
+              {balance ? `$${formatBalance(balance)}` : "--"}
+            </div>
+            <div className="mt-1 text-sm text-white/80">USDC</div>
+          </div>
+
+          {/* Secondary balances */}
+          {secondaryBalances && (
+            <div className="mt-2 text-sm text-white/70">{secondaryBalances}</div>
+          )}
+
+          {/* Bottom: Fund button */}
+          <div className="mt-6">
+            <Link
+              to="/fund"
+              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-[#4F46E5] transition-colors hover:bg-white/90"
+            >
+              <Wallet className="size-4" />
+              Fund Wallet
+            </Link>
+          </div>
+        </GradientCard>
+      )}
+
+      {/* Section 3: Quick Actions */}
+      <div className="flex flex-wrap gap-3">
+        {quickActions.map((action) => (
+          <Link
+            key={action.label}
+            to={action.to}
+            className="inline-flex items-center gap-2 rounded-full border border-[#E8E5E0] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] transition-colors hover:bg-[#F9FAFB]"
+          >
+            <action.icon className="size-4 text-[#6B7280]" />
+            {action.label}
+          </Link>
+        ))}
+      </div>
+
+      {/* Global Budget Utilization (preserved from original) */}
+      {budgetLoading ? (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
+            Global Budget Utilization
+          </h2>
+          <span className="text-sm text-[#6B7280]">Loading...</span>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
+            Global Budget Utilization
+          </h2>
+          <GlobalBudget summary={globalBudget} />
+        </div>
+      )}
+
+      {/* Section 4: Your Agents */}
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Agents</h2>
+          <Link
+            to="/agents"
+            className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
+          >
+            View all
+          </Link>
+        </div>
+
+        {budgetLoading ? (
+          <span className="text-sm text-[#6B7280]">Loading...</span>
+        ) : agentBudgets.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {agentBudgets.map((agent) => (
+              <AgentCard key={agent.agent_id} agent={agent} />
+            ))}
+            <Link
+              to="/settings"
+              className="flex min-h-[160px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-white p-5 text-center transition-colors hover:border-[#4F46E5] hover:bg-[#EEF2FF]"
+            >
+              <Plus className="size-8 text-[#9CA3AF]" />
+              <span className="mt-2 text-sm font-medium text-[#6B7280]">
+                Add Agent
+              </span>
+            </Link>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-[#F0EDE8] bg-white p-8 text-center">
+            <Bot className="mx-auto size-12 text-[#D1D5DB]" />
+            <p className="mt-3 text-sm font-medium text-[#1A1A1A]">
+              No agents yet
+            </p>
+            <p className="mt-1 text-sm text-[#6B7280]">
+              Generate an invitation code to let an AI agent connect.
+            </p>
+            <Link
+              to="/settings"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4338CA]"
+            >
+              <UserPlus className="size-4" />
+              Invite Agent
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Agent Budgets (preserved from original) */}
+      {!budgetLoading && agentBudgets.length > 0 && (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
+            Agent Budgets
+          </h2>
+          <AgentBudgets summaries={agentBudgets} />
+        </div>
+      )}
+
+      {/* Section 5: Recent Transactions */}
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[#1A1A1A]">
+            Recent Transactions
+          </h2>
+          <Link
+            to="/transactions"
+            className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
+          >
+            View all
+          </Link>
+        </div>
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8 text-center">
+          <ArrowUpDown className="mx-auto size-12 text-[#D1D5DB]" />
+          <p className="mt-3 text-sm font-medium text-[#1A1A1A]">
+            No transactions yet
+          </p>
+          <p className="mt-1 text-sm text-[#6B7280]">
+            Transactions will appear here once your agents start spending.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+================
+File: src/pages/Onboarding.tsx
+================
+import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
+import { EmailStep } from "@/components/onboarding/EmailStep";
+import { OtpStep } from "@/components/onboarding/OtpStep";
+import { FundStep } from "@/components/onboarding/FundStep";
+
+interface AuthLoginResponse {
+  status: "otp_sent" | "verified";
+  flow_id?: string;
+}
+
+interface AuthVerifyResponse {
+  status: "verified" | "otp_sent";
+}
+
+export function Onboarding() {
+  const [step, setStep] = useState(0);
+  const [email, setEmail] = useState("");
+  const [walletAddress, setWalletAddress] = useState("0x...");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleEmailSubmit(submittedEmail: string) {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await invoke<AuthLoginResponse>("auth_login", {
+        email: submittedEmail,
+      });
+      setEmail(submittedEmail);
+      if (result.status === "otp_sent") {
+        setStep(2);
+      } else if (result.status === "verified") {
+        // Already verified (e.g. returning user), skip OTP
+        setStep(3);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleOtpSubmit(otp: string) {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await invoke<AuthVerifyResponse>("auth_verify", { otp });
+      if (result.status === "verified") {
+        // Fetch wallet address after successful auth
+        try {
+          const status = await invoke<{ address?: string }>("auth_status");
+          if (status.address) {
+            setWalletAddress(status.address);
+          }
+        } catch {
+          // auth_status may not return address yet; use placeholder
+        }
+        setStep(3);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleComplete() {
+    // Navigate to dashboard
+    window.location.href = "/";
+  }
+
+  function handleBackToEmail() {
+    setError(null);
+    setStep(1);
+  }
+
+  function handleBackToWelcome() {
+    setError(null);
+    setStep(0);
+  }
+
+  return (
+    <div
+      className="flex min-h-screen items-center justify-center"
+      style={{
+        background:
+          "radial-gradient(ellipse at 50% 30%, #EEF2FF 0%, #FAFAF9 70%)",
+      }}
+    >
+      <div className="w-full max-w-[440px] px-4">
+        {step === 0 && <WelcomeStep onNext={() => setStep(1)} />}
+        {step === 1 && (
+          <EmailStep
+            onNext={handleEmailSubmit}
+            onBack={handleBackToWelcome}
+            loading={loading}
+            serverError={error}
+          />
+        )}
+        {step === 2 && (
+          <OtpStep
+            onNext={handleOtpSubmit}
+            onBack={handleBackToEmail}
+            loading={loading}
+            serverError={error}
+            email={email}
+          />
+        )}
+        {step === 3 && (
+          <FundStep address={walletAddress} onNext={handleComplete} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+================
+File: src/pages/Transactions.tsx
+================
+import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { formatCurrency, truncateAddress } from "@/lib/format";
+import { ArrowUpDown, Download, Search } from "lucide-react";
+import type { Transaction, Agent, TxStatus, TxType } from "@/types";
+
+const PAGE_SIZE = 20;
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "All statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "executing", label: "Executing" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "failed", label: "Failed" },
+  { value: "denied", label: "Denied" },
+  { value: "awaiting_approval", label: "Awaiting Approval" },
+];
+
+interface ListTransactionsResponse {
+  transactions: Transaction[];
+  total: number;
+}
+
+function statusDotColor(status: TxStatus): string {
+  switch (status) {
+    case "confirmed":
+      return "bg-[#10B981]";
+    case "executing":
+      return "bg-[#3B82F6]";
+    case "pending":
+    case "approved":
+      return "bg-[#F59E0B]";
+    case "failed":
+    case "denied":
+      return "bg-[#EF4444]";
+    default:
+      return "bg-[#9CA3AF]";
+  }
+}
+
+function statusBadgeClass(status: TxStatus): string {
+  switch (status) {
+    case "confirmed":
+      return "bg-green-100 text-green-800";
+    case "executing":
+      return "bg-blue-100 text-blue-800";
+    case "pending":
+    case "approved":
+      return "bg-yellow-100 text-yellow-800";
+    case "failed":
+    case "denied":
+      return "bg-red-100 text-red-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+}
+
+function statusLabel(status: TxStatus): string {
+  switch (status) {
+    case "confirmed":
+      return "Confirmed";
+    case "executing":
+      return "Executing";
+    case "pending":
+      return "Pending";
+    case "approved":
+      return "Approved";
+    case "failed":
+      return "Failed";
+    case "denied":
+      return "Denied";
+    default:
+      return status;
+  }
+}
+
+function typeBadgeClass(txType: TxType): string {
+  switch (txType) {
+    case "send":
+      return "bg-[#EEF2FF] text-[#4F46E5]";
+    case "receive":
+      return "bg-[#ECFDF5] text-[#10B981]";
+    case "earn":
+      return "bg-[#FFFBEB] text-[#F59E0B]";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+}
+
+function formatDate(timestamp: number): string {
+  const date = new Date(timestamp * 1000);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function StatusDot({ status }: { status: TxStatus }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-[#6B7280]">
+      <span className={`size-1.5 rounded-full ${statusDotColor(status)}`} />
+      {statusLabel(status)}
+    </span>
+  );
+}
+
+export function Transactions() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [agentFilter, setAgentFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+
+  const agentMap = new Map(agents.map((a) => [a.id, a.name]));
+
+  const fetchTransactions = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params: Record<string, unknown> = {
+        limit: PAGE_SIZE,
+        offset,
+      };
+      if (statusFilter) {
+        params.status = statusFilter;
+      }
+      if (agentFilter) {
+        params.agent_id = agentFilter;
+      }
+
+      const result = await invoke<ListTransactionsResponse>(
+        "list_transactions",
+        params
+      );
+      setTransactions(result.transactions);
+      setTotal(result.total);
+    } catch {
+      setTransactions([]);
+      setTotal(0);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [offset, statusFilter, agentFilter]);
+
+  const fetchAgents = useCallback(async () => {
+    try {
+      const result = await invoke<Agent[]>("list_agents");
+      setAgents(result);
+    } catch {
+      setAgents([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAgents();
+  }, [fetchAgents]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
+  const showStart = total > 0 ? offset + 1 : 0;
+  const showEnd = Math.min(offset + PAGE_SIZE, total);
+
+  const handlePrev = () => {
+    setOffset((prev) => Math.max(0, prev - PAGE_SIZE));
+  };
+
+  const handleNext = () => {
+    setOffset((prev) => prev + PAGE_SIZE);
+  };
+
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value);
+    setOffset(0);
+  };
+
+  const handleAgentChange = (value: string) => {
+    setAgentFilter(value);
+    setOffset(0);
+  };
+
+  const handleClearFilters = () => {
+    setStatusFilter("");
+    setAgentFilter("");
+    setSearchQuery("");
+    setOffset(0);
+  };
+
+  // Client-side search filtering
+  const filteredTransactions = searchQuery
+    ? transactions.filter((tx) => {
+        const query = searchQuery.toLowerCase();
+        const agentName = tx.agent_id ? agentMap.get(tx.agent_id) ?? "" : "";
+        return (
+          (tx.description ?? "").toLowerCase().includes(query) ||
+          agentName.toLowerCase().includes(query) ||
+          (tx.recipient ?? "").toLowerCase().includes(query) ||
+          tx.amount.includes(query)
+        );
+      })
+    : transactions;
+
+  return (
+    <div className="space-y-6 p-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Transactions</h1>
+        <button className="inline-flex items-center gap-2 rounded-lg border border-[#E8E5E0] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] hover:bg-[#F9FAFB]">
+          <Download className="size-4" />
+          Export CSV
+        </button>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="rounded-xl border border-[#F0EDE8] bg-white p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Status filter - preserving select for test compatibility */}
+          <select
+            data-testid="status-filter"
+            value={statusFilter}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            className="h-9 rounded-lg border border-[#E8E5E0] bg-white px-3 text-sm text-[#1A1A1A] focus:border-[#4F46E5] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+
+          {/* Agent filter */}
+          {agents.length > 0 && (
+            <select
+              data-testid="agent-filter"
+              value={agentFilter}
+              onChange={(e) => handleAgentChange(e.target.value)}
+              className="h-9 rounded-lg border border-[#E8E5E0] bg-white px-3 text-sm text-[#1A1A1A] focus:border-[#4F46E5] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+            >
+              <option value="">All agents</option>
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {(statusFilter || agentFilter) && (
+            <button
+              onClick={handleClearFilters}
+              className="rounded-lg border border-[#E8E5E0] bg-white px-3 py-1.5 text-sm font-medium text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#1A1A1A]"
+            >
+              Clear
+            </button>
+          )}
+
+          {/* Search */}
+          <div className="relative ml-auto">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9CA3AF]" />
+            <input
+              type="text"
+              placeholder="Search transactions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-9 rounded-lg border border-[#E8E5E0] bg-white pl-9 pr-4 text-sm placeholder:text-[#9CA3AF] focus:border-[#4F46E5] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Data Table */}
+      {isLoading ? (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-16 text-center text-sm text-[#6B7280]">
+          Loading...
+        </div>
+      ) : filteredTransactions.length === 0 && transactions.length === 0 ? (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white">
+          <div className="flex flex-col items-center py-16">
+            <ArrowUpDown className="size-12 text-[#9CA3AF]" />
+            <h3 className="mt-4 text-lg font-medium text-[#1A1A1A]">
+              No transactions yet
+            </h3>
+            <p className="mt-1 text-sm text-[#6B7280]">
+              Transactions will appear here once your agents start spending.
+            </p>
+          </div>
+        </div>
+      ) : filteredTransactions.length === 0 ? (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white">
+          <div className="flex flex-col items-center py-16">
+            <Search className="size-12 text-[#9CA3AF]" />
+            <h3 className="mt-4 text-lg font-medium text-[#1A1A1A]">
+              No matching transactions
+            </h3>
+            <p className="mt-1 text-sm text-[#6B7280]">
+              Try adjusting your search or filters.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-[#F0EDE8] bg-white">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-[#F0EDE8] bg-[#F9FAFB]">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[#6B7280]">
+                  Date
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[#6B7280]">
+                  Agent
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[#6B7280]">
+                  Type
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[#6B7280]">
+                  Amount
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[#6B7280]">
+                  Recipient
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[#6B7280]">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[#6B7280]">
+                  Description
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#F0EDE8]">
+              {filteredTransactions.map((tx) => (
+                <tr
+                  key={tx.id}
+                  className="transition-colors hover:bg-[#F9FAFB]"
+                  style={{ height: 52 }}
+                >
+                  <td className="px-4 py-3 text-sm text-[#6B7280]">
+                    {formatDate(tx.created_at)}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-[#1A1A1A]">
+                    {tx.agent_id
+                      ? agentMap.get(tx.agent_id) ?? tx.agent_id
+                      : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${typeBadgeClass(tx.tx_type)}`}
+                    >
+                      {tx.tx_type}
+                    </span>
+                  </td>
+                  <td
+                    className="px-4 py-3 text-sm font-mono"
+                    style={{ fontFeatureSettings: '"tnum"' }}
+                  >
+                    <span
+                      className={
+                        tx.tx_type === "send"
+                          ? "text-[#EF4444]"
+                          : "text-[#10B981]"
+                      }
+                    >
+                      {tx.tx_type === "send" ? "−" : "+"}
+                      {formatCurrency(tx.amount, tx.asset)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm font-mono text-[#6B7280]">
+                    {tx.recipient ? truncateAddress(tx.recipient) : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      data-testid={`status-badge-${tx.id}`}
+                      data-variant="default"
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(tx.status)}`}
+                    >
+                      <span
+                        className={`size-1.5 rounded-full ${statusDotColor(tx.status)}`}
+                      />
+                      {statusLabel(tx.status)}
+                    </span>
+                  </td>
+                  <td className="max-w-[200px] truncate px-4 py-3 text-sm text-[#6B7280]">
+                    {tx.description || "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Pagination inside table card */}
+          {total > 0 && (
+            <div className="flex items-center justify-between border-t border-[#F0EDE8] px-4 py-3">
+              <span className="text-sm text-[#6B7280]">
+                Showing {showStart}-{showEnd} of {total}
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-[#6B7280]">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  onClick={handlePrev}
+                  disabled={offset === 0}
+                  className="rounded-lg border border-[#E8E5E0] px-3 py-1.5 text-sm font-medium text-[#1A1A1A] transition-colors hover:bg-[#F9FAFB] disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={handleNext}
+                  disabled={offset + PAGE_SIZE >= total}
+                  className="rounded-lg bg-[#4F46E5] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#4338CA] disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pagination outside table for empty search results */}
+      {!isLoading &&
+        filteredTransactions.length === 0 &&
+        transactions.length > 0 &&
+        total > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[#6B7280]">
+              Showing {showStart}-{showEnd} of {total}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePrev}
+                disabled={offset === 0}
+                className="rounded-lg border border-[#E8E5E0] px-3 py-1.5 text-sm font-medium text-[#1A1A1A] disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={handleNext}
+                disabled={offset + PAGE_SIZE >= total}
+                className="rounded-lg bg-[#4F46E5] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+    </div>
+  );
+}
+
+================
+File: src/index.css
+================
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-background: #FAFAF9;
+  --color-foreground: #1A1A1A;
+  --color-card: #FFFFFF;
+  --color-card-foreground: #1A1A1A;
+  --color-popover: #FFFFFF;
+  --color-popover-foreground: #1A1A1A;
+  --color-primary: #4F46E5;
+  --color-primary-foreground: #FFFFFF;
+  --color-secondary: #FFFFFF;
+  --color-secondary-foreground: #1A1A1A;
+  --color-muted: #F9FAFB;
+  --color-muted-foreground: #6B7280;
+  --color-accent: #EEF2FF;
+  --color-accent-foreground: #4F46E5;
+  --color-destructive: #EF4444;
+  --color-destructive-foreground: #FFFFFF;
+  --color-border: #E8E5E0;
+  --color-input: #E8E5E0;
+  --color-ring: #6366F1;
+  --color-sidebar-background: #FFFFFF;
+  --color-sidebar-foreground: #1A1A1A;
+  --color-sidebar-primary: #4F46E5;
+  --color-sidebar-primary-foreground: #FFFFFF;
+  --color-sidebar-accent: #EEF2FF;
+  --color-sidebar-accent-foreground: #4F46E5;
+  --color-sidebar-border: #E8E5E0;
+  --color-sidebar-ring: #6366F1;
+  --radius: 0.75rem;
+  --color-text-secondary: #6B7280;
+  --color-text-tertiary: #9CA3AF;
+  --color-border-subtle: #F0EDE8;
+  --color-success: #10B981;
+  --color-success-bg: #ECFDF5;
+  --color-warning: #F59E0B;
+  --color-warning-bg: #FFFBEB;
+  --color-danger: #EF4444;
+  --color-danger-bg: #FEF2F2;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .font-mono-tabular {
+    font-family: var(--font-mono);
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Card hover lift */
+  .hover-lift {
+    transition: transform 200ms ease, box-shadow 200ms ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Button press */
+  .press-scale:active {
+    transform: scale(0.98);
+  }
+
+  /* Pending pulse */
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .animate-pulse-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  /* Shimmer loading */
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    border-radius: 4px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .hover-lift,
+  .press-scale,
+  .animate-pulse-dot,
+  .skeleton {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+================
+File: src/pages/Settings.tsx
+================
+import { GlobalPolicySettings } from "./Settings/GlobalPolicy";
+import { InvitationCodes } from "./Settings/InvitationCodes";
+import { Notifications } from "./Settings/Notifications";
+
+export function Settings() {
+  return (
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-semibold text-[#1A1A1A]">Settings</h1>
+      <Notifications />
+      <GlobalPolicySettings />
+      <InvitationCodes />
+    </div>
+  );
+}
+
+================
+File: src/App.tsx
+================
+import { Routes, Route } from "react-router-dom";
+import { Dashboard } from "./pages/Dashboard";
+import { Onboarding } from "./pages/Onboarding";
+import { Agents } from "./pages/Agents";
+import { AgentDetail } from "./pages/AgentDetail";
+import { Transactions } from "./pages/Transactions";
+import { Settings } from "./pages/Settings";
+import { Approvals } from "./pages/Approvals";
+import { Fund } from "./pages/Fund";
+import { Shell } from "./components/layout/Shell";
+
+export function App() {
+  return (
+    <Routes>
+      <Route path="/onboarding" element={<Onboarding />} />
+      <Route element={<Shell />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/agents" element={<Agents />} />
+        <Route path="/agents/:id" element={<AgentDetail />} />
+        <Route path="/transactions" element={<Transactions />} />
+        <Route path="/approvals" element={<Approvals />} />
+        <Route path="/fund" element={<Fund />} />
+        <Route path="/settings" element={<Settings />} />
+      </Route>
+    </Routes>
+  );
+}
+
+
+
+
+
+================================================================
+End of Codebase
+================================================================

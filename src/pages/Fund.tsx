@@ -1,8 +1,17 @@
 import { useState } from "react";
 import { Wallet, CreditCard, QrCode } from "lucide-react";
 
+const walletAddress = "0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4";
+
 export function Fund() {
   const [activeTab, setActiveTab] = useState<"buy" | "deposit">("buy");
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(walletAddress);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="space-y-6">
@@ -70,9 +79,12 @@ export function Fund() {
             <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Wallet Address</h2>
 
             <div className="mt-4 flex w-full max-w-md items-center gap-2 rounded-lg border border-[#E8E5E0] bg-[#F9FAFB] px-4 py-3">
-              <code className="flex-1 truncate text-sm font-mono text-[#1A1A1A]">0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4</code>
-              <button className="rounded-md bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-[#4F46E5] hover:bg-[#4F46E5] hover:text-white">
-                Copy
+              <code className="flex-1 truncate text-sm font-mono text-[#1A1A1A]">{walletAddress}</code>
+              <button
+                onClick={handleCopy}
+                className="rounded-md bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-[#4F46E5] hover:bg-[#4F46E5] hover:text-white"
+              >
+                {copied ? "Copied!" : "Copy"}
               </button>
             </div>
 

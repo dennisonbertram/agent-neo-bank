@@ -32,7 +32,15 @@ export function Onboarding() {
       if (result.status === "otp_sent") {
         setStep(2);
       } else if (result.status === "verified") {
-        // Already verified (e.g. returning user), skip OTP
+        // Already verified (e.g. returning user), skip OTP but fetch wallet address
+        try {
+          const status = await invoke<{ address?: string }>("auth_status");
+          if (status.address) {
+            setWalletAddress(status.address);
+          }
+        } catch {
+          // auth_status may not return address yet; use placeholder
+        }
         setStep(3);
       }
     } catch (err) {

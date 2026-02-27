@@ -17,6 +17,9 @@ export function AgentDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editPolicy, setEditPolicy] = useState<SpendingPolicy | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -54,22 +57,63 @@ export function AgentDetail() {
     await loadData();
   };
 
+  const validateField = (field: string, value: string): string | null => {
+    const num = parseFloat(value);
+    if (value.trim() === "" || isNaN(num)) return "Must be a valid number";
+    if (num < 0) return "Must be >= 0";
+    return null;
+  };
+
   const handleSaveLimits = async () => {
     if (!editPolicy) return;
-    await invoke("update_agent_spending_policy", { policy: editPolicy });
-    setPolicy(editPolicy);
-    setIsEditing(false);
+    setSaveError(null);
+
+    // Validate all numeric fields
+    const fieldsToValidate: (keyof SpendingPolicy)[] = [
+      "per_tx_max", "daily_cap", "weekly_cap", "monthly_cap",
+    ];
+    const errors: Record<string, string> = {};
+    for (const field of fieldsToValidate) {
+      const err = validateField(field, editPolicy[field] as string);
+      if (err) errors[field] = err;
+    }
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors({});
+
+    setIsSaving(true);
+    try {
+      await invoke("update_agent_spending_policy", { policy: editPolicy });
+      setPolicy(editPolicy);
+      setIsEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEditChange = (field: keyof SpendingPolicy, value: string) => {
     if (!editPolicy) return;
     setEditPolicy({ ...editPolicy, [field]: value });
+    // Clear validation error for this field on change
+    if (validationErrors[field]) {
+      setValidationErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
   };
 
-  const toggleEdit = () => {
+  const toggleEdit = async () => {
     if (isEditing) {
-      handleSaveLimits();
+      await handleSaveLimits();
     } else {
+      setSaveError(null);
+      setValidationErrors({});
       setIsEditing(true);
     }
   };
@@ -214,14 +258,20 @@ export function AgentDetail() {
               <h2 className="text-base font-semibold text-[#1A1A1A]">Spending Limits</h2>
               <button
                 onClick={toggleEdit}
-                className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
+                disabled={isSaving}
+                className={`text-sm font-medium ${isSaving ? "text-[#9CA3AF] cursor-not-allowed" : "text-[#4F46E5] hover:text-[#4338CA]"}`}
               >
-                {isEditing ? "Save" : "Edit"}
+                {isSaving ? "Saving..." : isEditing ? "Save" : "Edit"}
               </button>
             </div>
 
             {isEditing && editPolicy ? (
               <div className="space-y-4">
+                {saveError && (
+                  <div className="rounded-lg bg-[#FEF2F2] px-4 py-2 text-sm text-[#EF4444]">
+                    Failed to save: {saveError}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="per_tx_max" className="text-sm text-[#6B7280]">
@@ -229,9 +279,15 @@ export function AgentDetail() {
                     </label>
                     <Input
                       id="per_tx_max"
+                      type="number"
+                      min="0"
+                      step="any"
                       value={editPolicy.per_tx_max}
                       onChange={(e) => handleEditChange("per_tx_max", e.target.value)}
                     />
+                    {validationErrors.per_tx_max && (
+                      <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.per_tx_max}</p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="daily_cap" className="text-sm text-[#6B7280]">
@@ -239,9 +295,15 @@ export function AgentDetail() {
                     </label>
                     <Input
                       id="daily_cap"
+                      type="number"
+                      min="0"
+                      step="any"
                       value={editPolicy.daily_cap}
                       onChange={(e) => handleEditChange("daily_cap", e.target.value)}
                     />
+                    {validationErrors.daily_cap && (
+                      <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.daily_cap}</p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="weekly_cap" className="text-sm text-[#6B7280]">
@@ -249,9 +311,15 @@ export function AgentDetail() {
                     </label>
                     <Input
                       id="weekly_cap"
+                      type="number"
+                      min="0"
+                      step="any"
                       value={editPolicy.weekly_cap}
                       onChange={(e) => handleEditChange("weekly_cap", e.target.value)}
                     />
+                    {validationErrors.weekly_cap && (
+                      <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.weekly_cap}</p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="monthly_cap" className="text-sm text-[#6B7280]">
@@ -259,9 +327,15 @@ export function AgentDetail() {
                     </label>
                     <Input
                       id="monthly_cap"
+                      type="number"
+                      min="0"
+                      step="any"
                       value={editPolicy.monthly_cap}
                       onChange={(e) => handleEditChange("monthly_cap", e.target.value)}
                     />
+                    {validationErrors.monthly_cap && (
+                      <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.monthly_cap}</p>
+                    )}
                   </div>
                 </div>
               </div>

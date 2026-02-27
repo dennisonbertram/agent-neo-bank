@@ -6,7 +6,6 @@ import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
 import { GradientCard } from "@/components/shared/GradientCard";
 import { MonoAddress } from "@/components/shared/MonoAddress";
 import { ProgressBar } from "@/components/shared/ProgressBar";
-import { StatusBadge } from "@/components/shared/StatusBadge";
 import { GlobalBudget } from "@/components/dashboard/GlobalBudget";
 import { AgentBudgets } from "@/components/dashboard/AgentBudgets";
 import {
@@ -18,7 +17,7 @@ import {
   Bot,
   ArrowUpDown,
 } from "lucide-react";
-import type { AgentBudgetSummary, GlobalBudgetSummary } from "@/types";
+import type { AgentBudgetSummary, GlobalBudgetSummary, AddressResponse } from "@/types";
 
 function formatBalance(amount: string): string {
   const num = parseFloat(amount);
@@ -53,7 +52,6 @@ function AgentCard({ agent }: { agent: AgentBudgetSummary }) {
             <p className="text-xs text-[#6B7280]">Agent</p>
           </div>
         </div>
-        <StatusBadge status="active" />
       </div>
       <div className="mt-4">
         <ProgressBar
@@ -88,6 +86,16 @@ export function Dashboard() {
     null,
   );
   const [budgetLoading, setBudgetLoading] = useState(true);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+
+  useEffect(() => {
+    invoke<AddressResponse>("get_address")
+      .then((res) => setWalletAddress(res.address))
+      .catch(() => {
+        // Fallback if get_address not available
+        setWalletAddress("0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4");
+      });
+  }, []);
 
   const fetchBudgets = useCallback(async () => {
     setBudgetLoading(true);
@@ -134,7 +142,7 @@ export function Dashboard() {
           {/* Top: wallet address */}
           <div className="flex items-center gap-2 text-white/80">
             <MonoAddress
-              address="0x72AE...C504B4"
+              address={walletAddress ?? "0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4"}
               className="text-xs text-white/80"
             />
           </div>

@@ -8,8 +8,10 @@ interface FundStepProps {
 
 export function FundStep({ address, onNext }: FundStepProps) {
   const [copied, setCopied] = useState(false);
+  const addressReady = address !== "0x..." && address !== "";
 
   async function handleCopy() {
+    if (!addressReady) return;
     await navigator.clipboard.writeText(address);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -39,8 +41,9 @@ export function FundStep({ address, onNext }: FundStepProps) {
           </code>
           <button
             onClick={handleCopy}
+            disabled={!addressReady}
             aria-label="Copy address"
-            className="flex size-9 items-center justify-center rounded-lg border border-[#E8E5E0] text-[#6B7280] transition-colors hover:bg-[#F5F5F4] hover:text-[#1A1A1A]"
+            className={`flex size-9 items-center justify-center rounded-lg border border-[#E8E5E0] text-[#6B7280] transition-colors ${addressReady ? "hover:bg-[#F5F5F4] hover:text-[#1A1A1A]" : "opacity-50 cursor-not-allowed"}`}
           >
             {copied ? (
               <Check className="size-4" />
@@ -53,9 +56,10 @@ export function FundStep({ address, onNext }: FundStepProps) {
 
       <button
         onClick={onNext}
-        className="mt-6 w-full rounded-lg bg-[#4F46E5] px-6 py-3 text-base font-medium text-white transition-colors hover:bg-[#4338CA] active:scale-[0.98]"
+        disabled={!addressReady}
+        className={`mt-6 w-full rounded-lg px-6 py-3 text-base font-medium text-white transition-colors active:scale-[0.98] ${addressReady ? "bg-[#4F46E5] hover:bg-[#4338CA]" : "bg-[#4F46E5]/50 cursor-not-allowed"}`}
       >
-        Continue to Dashboard
+        {addressReady ? "Continue to Dashboard" : "Loading wallet address..."}
       </button>
     </div>
   );
