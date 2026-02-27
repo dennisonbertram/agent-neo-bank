@@ -51,6 +51,12 @@ pub fn run() {
             commands::transactions::list_transactions,
             commands::transactions::get_transaction,
             commands::agents::list_agents,
+            commands::approvals::list_approvals,
+            commands::approvals::resolve_approval,
+            commands::approvals::get_approval,
+            commands::invitation_codes::list_invitation_codes,
+            commands::invitation_codes::generate_invitation_code,
+            commands::invitation_codes::revoke_invitation_code,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

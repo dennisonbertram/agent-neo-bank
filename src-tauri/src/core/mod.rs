@@ -1,9 +1,11 @@
 pub mod agent_registry;
 pub mod approval_manager;
+pub mod event_bus;
 pub mod services;
 pub mod auth_service;
 pub mod global_policy;
 pub mod invitation;
 pub mod spending_policy;
 pub mod tx_processor;
+pub mod notification;
 pub mod wallet_service;

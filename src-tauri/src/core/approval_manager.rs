@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use chrono::Utc;
 
-use crate::db::models::{ApprovalRequest, ApprovalStatus};
+use crate::db::models::{ApprovalRequest, ApprovalRequestType, ApprovalStatus};
 use crate::db::queries;
 use crate::db::schema::Database;
 use crate::error::AppError;
 
-/// Manages approval request lifecycle: resolving, listing, and cleaning up
-/// stale (expired) approvals.
+/// Manages approval request lifecycle: creating, resolving, listing, and
+/// cleaning up stale (expired) approvals.
 pub struct ApprovalManager {
     db: Arc<Database>,
 }
@@ -16,6 +16,43 @@ pub struct ApprovalManager {
 impl ApprovalManager {
     pub fn new(db: Arc<Database>) -> Self {
         Self { db }
+    }
+
+    /// Create a new approval request. Returns the created request.
+    pub fn create_request(
+        &self,
+        agent_id: &str,
+        request_type: ApprovalRequestType,
+        payload: serde_json::Value,
+        tx_id: Option<&str>,
+        expires_in_seconds: Option<i64>,
+    ) -> Result<ApprovalRequest, AppError> {
+        let now = Utc::now().timestamp();
+        let expires_at = now + expires_in_seconds.unwrap_or(86400); // 24h default
+
+        let approval = ApprovalRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            agent_id: agent_id.to_string(),
+            request_type,
+            payload: payload.to_string(),
+            status: ApprovalStatus::Pending,
+            tx_id: tx_id.map(String::from),
+            expires_at,
+            created_at: now,
+            resolved_at: None,
+            resolved_by: None,
+        };
+
+        queries::insert_approval_request(&self.db, &approval)?;
+        Ok(approval)
+    }
+
+    /// List all approvals, optionally filtered by status.
+    pub fn list_all(
+        &self,
+        status: Option<&ApprovalStatus>,
+    ) -> Result<Vec<ApprovalRequest>, AppError> {
+        queries::list_approvals(&self.db, status)
     }
 
     /// Resolve a pending approval (approve or deny).
@@ -458,6 +495,167 @@ mod tests {
         match result.unwrap_err() {
             AppError::NotFound(_) => {}
             other => panic!("Expected NotFound, got: {:?}", other),
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 10: Create request via create_request()
+    // -----------------------------------------------------------------------
+    #[test]
+    fn test_approval_create_request() {
+        let db = setup_test_db();
+        let agent = create_test_agent("CreateBot", AgentStatus::Active);
+        insert_agent(&db, &agent).unwrap();
+
+        // Create a transaction so the FK constraint is satisfied
+        let tx = make_test_transaction(&agent.id, TxStatus::Pending);
+        insert_transaction(&db, &tx).unwrap();
+
+        let manager = ApprovalManager::new(db.clone());
+        let payload = serde_json::json!({"amount": "50.00", "recipient": "0xABC"});
+        let result = manager
+            .create_request(
+                &agent.id,
+                ApprovalRequestType::Transaction,
+                payload.clone(),
+                Some(&tx.id),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(result.agent_id, agent.id);
+        assert_eq!(result.request_type, ApprovalRequestType::Transaction);
+        assert_eq!(result.status, ApprovalStatus::Pending);
+        assert_eq!(result.tx_id.as_deref(), Some(tx.id.as_str()));
+        assert!(result.resolved_at.is_none());
+        assert!(result.resolved_by.is_none());
+
+        // Verify it is persisted in the DB
+        let fetched = queries::get_approval_request(&db, &result.id).unwrap();
+        assert_eq!(fetched.id, result.id);
+        assert_eq!(fetched.agent_id, agent.id);
+        assert_eq!(fetched.payload, payload.to_string());
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 11: Create request with custom expiry
+    // -----------------------------------------------------------------------
+    #[test]
+    fn test_approval_create_request_with_custom_expiry() {
+        let db = setup_test_db();
+        let agent = create_test_agent("ExpiryBot", AgentStatus::Active);
+        insert_agent(&db, &agent).unwrap();
+
+        let manager = ApprovalManager::new(db);
+        let now = Utc::now().timestamp();
+
+        let result = manager
+            .create_request(
+                &agent.id,
+                ApprovalRequestType::LimitIncrease,
+                serde_json::json!({"new_limit": "1000"}),
+                None,
+                Some(3600), // 1 hour
+            )
+            .unwrap();
+
+        // expires_at should be approximately now + 3600
+        let diff = result.expires_at - now;
+        assert!(
+            diff >= 3599 && diff <= 3601,
+            "Expected expires_at ~1h from now, got diff={}",
+            diff
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 12: List all with status filter
+    // -----------------------------------------------------------------------
+    #[test]
+    fn test_approval_list_all_with_status_filter() {
+        let db = setup_test_db();
+        let agent = create_test_agent("ListAllBot", AgentStatus::Active);
+        insert_agent(&db, &agent).unwrap();
+
+        let manager = ApprovalManager::new(db.clone());
+
+        // Create two pending approvals
+        let a1 = manager
+            .create_request(
+                &agent.id,
+                ApprovalRequestType::Transaction,
+                serde_json::json!({}),
+                None,
+                None,
+            )
+            .unwrap();
+        let _a2 = manager
+            .create_request(
+                &agent.id,
+                ApprovalRequestType::LimitIncrease,
+                serde_json::json!({}),
+                None,
+                None,
+            )
+            .unwrap();
+
+        // Approve one
+        manager
+            .resolve(&a1.id, ApprovalStatus::Approved, "user")
+            .unwrap();
+
+        // List all: should be 2
+        let all = manager.list_all(None).unwrap();
+        assert_eq!(all.len(), 2);
+
+        // List pending only: should be 1
+        let pending = manager.list_all(Some(&ApprovalStatus::Pending)).unwrap();
+        assert_eq!(pending.len(), 1);
+
+        // List approved only: should be 1
+        let approved = manager.list_all(Some(&ApprovalStatus::Approved)).unwrap();
+        assert_eq!(approved.len(), 1);
+        assert_eq!(approved[0].id, a1.id);
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 13: Create and resolve flow
+    // -----------------------------------------------------------------------
+    #[test]
+    fn test_approval_create_and_resolve_flow() {
+        let db = setup_test_db();
+        let agent = create_test_agent("FlowBot", AgentStatus::Active);
+        insert_agent(&db, &agent).unwrap();
+
+        let manager = ApprovalManager::new(db);
+
+        // Create
+        let created = manager
+            .create_request(
+                &agent.id,
+                ApprovalRequestType::Registration,
+                serde_json::json!({"name": "NewAgent"}),
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(created.status, ApprovalStatus::Pending);
+
+        // Resolve as denied
+        let resolved = manager
+            .resolve(&created.id, ApprovalStatus::Denied, "admin")
+            .unwrap();
+        assert_eq!(resolved.status, ApprovalStatus::Denied);
+        assert!(resolved.resolved_at.is_some());
+        assert_eq!(resolved.resolved_by.as_deref(), Some("admin"));
+
+        // Cannot resolve again
+        let err = manager
+            .resolve(&created.id, ApprovalStatus::Approved, "user")
+            .unwrap_err();
+        match err {
+            AppError::InvalidInput(_) => {} // expected
+            other => panic!("Expected InvalidInput, got: {:?}", other),
         }
     }
 }

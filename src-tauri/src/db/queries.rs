@@ -701,6 +701,57 @@ pub fn list_active_invitation_codes(db: &Database) -> Result<Vec<InvitationCode>
         .map_err(|e| AppError::DatabaseError(format!("Failed to collect invitation codes: {}", e)))
 }
 
+pub fn list_all_invitation_codes(db: &Database) -> Result<Vec<InvitationCode>, AppError> {
+    let conn = db.get_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT code, created_at, expires_at, used_by, used_at, max_uses, use_count, label
+             FROM invitation_codes
+             ORDER BY created_at DESC",
+        )
+        .map_err(|e| AppError::DatabaseError(format!("Failed to prepare statement: {}", e)))?;
+
+    let codes = stmt
+        .query_map([], |row| {
+            Ok(InvitationCode {
+                code: row.get(0)?,
+                created_at: row.get(1)?,
+                expires_at: row.get(2)?,
+                used_by: row.get(3)?,
+                used_at: row.get(4)?,
+                max_uses: row.get(5)?,
+                use_count: row.get(6)?,
+                label: row.get(7)?,
+            })
+        })
+        .map_err(|e| {
+            AppError::DatabaseError(format!("Failed to query invitation codes: {}", e))
+        })?;
+
+    codes
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| AppError::DatabaseError(format!("Failed to collect invitation codes: {}", e)))
+}
+
+pub fn delete_invitation_code(db: &Database, code: &str) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    let rows = conn
+        .execute(
+            "DELETE FROM invitation_codes WHERE code = ?1",
+            params![code],
+        )
+        .map_err(|e| {
+            AppError::DatabaseError(format!("Failed to delete invitation code: {}", e))
+        })?;
+    if rows == 0 {
+        return Err(AppError::NotFound(format!(
+            "Invitation code not found: {}",
+            code
+        )));
+    }
+    Ok(())
+}
+
 // -------------------------------------------------------------------------
 // Global Policy CRUD
 // -------------------------------------------------------------------------
@@ -1228,6 +1279,54 @@ pub fn list_expired_approvals(
         .map_err(|e| AppError::DatabaseError(format!("Failed to query expired approvals: {}", e)))?;
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| AppError::DatabaseError(format!("Failed to collect expired approvals: {}", e)))
+}
+
+pub fn list_approvals(
+    db: &Database,
+    status: Option<&ApprovalStatus>,
+) -> Result<Vec<ApprovalRequest>, AppError> {
+    let conn = db.get_connection()?;
+    match status {
+        Some(s) => {
+            let status_str = s.to_string();
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, agent_id, request_type, payload, status, tx_id, expires_at,
+                     created_at, resolved_at, resolved_by
+                     FROM approval_requests WHERE status = ?1
+                     ORDER BY created_at DESC",
+                )
+                .map_err(|e| {
+                    AppError::DatabaseError(format!("Failed to prepare statement: {}", e))
+                })?;
+            let rows = stmt
+                .query_map(params![status_str], |row| row_to_approval_request(row))
+                .map_err(|e| {
+                    AppError::DatabaseError(format!("Failed to query approvals: {}", e))
+                })?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| AppError::DatabaseError(format!("Failed to collect approvals: {}", e)))
+        }
+        None => {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, agent_id, request_type, payload, status, tx_id, expires_at,
+                     created_at, resolved_at, resolved_by
+                     FROM approval_requests
+                     ORDER BY created_at DESC",
+                )
+                .map_err(|e| {
+                    AppError::DatabaseError(format!("Failed to prepare statement: {}", e))
+                })?;
+            let rows = stmt
+                .query_map([], |row| row_to_approval_request(row))
+                .map_err(|e| {
+                    AppError::DatabaseError(format!("Failed to query approvals: {}", e))
+                })?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| AppError::DatabaseError(format!("Failed to collect approvals: {}", e)))
+        }
+    }
 }
 
 // -------------------------------------------------------------------------
