@@ -51,6 +51,7 @@ dependencies = [
  "argon2",
  "async-trait",
  "axum",
+ "base64 0.22.1",
  "chrono",
  "r2d2",
  "r2d2_sqlite",

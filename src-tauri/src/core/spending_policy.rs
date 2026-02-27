@@ -23,16 +23,16 @@ pub enum PolicyDecision {
 // Period key helpers
 // -------------------------------------------------------------------------
 
-fn daily_period_key(dt: &chrono::DateTime<Utc>) -> String {
+pub fn daily_period_key(dt: &chrono::DateTime<Utc>) -> String {
     format!("daily:{}", dt.format("%Y-%m-%d"))
 }
 
-fn weekly_period_key(dt: &chrono::DateTime<Utc>) -> String {
+pub fn weekly_period_key(dt: &chrono::DateTime<Utc>) -> String {
     let week: IsoWeek = dt.iso_week();
     format!("weekly:{}-W{:02}", week.year(), week.week())
 }
 
-fn monthly_period_key(dt: &chrono::DateTime<Utc>) -> String {
+pub fn monthly_period_key(dt: &chrono::DateTime<Utc>) -> String {
     format!("monthly:{}", dt.format("%Y-%m"))
 }
 

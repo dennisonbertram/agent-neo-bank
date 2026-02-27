@@ -282,6 +282,7 @@ fn row_to_transaction(row: &rusqlite::Row<'_>) -> rusqlite::Result<Transaction> 
     let status_str: String = row.get(8)?;
     let status = match status_str.as_str() {
         "approved" => TxStatus::Approved,
+        "awaiting_approval" => TxStatus::AwaitingApproval,
         "executing" => TxStatus::Executing,
         "confirmed" => TxStatus::Confirmed,
         "failed" => TxStatus::Failed,
@@ -711,6 +712,109 @@ pub fn get_global_spending_for_period(
 }
 
 // -------------------------------------------------------------------------
+// Transaction Status Updates
+// -------------------------------------------------------------------------
+
+pub fn update_transaction_status(
+    db: &Database,
+    tx_id: &str,
+    status: &TxStatus,
+    chain_tx_hash: Option<&str>,
+    error_message: Option<&str>,
+    updated_at: i64,
+) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    let rows = conn
+        .execute(
+            "UPDATE transactions SET status = ?1, chain_tx_hash = ?2, error_message = ?3, updated_at = ?4
+             WHERE id = ?5",
+            params![status.to_string(), chain_tx_hash, error_message, updated_at, tx_id],
+        )
+        .map_err(|e| AppError::DatabaseError(format!("Failed to update transaction status: {}", e)))?;
+    if rows == 0 {
+        return Err(AppError::NotFound(format!("Transaction not found: {}", tx_id)));
+    }
+    Ok(())
+}
+
+/// Atomically update transaction to confirmed and upsert both spending ledgers.
+/// Uses BEGIN EXCLUSIVE to ensure atomicity.
+pub fn update_transaction_and_ledgers_atomic(
+    db: &Database,
+    tx_id: &str,
+    chain_tx_hash: &str,
+    agent_id: &str,
+    amount: &str,
+    period_daily: &str,
+    period_weekly: &str,
+    period_monthly: &str,
+    updated_at: i64,
+) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    conn.execute_batch("BEGIN EXCLUSIVE")
+        .map_err(|e| AppError::DatabaseError(format!("Failed to begin transaction: {}", e)))?;
+
+    // Update transaction status to confirmed
+    let result = (|| -> Result<(), AppError> {
+        conn.execute(
+            "UPDATE transactions SET status = 'confirmed', chain_tx_hash = ?1, updated_at = ?2
+             WHERE id = ?3",
+            params![chain_tx_hash, updated_at, tx_id],
+        )
+        .map_err(|e| AppError::DatabaseError(format!("Failed to update tx status: {}", e)))?;
+
+        // Upsert agent spending ledger for all three periods
+        for period in &[period_daily, period_weekly, period_monthly] {
+            conn.execute(
+                "INSERT INTO spending_ledger (agent_id, period, total, tx_count, updated_at)
+                 VALUES (?1, ?2, ?3, 1, ?4)
+                 ON CONFLICT(agent_id, period) DO UPDATE SET
+                   total = CAST((CAST(spending_ledger.total AS REAL) + CAST(?3 AS REAL)) AS TEXT),
+                   tx_count = spending_ledger.tx_count + 1,
+                   updated_at = ?4",
+                params![agent_id, period, amount, updated_at],
+            )
+            .map_err(|e| {
+                AppError::DatabaseError(format!("Failed to upsert spending ledger: {}", e))
+            })?;
+        }
+
+        // Upsert global spending ledger for all three periods
+        for period in &[period_daily, period_weekly, period_monthly] {
+            conn.execute(
+                "INSERT INTO global_spending_ledger (period, total, tx_count, updated_at)
+                 VALUES (?1, ?2, 1, ?3)
+                 ON CONFLICT(period) DO UPDATE SET
+                   total = CAST((CAST(global_spending_ledger.total AS REAL) + CAST(?2 AS REAL)) AS TEXT),
+                   tx_count = global_spending_ledger.tx_count + 1,
+                   updated_at = ?3",
+                params![period, amount, updated_at],
+            )
+            .map_err(|e| {
+                AppError::DatabaseError(format!(
+                    "Failed to upsert global spending ledger: {}",
+                    e
+                ))
+            })?;
+        }
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT")
+                .map_err(|e| AppError::DatabaseError(format!("Failed to commit: {}", e)))?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
+}
+
+// -------------------------------------------------------------------------
 // Notification Preferences CRUD
 // -------------------------------------------------------------------------
 
@@ -819,6 +923,275 @@ pub fn delete_app_config(db: &Database, key: &str) -> Result<(), AppError> {
     let conn = db.get_connection()?;
     conn.execute("DELETE FROM app_config WHERE key = ?1", params![key])
         .map_err(|e| AppError::DatabaseError(format!("Failed to delete app config: {}", e)))?;
+    Ok(())
+}
+
+// -------------------------------------------------------------------------
+// Approval Request CRUD
+// -------------------------------------------------------------------------
+
+pub fn insert_approval_request(
+    db: &Database,
+    request: &ApprovalRequest,
+) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    conn.execute(
+        "INSERT INTO approval_requests (id, agent_id, request_type, payload, status, tx_id,
+         expires_at, created_at, resolved_at, resolved_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            request.id,
+            request.agent_id,
+            request.request_type.to_string(),
+            request.payload,
+            request.status.to_string(),
+            request.tx_id,
+            request.expires_at,
+            request.created_at,
+            request.resolved_at,
+            request.resolved_by,
+        ],
+    )
+    .map_err(|e| AppError::DatabaseError(format!("Failed to insert approval request: {}", e)))?;
+    Ok(())
+}
+
+pub fn get_approval_request_by_agent(
+    db: &Database,
+    agent_id: &str,
+    request_type: &ApprovalRequestType,
+) -> Result<Option<ApprovalRequest>, AppError> {
+    let conn = db.get_connection()?;
+    match conn.query_row(
+        "SELECT id, agent_id, request_type, payload, status, tx_id, expires_at,
+         created_at, resolved_at, resolved_by
+         FROM approval_requests WHERE agent_id = ?1 AND request_type = ?2
+         ORDER BY created_at DESC LIMIT 1",
+        params![agent_id, request_type.to_string()],
+        |row| row_to_approval_request(row),
+    ) {
+        Ok(req) => Ok(Some(req)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(AppError::DatabaseError(format!(
+            "Failed to get approval request: {}",
+            e
+        ))),
+    }
+}
+
+fn row_to_approval_request(row: &rusqlite::Row<'_>) -> rusqlite::Result<ApprovalRequest> {
+    let request_type_str: String = row.get(2)?;
+    let request_type = match request_type_str.as_str() {
+        "transaction" => ApprovalRequestType::Transaction,
+        "limit_increase" => ApprovalRequestType::LimitIncrease,
+        _ => ApprovalRequestType::Registration,
+    };
+    let status_str: String = row.get(4)?;
+    let status = match status_str.as_str() {
+        "approved" => ApprovalStatus::Approved,
+        "denied" => ApprovalStatus::Denied,
+        "expired" => ApprovalStatus::Expired,
+        _ => ApprovalStatus::Pending,
+    };
+    Ok(ApprovalRequest {
+        id: row.get(0)?,
+        agent_id: row.get(1)?,
+        request_type,
+        payload: row.get(3)?,
+        status,
+        tx_id: row.get(5)?,
+        expires_at: row.get(6)?,
+        created_at: row.get(7)?,
+        resolved_at: row.get(8)?,
+        resolved_by: row.get(9)?,
+    })
+}
+
+pub fn get_approval_request(db: &Database, id: &str) -> Result<ApprovalRequest, AppError> {
+    let conn = db.get_connection()?;
+    conn.query_row(
+        "SELECT id, agent_id, request_type, payload, status, tx_id, expires_at,
+         created_at, resolved_at, resolved_by
+         FROM approval_requests WHERE id = ?1",
+        params![id],
+        |row| row_to_approval_request(row),
+    )
+    .map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            AppError::NotFound(format!("Approval request not found: {}", id))
+        }
+        _ => AppError::DatabaseError(format!("Failed to get approval request: {}", e)),
+    })
+}
+
+pub fn list_pending_approvals(
+    db: &Database,
+    agent_id: Option<&str>,
+) -> Result<Vec<ApprovalRequest>, AppError> {
+    let conn = db.get_connection()?;
+    match agent_id {
+        Some(aid) => {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, agent_id, request_type, payload, status, tx_id, expires_at,
+                     created_at, resolved_at, resolved_by
+                     FROM approval_requests WHERE status = 'pending' AND agent_id = ?1
+                     ORDER BY created_at DESC",
+                )
+                .map_err(|e| {
+                    AppError::DatabaseError(format!("Failed to prepare statement: {}", e))
+                })?;
+            let rows = stmt
+                .query_map(params![aid], |row| row_to_approval_request(row))
+                .map_err(|e| {
+                    AppError::DatabaseError(format!("Failed to query approvals: {}", e))
+                })?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| AppError::DatabaseError(format!("Failed to collect approvals: {}", e)))
+        }
+        None => {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, agent_id, request_type, payload, status, tx_id, expires_at,
+                     created_at, resolved_at, resolved_by
+                     FROM approval_requests WHERE status = 'pending'
+                     ORDER BY created_at DESC",
+                )
+                .map_err(|e| {
+                    AppError::DatabaseError(format!("Failed to prepare statement: {}", e))
+                })?;
+            let rows = stmt
+                .query_map([], |row| row_to_approval_request(row))
+                .map_err(|e| {
+                    AppError::DatabaseError(format!("Failed to query approvals: {}", e))
+                })?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| AppError::DatabaseError(format!("Failed to collect approvals: {}", e)))
+        }
+    }
+}
+
+pub fn update_approval_status(
+    db: &Database,
+    id: &str,
+    status: &ApprovalStatus,
+    resolved_at: Option<i64>,
+    resolved_by: Option<&str>,
+) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    let rows = conn
+        .execute(
+            "UPDATE approval_requests SET status = ?1, resolved_at = ?2, resolved_by = ?3 WHERE id = ?4",
+            params![status.to_string(), resolved_at, resolved_by, id],
+        )
+        .map_err(|e| AppError::DatabaseError(format!("Failed to update approval status: {}", e)))?;
+    if rows == 0 {
+        return Err(AppError::NotFound(format!(
+            "Approval request not found: {}",
+            id
+        )));
+    }
+    Ok(())
+}
+
+pub fn list_expired_approvals(
+    db: &Database,
+    now_timestamp: i64,
+) -> Result<Vec<ApprovalRequest>, AppError> {
+    let conn = db.get_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, agent_id, request_type, payload, status, tx_id, expires_at,
+             created_at, resolved_at, resolved_by
+             FROM approval_requests WHERE status = 'pending' AND expires_at < ?1
+             ORDER BY created_at DESC",
+        )
+        .map_err(|e| AppError::DatabaseError(format!("Failed to prepare statement: {}", e)))?;
+    let rows = stmt
+        .query_map(params![now_timestamp], |row| row_to_approval_request(row))
+        .map_err(|e| AppError::DatabaseError(format!("Failed to query expired approvals: {}", e)))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| AppError::DatabaseError(format!("Failed to collect expired approvals: {}", e)))
+}
+
+// -------------------------------------------------------------------------
+// Token Delivery CRUD
+// -------------------------------------------------------------------------
+
+pub fn insert_token_delivery(db: &Database, delivery: &TokenDelivery) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    conn.execute(
+        "INSERT INTO token_delivery (agent_id, encrypted_token, created_at, expires_at, delivered)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            delivery.agent_id,
+            delivery.encrypted_token,
+            delivery.created_at,
+            delivery.expires_at,
+            delivery.delivered as i32,
+        ],
+    )
+    .map_err(|e| AppError::DatabaseError(format!("Failed to insert token delivery: {}", e)))?;
+    Ok(())
+}
+
+pub fn get_token_delivery(db: &Database, agent_id: &str) -> Result<Option<TokenDelivery>, AppError> {
+    let conn = db.get_connection()?;
+    match conn.query_row(
+        "SELECT agent_id, encrypted_token, created_at, expires_at, delivered
+         FROM token_delivery WHERE agent_id = ?1",
+        params![agent_id],
+        |row| {
+            let delivered: i32 = row.get(4)?;
+            Ok(TokenDelivery {
+                agent_id: row.get(0)?,
+                encrypted_token: row.get(1)?,
+                created_at: row.get(2)?,
+                expires_at: row.get(3)?,
+                delivered: delivered != 0,
+            })
+        },
+    ) {
+        Ok(delivery) => Ok(Some(delivery)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(AppError::DatabaseError(format!(
+            "Failed to get token delivery: {}",
+            e
+        ))),
+    }
+}
+
+pub fn delete_token_delivery(db: &Database, agent_id: &str) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    conn.execute(
+        "DELETE FROM token_delivery WHERE agent_id = ?1",
+        params![agent_id],
+    )
+    .map_err(|e| AppError::DatabaseError(format!("Failed to delete token delivery: {}", e)))?;
+    Ok(())
+}
+
+// -------------------------------------------------------------------------
+// Agent Token Update
+// -------------------------------------------------------------------------
+
+pub fn update_agent_token(
+    db: &Database,
+    agent_id: &str,
+    token_hash: &str,
+    token_prefix: &str,
+    updated_at: i64,
+) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    let rows = conn
+        .execute(
+            "UPDATE agents SET api_token_hash = ?1, token_prefix = ?2, updated_at = ?3 WHERE id = ?4",
+            params![token_hash, token_prefix, updated_at, agent_id],
+        )
+        .map_err(|e| AppError::DatabaseError(format!("Failed to update agent token: {}", e)))?;
+    if rows == 0 {
+        return Err(AppError::NotFound(format!("Agent not found: {}", agent_id)));
+    }
     Ok(())
 }
 

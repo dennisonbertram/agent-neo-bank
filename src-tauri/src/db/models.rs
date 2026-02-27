@@ -25,10 +25,11 @@ impl std::fmt::Display for AgentStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum TxStatus {
     Pending,
     Approved,
+    AwaitingApproval,
     Executing,
     Confirmed,
     Failed,
@@ -40,6 +41,7 @@ impl std::fmt::Display for TxStatus {
         match self {
             TxStatus::Pending => write!(f, "pending"),
             TxStatus::Approved => write!(f, "approved"),
+            TxStatus::AwaitingApproval => write!(f, "awaiting_approval"),
             TxStatus::Executing => write!(f, "executing"),
             TxStatus::Confirmed => write!(f, "confirmed"),
             TxStatus::Failed => write!(f, "failed"),
