@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Wallet } from "lucide-react";
 
 interface FundStepProps {
   address: string;
@@ -17,30 +16,47 @@ export function FundStep({ address, onNext }: FundStepProps) {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Fund your wallet</h2>
-        <p className="text-muted-foreground mt-1">
+    <div>
+      <div className="text-center">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#EEF2FF]">
+          <Wallet className="size-6 text-[#4F46E5]" />
+        </div>
+        <h1 className="mt-4 text-2xl font-semibold text-[#1A1A1A]">
+          Fund your wallet
+        </h1>
+        <p className="mt-2 text-sm text-[#6B7280]">
           Send USDC to your wallet address to get started
         </p>
       </div>
-      <div className="rounded-lg border border-border bg-zinc-800/50 p-4">
-        <p className="text-xs text-muted-foreground mb-2">Your wallet address</p>
+
+      <div className="mt-8 rounded-xl border border-[#E8E5E0] bg-white p-4">
+        <p className="mb-2 text-xs font-medium text-[#6B7280]">
+          Your wallet address
+        </p>
         <div className="flex items-center gap-2">
-          <code className="flex-1 break-all text-sm font-mono">{address}</code>
-          <Button
-            variant="outline"
-            size="icon"
+          <code className="flex-1 break-all text-sm font-mono text-[#1A1A1A]">
+            {address}
+          </code>
+          <button
             onClick={handleCopy}
             aria-label="Copy address"
+            className="flex size-9 items-center justify-center rounded-lg border border-[#E8E5E0] text-[#6B7280] transition-colors hover:bg-[#F5F5F4] hover:text-[#1A1A1A]"
           >
-            {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-          </Button>
+            {copied ? (
+              <Check className="size-4" />
+            ) : (
+              <Copy className="size-4" />
+            )}
+          </button>
         </div>
       </div>
-      <Button size="lg" className="w-full" onClick={onNext}>
+
+      <button
+        onClick={onNext}
+        className="mt-6 w-full rounded-lg bg-[#4F46E5] px-6 py-3 text-base font-medium text-white transition-colors hover:bg-[#4338CA] active:scale-[0.98]"
+      >
         Continue to Dashboard
-      </Button>
+      </button>
     </div>
   );
 }

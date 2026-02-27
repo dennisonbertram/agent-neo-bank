@@ -10,15 +10,15 @@ vi.mock("@tauri-apps/api/core", () => ({
 describe("Onboarding", () => {
   it("renders WelcomeStep initially", () => {
     render(<Onboarding />);
-    expect(screen.getByText(/welcome to agent neo bank/i)).toBeInTheDocument();
+    expect(screen.getByText(/give your ai agents spending power/i)).toBeInTheDocument();
   });
 
   it("advances through steps", async () => {
     render(<Onboarding />);
     // Step 0: Welcome
-    expect(screen.getByText(/welcome to agent neo bank/i)).toBeInTheDocument();
+    expect(screen.getByText(/give your ai agents spending power/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /get started/i }));
     // Step 1: Email
-    expect(screen.getByPlaceholderText(/email/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/you@example\.com/i)).toBeInTheDocument();
   });
 });

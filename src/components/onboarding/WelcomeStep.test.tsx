@@ -6,7 +6,7 @@ import { WelcomeStep } from "./WelcomeStep";
 describe("WelcomeStep", () => {
   it("renders welcome text", () => {
     render(<WelcomeStep onNext={vi.fn()} />);
-    expect(screen.getByText(/welcome to agent neo bank/i)).toBeInTheDocument();
+    expect(screen.getByText(/give your ai agents spending power/i)).toBeInTheDocument();
   });
 
   it("renders continue button", () => {

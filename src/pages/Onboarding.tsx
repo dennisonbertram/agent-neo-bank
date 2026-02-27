@@ -26,8 +26,14 @@ export function Onboarding() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md">
+    <div
+      className="flex min-h-screen items-center justify-center"
+      style={{
+        background:
+          "radial-gradient(ellipse at 50% 30%, #EEF2FF 0%, #FAFAF9 70%)",
+      }}
+    >
+      <div className="w-full max-w-[440px] px-4">
         {step === 0 && <WelcomeStep onNext={() => setStep(1)} />}
         {step === 1 && (
           <EmailStep onNext={handleEmailSubmit} onBack={() => setStep(0)} />

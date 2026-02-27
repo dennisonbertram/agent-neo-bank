@@ -4,15 +4,17 @@ import userEvent from "@testing-library/user-event";
 import { OtpStep } from "./OtpStep";
 
 describe("OtpStep", () => {
-  it("renders 6-digit input", () => {
+  it("renders 6 digit inputs", () => {
     render(<OtpStep onNext={vi.fn()} onBack={vi.fn()} />);
-    expect(screen.getByPlaceholderText(/000000/i)).toBeInTheDocument();
+    const inputs = screen.getAllByRole("textbox");
+    expect(inputs).toHaveLength(6);
   });
 
   it("shows error on invalid OTP", async () => {
     render(<OtpStep onNext={vi.fn()} onBack={vi.fn()} />);
-    const input = screen.getByPlaceholderText(/000000/i);
-    await userEvent.type(input, "123");
+    // Only type into first input, leaving rest empty
+    const inputs = screen.getAllByRole("textbox");
+    await userEvent.type(inputs[0]!, "1");
     await userEvent.click(screen.getByRole("button", { name: /verify/i }));
     await waitFor(() => {
       expect(screen.getByText(/6 digits/i)).toBeInTheDocument();
