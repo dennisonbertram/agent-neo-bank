@@ -55,3 +55,30 @@ docs/          # Documentation and reports
 
 - Keep docs organized in the `docs/` folder structure
 - See `docs/reference/documentation-organization.md` for standards
+
+## GitHub Workflow
+
+### Branch Naming
+- `feature/xxx` -- new features
+- `fix/xxx` -- bug fixes
+- `docs/xxx` -- documentation updates
+
+### Commit Message Conventions
+- Use imperative mood: "Add feature" not "Added feature"
+- Keep the subject line under 72 characters
+- Reference issues when applicable: "Fix #12: correct balance calculation"
+
+### PR Workflow
+1. Create a branch from `main` using the naming convention above
+2. Implement with TDD (tests first, always)
+3. Push branch and open a PR using the PR template
+4. Request review (or self-review for solo work)
+5. Merge to `main` after approval and passing checks
+
+### Labels
+- `bug` -- something is broken
+- `feature` -- new feature or request
+- `enhancement` -- improvement to existing functionality
+- `docs` -- documentation updates
+- `agent` -- agent-related functionality
+- `blocked` -- blocked by external dependency
