@@ -155,6 +155,55 @@ pub fn list_agents_by_status(db: &Database, status: &AgentStatus) -> Result<Vec<
         .map_err(|e| AppError::DatabaseError(format!("Failed to collect agents: {}", e)))
 }
 
+pub fn list_all_agents(db: &Database) -> Result<Vec<Agent>, AppError> {
+    let conn = db.get_connection()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, description, purpose, agent_type, capabilities, status,
+             api_token_hash, token_prefix, balance_visible, invitation_code, created_at,
+             updated_at, last_active_at, metadata
+             FROM agents ORDER BY name ASC",
+        )
+        .map_err(|e| AppError::DatabaseError(format!("Failed to prepare statement: {}", e)))?;
+
+    let agents = stmt
+        .query_map([], |row| {
+            let capabilities_str: String = row.get(5)?;
+            let capabilities: Vec<String> =
+                serde_json::from_str(&capabilities_str).unwrap_or_default();
+            let status_str: String = row.get(6)?;
+            let status = match status_str.as_str() {
+                "active" => AgentStatus::Active,
+                "suspended" => AgentStatus::Suspended,
+                "revoked" => AgentStatus::Revoked,
+                _ => AgentStatus::Pending,
+            };
+            let balance_visible: i32 = row.get(9)?;
+            Ok(Agent {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                purpose: row.get(3)?,
+                agent_type: row.get(4)?,
+                capabilities,
+                status,
+                api_token_hash: row.get(7)?,
+                token_prefix: row.get(8)?,
+                balance_visible: balance_visible != 0,
+                invitation_code: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
+                last_active_at: row.get(13)?,
+                metadata: row.get(14)?,
+            })
+        })
+        .map_err(|e| AppError::DatabaseError(format!("Failed to query agents: {}", e)))?;
+
+    agents
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| AppError::DatabaseError(format!("Failed to collect agents: {}", e)))
+}
+
 pub fn delete_agent(db: &Database, id: &str) -> Result<(), AppError> {
     let conn = db.get_connection()?;
     let rows = conn

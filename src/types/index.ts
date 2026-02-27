@@ -1,7 +1,7 @@
 // TypeScript types matching Rust models in src-tauri/src/db/models.rs
 
 export type AgentStatus = "pending" | "active" | "suspended" | "revoked";
-export type TxStatus = "pending" | "approved" | "executing" | "confirmed" | "failed" | "denied";
+export type TxStatus = "pending" | "approved" | "awaiting_approval" | "executing" | "confirmed" | "failed" | "denied";
 export type TxType = "send" | "receive" | "earn";
 export type ApprovalRequestType = "transaction" | "limit_increase" | "registration";
 export type ApprovalStatus = "pending" | "approved" | "denied" | "expired";

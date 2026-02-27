@@ -12,6 +12,7 @@ pub fn setup_test_db() -> Arc<Database> {
 
 /// Create a file-based database with all migrations applied.
 /// Returns the database and a TempDir that must be kept alive for the DB to persist.
+#[cfg(test)]
 pub fn setup_test_db_file() -> (Arc<Database>, tempfile::TempDir) {
     let tmp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let db_path = tmp_dir.path().join("test.db");

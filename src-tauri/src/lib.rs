@@ -1,13 +1,12 @@
-mod api;
+pub mod api;
 mod commands;
-mod cli;
-mod config;
-mod core;
-mod db;
-mod error;
+pub mod cli;
+pub mod config;
+pub mod core;
+pub mod db;
+pub mod error;
 mod state;
-#[cfg(test)]
-mod test_helpers;
+pub mod test_helpers;
 
 use tauri::Manager;
 
@@ -49,6 +48,9 @@ pub fn run() {
             commands::auth::auth_logout,
             commands::wallet::get_balance,
             commands::wallet::get_address,
+            commands::transactions::list_transactions,
+            commands::transactions::get_transaction,
+            commands::agents::list_agents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
