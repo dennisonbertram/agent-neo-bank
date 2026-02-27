@@ -92,8 +92,7 @@ export function Dashboard() {
     invoke<AddressResponse>("get_address")
       .then((res) => setWalletAddress(res.address))
       .catch(() => {
-        // Fallback if get_address not available
-        setWalletAddress("0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4");
+        // Address unavailable — MonoAddress will be hidden
       });
   }, []);
 
@@ -140,12 +139,14 @@ export function Dashboard() {
       ) : (
         <GradientCard className="max-w-[480px] min-h-[220px] rounded-2xl p-8">
           {/* Top: wallet address */}
-          <div className="flex items-center gap-2 text-white/80">
-            <MonoAddress
-              address={walletAddress ?? "0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4"}
-              className="text-xs text-white/80"
-            />
-          </div>
+          {walletAddress && (
+            <div className="flex items-center gap-2 text-white/80">
+              <MonoAddress
+                address={walletAddress}
+                className="text-xs text-white/80"
+              />
+            </div>
+          )}
 
           {/* Center: Hero balance */}
           <div className="mt-6">

@@ -37,7 +37,7 @@ Notes:
 ------
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Only files matching these patterns are included: src/pages/*.tsx, src/components/layout/*.tsx, src/components/shared/*.tsx, src/components/onboarding/*.tsx, src/index.css, src/main.tsx, src/App.tsx
+- Only files matching these patterns are included: src/pages/*.tsx, src/components/layout/*.tsx, src/components/shared/*.tsx, src/components/onboarding/*.tsx, src/index.css, src/App.tsx
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -93,7 +93,6 @@ src/
     Transactions.tsx
   App.tsx
   index.css
-  main.tsx
 
 ================================================================
 Files
@@ -429,115 +428,6 @@ describe("Fund", () => {
     expect(screen.getByText("Your Wallet Address")).toBeInTheDocument();
   });
 });
-
-================
-File: src/pages/Fund.tsx
-================
-import { useState } from "react";
-import { Wallet, CreditCard, QrCode } from "lucide-react";
-
-export function Fund() {
-  const [activeTab, setActiveTab] = useState<"buy" | "deposit">("buy");
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Fund Wallet</h1>
-        <p className="mt-1 text-sm text-[#6B7280]">Add funds to your wallet</p>
-      </div>
-
-      {/* Tab bar */}
-      <div className="flex gap-1 border-b border-[#F0EDE8]">
-        <button
-          onClick={() => setActiveTab("buy")}
-          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === "buy"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
-              : "text-[#6B7280] hover:text-[#1A1A1A]"
-          }`}
-        >
-          Buy Crypto
-        </button>
-        <button
-          onClick={() => setActiveTab("deposit")}
-          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === "deposit"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
-              : "text-[#6B7280] hover:text-[#1A1A1A]"
-          }`}
-        >
-          Deposit
-        </button>
-      </div>
-
-      {activeTab === "buy" ? (
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8">
-          <div className="flex flex-col items-center text-center">
-            <div className="flex size-16 items-center justify-center rounded-2xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
-              <CreditCard className="size-8 text-[#9CA3AF]" />
-            </div>
-            <h2 className="mt-4 text-lg font-semibold text-[#1A1A1A]">Buy crypto with Coinbase</h2>
-            <p className="mt-2 max-w-sm text-sm text-[#6B7280]">
-              Purchase USDC, ETH, or WETH using your credit card, debit card, or bank transfer.
-            </p>
-            <button className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-6 py-3 text-sm font-medium text-white hover:bg-[#4338CA]">
-              Continue to Coinbase
-            </button>
-            <p className="mt-3 text-xs text-[#9CA3AF]">Coming soon — will be available in Phase 3</p>
-          </div>
-
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4 border-t border-[#F0EDE8] pt-6">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-medium text-[#6B7280]">Supported tokens:</span>
-              {["USDC", "ETH", "WETH"].map(token => (
-                <span key={token} className="rounded-full bg-[#F9FAFB] px-2.5 py-1 text-xs font-medium text-[#1A1A1A]">{token}</span>
-              ))}
-            </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-medium text-[#10B981]">
-              <span className="size-1.5 rounded-full bg-[#10B981]" />
-              Base Sepolia
-            </span>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8">
-          <div className="flex flex-col items-center text-center">
-            <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Wallet Address</h2>
-
-            <div className="mt-4 flex w-full max-w-md items-center gap-2 rounded-lg border border-[#E8E5E0] bg-[#F9FAFB] px-4 py-3">
-              <code className="flex-1 truncate text-sm font-mono text-[#1A1A1A]">0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4</code>
-              <button className="rounded-md bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-[#4F46E5] hover:bg-[#4F46E5] hover:text-white">
-                Copy
-              </button>
-            </div>
-
-            <div className="mt-6 flex size-[200px] items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
-              <div className="text-center">
-                <QrCode className="mx-auto size-12 text-[#9CA3AF]" />
-                <p className="mt-2 text-xs text-[#9CA3AF]">QR Code</p>
-              </div>
-            </div>
-
-            <p className="mt-4 max-w-sm text-sm text-[#6B7280]">
-              Scan this QR code or copy the address above to send funds
-            </p>
-
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-              {["USDC", "ETH", "WETH"].map(token => (
-                <span key={token} className="rounded-full bg-[#F9FAFB] px-2.5 py-1 text-xs font-medium text-[#1A1A1A]">{token}</span>
-              ))}
-            </div>
-
-            <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-medium text-[#10B981]">
-              <span className="size-1.5 rounded-full bg-[#10B981]" />
-              Base Sepolia
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 ================
 File: src/components/layout/Sidebar.test.tsx
@@ -1233,6 +1123,127 @@ describe("Approvals", () => {
 });
 
 ================
+File: src/pages/Fund.tsx
+================
+import { useState } from "react";
+import { Wallet, CreditCard, QrCode } from "lucide-react";
+
+const walletAddress = "0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4";
+
+export function Fund() {
+  const [activeTab, setActiveTab] = useState<"buy" | "deposit">("buy");
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(walletAddress);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Fund Wallet</h1>
+        <p className="mt-1 text-sm text-[#6B7280]">Add funds to your wallet</p>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-[#F0EDE8]">
+        <button
+          onClick={() => setActiveTab("buy")}
+          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
+            activeTab === "buy"
+              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              : "text-[#6B7280] hover:text-[#1A1A1A]"
+          }`}
+        >
+          Buy Crypto
+        </button>
+        <button
+          onClick={() => setActiveTab("deposit")}
+          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
+            activeTab === "deposit"
+              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              : "text-[#6B7280] hover:text-[#1A1A1A]"
+          }`}
+        >
+          Deposit
+        </button>
+      </div>
+
+      {activeTab === "buy" ? (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8">
+          <div className="flex flex-col items-center text-center">
+            <div className="flex size-16 items-center justify-center rounded-2xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
+              <CreditCard className="size-8 text-[#9CA3AF]" />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold text-[#1A1A1A]">Buy crypto with Coinbase</h2>
+            <p className="mt-2 max-w-sm text-sm text-[#6B7280]">
+              Purchase USDC, ETH, or WETH using your credit card, debit card, or bank transfer.
+            </p>
+            <button className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-6 py-3 text-sm font-medium text-white hover:bg-[#4338CA]">
+              Continue to Coinbase
+            </button>
+            <p className="mt-3 text-xs text-[#9CA3AF]">Coming soon — will be available in Phase 3</p>
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4 border-t border-[#F0EDE8] pt-6">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-[#6B7280]">Supported tokens:</span>
+              {["USDC", "ETH", "WETH"].map(token => (
+                <span key={token} className="rounded-full bg-[#F9FAFB] px-2.5 py-1 text-xs font-medium text-[#1A1A1A]">{token}</span>
+              ))}
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-medium text-[#10B981]">
+              <span className="size-1.5 rounded-full bg-[#10B981]" />
+              Base Sepolia
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8">
+          <div className="flex flex-col items-center text-center">
+            <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Wallet Address</h2>
+
+            <div className="mt-4 flex w-full max-w-md items-center gap-2 rounded-lg border border-[#E8E5E0] bg-[#F9FAFB] px-4 py-3">
+              <code className="flex-1 truncate text-sm font-mono text-[#1A1A1A]">{walletAddress}</code>
+              <button
+                onClick={handleCopy}
+                className="rounded-md bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-[#4F46E5] hover:bg-[#4F46E5] hover:text-white"
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+
+            <div className="mt-6 flex size-[200px] items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
+              <div className="text-center">
+                <QrCode className="mx-auto size-12 text-[#9CA3AF]" />
+                <p className="mt-2 text-xs text-[#9CA3AF]">QR Code</p>
+              </div>
+            </div>
+
+            <p className="mt-4 max-w-sm text-sm text-[#6B7280]">
+              Scan this QR code or copy the address above to send funds
+            </p>
+
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              {["USDC", "ETH", "WETH"].map(token => (
+                <span key={token} className="rounded-full bg-[#F9FAFB] px-2.5 py-1 text-xs font-medium text-[#1A1A1A]">{token}</span>
+              ))}
+            </div>
+
+            <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-medium text-[#10B981]">
+              <span className="size-1.5 rounded-full bg-[#10B981]" />
+              Base Sepolia
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+================
 File: src/pages/Transactions.test.tsx
 ================
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -1454,72 +1465,6 @@ export function Shell() {
 }
 
 ================
-File: src/components/onboarding/FundStep.tsx
-================
-import { useState } from "react";
-import { Copy, Check, Wallet } from "lucide-react";
-
-interface FundStepProps {
-  address: string;
-  onNext: () => void;
-}
-
-export function FundStep({ address, onNext }: FundStepProps) {
-  const [copied, setCopied] = useState(false);
-
-  async function handleCopy() {
-    await navigator.clipboard.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  return (
-    <div>
-      <div className="text-center">
-        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#EEF2FF]">
-          <Wallet className="size-6 text-[#4F46E5]" />
-        </div>
-        <h1 className="mt-4 text-2xl font-semibold text-[#1A1A1A]">
-          Fund your wallet
-        </h1>
-        <p className="mt-2 text-sm text-[#6B7280]">
-          Send USDC to your wallet address to get started
-        </p>
-      </div>
-
-      <div className="mt-8 rounded-xl border border-[#E8E5E0] bg-white p-4">
-        <p className="mb-2 text-xs font-medium text-[#6B7280]">
-          Your wallet address
-        </p>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 break-all text-sm font-mono text-[#1A1A1A]">
-            {address}
-          </code>
-          <button
-            onClick={handleCopy}
-            aria-label="Copy address"
-            className="flex size-9 items-center justify-center rounded-lg border border-[#E8E5E0] text-[#6B7280] transition-colors hover:bg-[#F5F5F4] hover:text-[#1A1A1A]"
-          >
-            {copied ? (
-              <Check className="size-4" />
-            ) : (
-              <Copy className="size-4" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      <button
-        onClick={onNext}
-        className="mt-6 w-full rounded-lg bg-[#4F46E5] px-6 py-3 text-base font-medium text-white transition-colors hover:bg-[#4338CA] active:scale-[0.98]"
-      >
-        Continue to Dashboard
-      </button>
-    </div>
-  );
-}
-
-================
 File: src/components/onboarding/WelcomeStep.tsx
 ================
 import { Wallet } from "lucide-react";
@@ -1585,347 +1530,6 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
       <span className={cn("size-1.5 rounded-full", config.dot)} />
       {config.label}
     </span>
-  );
-}
-
-================
-File: src/pages/AgentDetail.tsx
-================
-import { useState, useEffect, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/core";
-import { ChevronRight, Bot, Pause, RefreshCw, X } from "lucide-react";
-import type { Agent, SpendingPolicy, Transaction, AgentBudgetSummary } from "../types";
-import { StatusBadge } from "../components/shared/StatusBadge";
-import { ProgressBar } from "../components/shared/ProgressBar";
-import { MonoAddress } from "../components/shared/MonoAddress";
-import { Input } from "../components/ui/input";
-
-export function AgentDetail() {
-  const { id } = useParams<{ id: string }>();
-  const [agent, setAgent] = useState<Agent | null>(null);
-  const [policy, setPolicy] = useState<SpendingPolicy | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [budget, setBudget] = useState<AgentBudgetSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editPolicy, setEditPolicy] = useState<SpendingPolicy | null>(null);
-
-  const loadData = useCallback(async () => {
-    if (!id) return;
-    setIsLoading(true);
-    try {
-      const [agentData, policyData, txData, budgetSummaries] = await Promise.all([
-        invoke<Agent>("get_agent", { agentId: id }),
-        invoke<SpendingPolicy>("get_agent_spending_policy", { agentId: id }),
-        invoke<Transaction[]>("get_agent_transactions", {
-          agentId: id,
-          limit: 20,
-        }),
-        invoke<AgentBudgetSummary[]>("get_agent_budget_summaries").catch(() => [] as AgentBudgetSummary[]),
-      ]);
-      setAgent(agentData);
-      setPolicy(policyData);
-      setEditPolicy(policyData);
-      setTransactions(txData);
-      const agentBudget = budgetSummaries.find((b) => b.agent_id === id) ?? null;
-      setBudget(agentBudget);
-    } catch {
-      // Error loading data
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const handleSuspend = async () => {
-    if (!id) return;
-    await invoke("suspend_agent", { agentId: id });
-    await loadData();
-  };
-
-  const handleSaveLimits = async () => {
-    if (!editPolicy) return;
-    await invoke("update_agent_spending_policy", { policy: editPolicy });
-    setPolicy(editPolicy);
-    setIsEditing(false);
-  };
-
-  const handleEditChange = (field: keyof SpendingPolicy, value: string) => {
-    if (!editPolicy) return;
-    setEditPolicy({ ...editPolicy, [field]: value });
-  };
-
-  const toggleEdit = () => {
-    if (isEditing) {
-      handleSaveLimits();
-    } else {
-      setIsEditing(true);
-    }
-  };
-
-  const formatDate = (timestamp: number | null) => {
-    if (!timestamp) return "Never";
-    return new Date(timestamp * 1000).toLocaleDateString();
-  };
-
-  const formatTime = (timestamp: number | null) => {
-    if (!timestamp) return "";
-    const d = new Date(timestamp * 1000);
-    return d.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const getStatusDotColor = (status: string) => {
-    switch (status) {
-      case "confirmed":
-        return "bg-[#10B981]";
-      case "pending":
-      case "awaiting_approval":
-        return "bg-[#F59E0B]";
-      case "failed":
-      case "denied":
-        return "bg-[#EF4444]";
-      default:
-        return "bg-[#9CA3AF]";
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <p className="text-[#6B7280]">Loading agent details...</p>
-      </div>
-    );
-  }
-
-  if (!agent) {
-    return (
-      <div className="p-6">
-        <p className="text-[#6B7280]">Agent not found</p>
-      </div>
-    );
-  }
-
-  const policyRows = policy
-    ? [
-        {
-          label: "Per Transaction",
-          limit: parseFloat(policy.per_tx_max) || 0,
-          spent: 0,
-        },
-        {
-          label: "Daily",
-          limit: parseFloat(policy.daily_cap) || 0,
-          spent: budget ? parseFloat(budget.daily_spent) || 0 : 0,
-        },
-        {
-          label: "Weekly",
-          limit: parseFloat(policy.weekly_cap) || 0,
-          spent: budget ? parseFloat(budget.weekly_spent) || 0 : 0,
-        },
-        {
-          label: "Monthly",
-          limit: parseFloat(policy.monthly_cap) || 0,
-          spent: budget ? parseFloat(budget.monthly_spent) || 0 : 0,
-        },
-      ]
-    : [];
-
-  const getColor = (row: { spent: number; limit: number }): "indigo" | "green" | "amber" | "red" => {
-    if (row.limit === 0) return "indigo";
-    const ratio = row.spent / row.limit;
-    if (ratio >= 0.9) return "red";
-    if (ratio >= 0.7) return "amber";
-    return "indigo";
-  };
-
-  const recipients = policy?.allowlist ?? [];
-
-  return (
-    <div className="p-6 space-y-4">
-      {/* Breadcrumb + Header */}
-      <div className="space-y-4">
-        <nav className="flex items-center gap-2 text-sm text-[#6B7280]">
-          <Link to="/agents" className="hover:text-[#4F46E5]">
-            Agents
-          </Link>
-          <ChevronRight className="size-4" />
-          <span className="text-[#1A1A1A] font-medium">{agent.name}</span>
-        </nav>
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex size-12 items-center justify-center rounded-full bg-[#EEF2FF]">
-              <Bot className="size-6 text-[#4F46E5]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-semibold text-[#1A1A1A]">{agent.name}</h1>
-                <StatusBadge status={agent.status} />
-              </div>
-              <p className="text-sm text-[#6B7280]">
-                {agent.purpose} · Created {formatDate(agent.created_at)}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {agent.status === "active" && (
-              <button
-                onClick={handleSuspend}
-                className="inline-flex items-center gap-2 rounded-lg border border-[#EF4444] px-4 py-2 text-sm font-medium text-[#EF4444] hover:bg-[#FEF2F2]"
-              >
-                <Pause className="size-4" />
-                Suspend Agent
-              </button>
-            )}
-            <button
-              disabled
-              title="Coming soon — available in Phase 4"
-              className="inline-flex items-center gap-2 rounded-lg border border-[#E8E5E0] px-4 py-2 text-sm font-medium text-[#1A1A1A] opacity-50 cursor-not-allowed"
-            >
-              <RefreshCw className="size-4" />
-              Rotate Token
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Two-Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-        <div className="lg:col-span-2 space-y-6">
-          {/* Card 1: Spending Limits */}
-          <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-base font-semibold text-[#1A1A1A]">Spending Limits</h2>
-              <button
-                onClick={toggleEdit}
-                className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
-              >
-                {isEditing ? "Save" : "Edit"}
-              </button>
-            </div>
-
-            {isEditing && editPolicy ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="per_tx_max" className="text-sm text-[#6B7280]">
-                      Per Transaction Max
-                    </label>
-                    <Input
-                      id="per_tx_max"
-                      value={editPolicy.per_tx_max}
-                      onChange={(e) => handleEditChange("per_tx_max", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="daily_cap" className="text-sm text-[#6B7280]">
-                      Daily Cap
-                    </label>
-                    <Input
-                      id="daily_cap"
-                      value={editPolicy.daily_cap}
-                      onChange={(e) => handleEditChange("daily_cap", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="weekly_cap" className="text-sm text-[#6B7280]">
-                      Weekly Cap
-                    </label>
-                    <Input
-                      id="weekly_cap"
-                      value={editPolicy.weekly_cap}
-                      onChange={(e) => handleEditChange("weekly_cap", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="monthly_cap" className="text-sm text-[#6B7280]">
-                      Monthly Cap
-                    </label>
-                    <Input
-                      id="monthly_cap"
-                      value={editPolicy.monthly_cap}
-                      onChange={(e) => handleEditChange("monthly_cap", e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {policyRows.map((row) => (
-                  <div key={row.label}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-sm text-[#6B7280]">{row.label}</span>
-                      <span className="text-sm font-medium font-mono text-[#1A1A1A]">
-                        ${row.spent} / ${row.limit}
-                      </span>
-                    </div>
-                    <ProgressBar value={row.spent} max={row.limit} color={getColor(row)} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Card 2: Allowed Recipients */}
-          <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
-            <h2 className="text-base font-semibold text-[#1A1A1A] mb-4">Allowed Recipients</h2>
-            {recipients.length > 0 ? (
-              <div className="space-y-3">
-                {recipients.map((addr) => (
-                  <div
-                    key={addr}
-                    className="flex items-center justify-between rounded-lg bg-[#F9FAFB] px-3 py-2"
-                  >
-                    <MonoAddress address={addr} />
-                    <button className="text-[#9CA3AF] hover:text-[#EF4444]">
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-[#9CA3AF]">All recipients allowed</p>
-            )}
-          </div>
-        </div>
-
-        {/* Card 3: Activity Feed */}
-        <div>
-          <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
-            <h2 className="text-base font-semibold text-[#1A1A1A] mb-4">Activity</h2>
-            {transactions.length === 0 ? (
-              <p className="text-sm text-[#9CA3AF]">No transactions</p>
-            ) : (
-              <div className="space-y-4">
-                {transactions.map((tx) => (
-                  <div key={tx.id} className="flex items-start gap-3">
-                    <div className={`mt-1 size-2 rounded-full ${getStatusDotColor(tx.status)}`} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-[#1A1A1A]">${tx.amount}</span>
-                        <span className="text-xs text-[#9CA3AF]">{formatTime(tx.created_at)}</span>
-                      </div>
-                      <p className="text-xs text-[#6B7280] truncate">
-                        {tx.description || tx.recipient}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -2690,28 +2294,6 @@ describe("Onboarding", () => {
 });
 
 ================
-File: src/main.tsx
-================
-import "@fontsource/inter/400.css";
-import "@fontsource/inter/500.css";
-import "@fontsource/inter/600.css";
-import "@fontsource/inter/700.css";
-import "@fontsource/jetbrains-mono/400.css";
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
-import { App } from "./App";
-import "./index.css";
-
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </React.StrictMode>,
-);
-
-================
 File: src/components/layout/Sidebar.tsx
 ================
 import { NavLink } from "react-router-dom";
@@ -2878,6 +2460,76 @@ export function EmailStep({ onNext, onBack, loading, serverError }: EmailStepPro
 }
 
 ================
+File: src/components/onboarding/FundStep.tsx
+================
+import { useState } from "react";
+import { Copy, Check, Wallet } from "lucide-react";
+
+interface FundStepProps {
+  address: string;
+  onNext: () => void;
+}
+
+export function FundStep({ address, onNext }: FundStepProps) {
+  const [copied, setCopied] = useState(false);
+  const addressReady = address !== "0x..." && address !== "";
+
+  async function handleCopy() {
+    if (!addressReady) return;
+    await navigator.clipboard.writeText(address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div>
+      <div className="text-center">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#EEF2FF]">
+          <Wallet className="size-6 text-[#4F46E5]" />
+        </div>
+        <h1 className="mt-4 text-2xl font-semibold text-[#1A1A1A]">
+          Fund your wallet
+        </h1>
+        <p className="mt-2 text-sm text-[#6B7280]">
+          Send USDC to your wallet address to get started
+        </p>
+      </div>
+
+      <div className="mt-8 rounded-xl border border-[#E8E5E0] bg-white p-4">
+        <p className="mb-2 text-xs font-medium text-[#6B7280]">
+          Your wallet address
+        </p>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 break-all text-sm font-mono text-[#1A1A1A]">
+            {address}
+          </code>
+          <button
+            onClick={handleCopy}
+            disabled={!addressReady}
+            aria-label="Copy address"
+            className={`flex size-9 items-center justify-center rounded-lg border border-[#E8E5E0] text-[#6B7280] transition-colors ${addressReady ? "hover:bg-[#F5F5F4] hover:text-[#1A1A1A]" : "opacity-50 cursor-not-allowed"}`}
+          >
+            {copied ? (
+              <Check className="size-4" />
+            ) : (
+              <Copy className="size-4" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      <button
+        onClick={onNext}
+        disabled={!addressReady}
+        className={`mt-6 w-full rounded-lg px-6 py-3 text-base font-medium text-white transition-colors active:scale-[0.98] ${addressReady ? "bg-[#4F46E5] hover:bg-[#4338CA]" : "bg-[#4F46E5]/50 cursor-not-allowed"}`}
+      >
+        {addressReady ? "Continue to Dashboard" : "Loading wallet address..."}
+      </button>
+    </div>
+  );
+}
+
+================
 File: src/components/onboarding/OtpStep.tsx
 ================
 import { useState, useRef } from "react";
@@ -3007,411 +2659,415 @@ export function OtpStep({ onNext, onBack, loading, serverError, email }: OtpStep
 }
 
 ================
-File: src/pages/Dashboard.tsx
+File: src/pages/AgentDetail.tsx
 ================
 import { useState, useEffect, useCallback } from "react";
+import { useParams, Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { Link } from "react-router-dom";
-import { useBalance } from "@/hooks/useBalance";
-import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
-import { GradientCard } from "@/components/shared/GradientCard";
-import { MonoAddress } from "@/components/shared/MonoAddress";
-import { ProgressBar } from "@/components/shared/ProgressBar";
-import { StatusBadge } from "@/components/shared/StatusBadge";
-import { GlobalBudget } from "@/components/dashboard/GlobalBudget";
-import { AgentBudgets } from "@/components/dashboard/AgentBudgets";
-import {
-  ArrowUpRight,
-  Wallet,
-  UserPlus,
-  Settings,
-  Plus,
-  Bot,
-  ArrowUpDown,
-} from "lucide-react";
-import type { AgentBudgetSummary, GlobalBudgetSummary } from "@/types";
+import { ChevronRight, Bot, Pause, RefreshCw, X } from "lucide-react";
+import type { Agent, SpendingPolicy, Transaction, AgentBudgetSummary } from "../types";
+import { StatusBadge } from "../components/shared/StatusBadge";
+import { ProgressBar } from "../components/shared/ProgressBar";
+import { MonoAddress } from "../components/shared/MonoAddress";
+import { Input } from "../components/ui/input";
 
-function formatBalance(amount: string): string {
-  const num = parseFloat(amount);
-  if (isNaN(num)) return amount;
-  return num.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
+export function AgentDetail() {
+  const { id } = useParams<{ id: string }>();
+  const [agent, setAgent] = useState<Agent | null>(null);
+  const [policy, setPolicy] = useState<SpendingPolicy | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [budget, setBudget] = useState<AgentBudgetSummary | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editPolicy, setEditPolicy] = useState<SpendingPolicy | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-function getProgressColor(spent: number, cap: number): "green" | "amber" | "red" {
-  if (cap <= 0) return "green";
-  const pct = (spent / cap) * 100;
-  if (pct > 95) return "red";
-  if (pct > 80) return "amber";
-  return "green";
-}
-
-function AgentCard({ agent }: { agent: AgentBudgetSummary }) {
-  const dailySpent = parseFloat(agent.daily_spent) || 0;
-  const dailyCap = parseFloat(agent.daily_cap) || 0;
-
-  return (
-    <div className="flex flex-col rounded-xl border border-[#F0EDE8] bg-white p-5 transition-shadow hover:shadow-md">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-full bg-[#EEF2FF]">
-            <Bot className="size-5 text-[#4F46E5]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[#1A1A1A]">{agent.agent_name}</p>
-            <p className="text-xs text-[#6B7280]">Agent</p>
-          </div>
-        </div>
-        <StatusBadge status="active" />
-      </div>
-      <div className="mt-4">
-        <ProgressBar
-          value={dailySpent}
-          max={dailyCap}
-          color={getProgressColor(dailySpent, dailyCap)}
-        />
-        <div className="mt-1.5 flex justify-between text-xs text-[#6B7280]">
-          <span>
-            <CurrencyDisplay amount={agent.daily_spent} /> spent
-          </span>
-          <span>
-            <CurrencyDisplay amount={agent.daily_cap} /> daily cap
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const quickActions = [
-  { label: "Send", icon: ArrowUpRight, to: "/transactions" },
-  { label: "Fund", icon: Wallet, to: "/fund" },
-  { label: "Invite Agent", icon: UserPlus, to: "/settings" },
-  { label: "Settings", icon: Settings, to: "/settings" },
-];
-
-export function Dashboard() {
-  const { balance, balances, isLoading } = useBalance();
-  const [agentBudgets, setAgentBudgets] = useState<AgentBudgetSummary[]>([]);
-  const [globalBudget, setGlobalBudget] = useState<GlobalBudgetSummary | null>(
-    null,
-  );
-  const [budgetLoading, setBudgetLoading] = useState(true);
-
-  const fetchBudgets = useCallback(async () => {
-    setBudgetLoading(true);
+  const loadData = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
     try {
-      const [agents, global] = await Promise.all([
-        invoke<AgentBudgetSummary[]>("get_agent_budget_summaries"),
-        invoke<GlobalBudgetSummary>("get_global_budget_summary"),
+      const [agentData, policyData, txData, budgetSummaries] = await Promise.all([
+        invoke<Agent>("get_agent", { agentId: id }),
+        invoke<SpendingPolicy>("get_agent_spending_policy", { agentId: id }),
+        invoke<Transaction[]>("get_agent_transactions", {
+          agentId: id,
+          limit: 20,
+        }),
+        invoke<AgentBudgetSummary[]>("get_agent_budget_summaries").catch(() => [] as AgentBudgetSummary[]),
       ]);
-      setAgentBudgets(agents);
-      setGlobalBudget(global);
+      setAgent(agentData);
+      setPolicy(policyData);
+      setEditPolicy(policyData);
+      setTransactions(txData);
+      const agentBudget = budgetSummaries.find((b) => b.agent_id === id) ?? null;
+      setBudget(agentBudget);
     } catch {
-      // Budget data is non-critical, fail silently
+      // Error loading data
     } finally {
-      setBudgetLoading(false);
+      setIsLoading(false);
     }
-  }, []);
+  }, [id]);
 
   useEffect(() => {
-    fetchBudgets();
-  }, [fetchBudgets]);
+    loadData();
+  }, [loadData]);
 
-  // Build secondary balance text from balances map
-  const secondaryBalances = balances
-    ? Object.entries(balances)
-        .filter(([key]) => key !== "USDC")
-        .map(([key, val]) => `${val.formatted} ${key}`)
-        .join(" | ")
-    : null;
+  const handleSuspend = async () => {
+    if (!id) return;
+    await invoke("suspend_agent", { agentId: id });
+    await loadData();
+  };
 
-  return (
-    <div className="space-y-8 p-6">
-      {/* Section 1: Page Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Dashboard</h1>
-      </div>
+  const validateField = (field: string, value: string): string | null => {
+    const num = parseFloat(value);
+    if (value.trim() === "" || isNaN(num)) return "Must be a valid number";
+    if (num < 0) return "Must be >= 0";
+    return null;
+  };
 
-      {/* Section 2: Balance Card (HERO) */}
-      {isLoading ? (
-        <div className="flex h-[220px] max-w-[480px] items-center justify-center rounded-2xl bg-[#F9FAFB]">
-          <span className="text-sm text-[#6B7280]">Loading...</span>
-        </div>
-      ) : (
-        <GradientCard className="max-w-[480px] min-h-[220px] rounded-2xl p-8">
-          {/* Top: wallet address */}
-          <div className="flex items-center gap-2 text-white/80">
-            <MonoAddress
-              address="0x72AE...C504B4"
-              className="text-xs text-white/80"
-            />
-          </div>
+  const handleSaveLimits = async () => {
+    if (!editPolicy) return;
+    setSaveError(null);
 
-          {/* Center: Hero balance */}
-          <div className="mt-6">
-            <div
-              className="text-5xl font-bold tracking-tight"
-              style={{ fontFeatureSettings: '"tnum"' }}
-            >
-              {balance ? `$${formatBalance(balance)}` : "--"}
-            </div>
-            <div className="mt-1 text-sm text-white/80">USDC</div>
-          </div>
+    // Validate all numeric fields
+    const fieldsToValidate: (keyof SpendingPolicy)[] = [
+      "per_tx_max", "daily_cap", "weekly_cap", "monthly_cap",
+    ];
+    const errors: Record<string, string> = {};
+    for (const field of fieldsToValidate) {
+      const err = validateField(field, editPolicy[field] as string);
+      if (err) errors[field] = err;
+    }
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors({});
 
-          {/* Secondary balances */}
-          {secondaryBalances && (
-            <div className="mt-2 text-sm text-white/70">{secondaryBalances}</div>
-          )}
-
-          {/* Bottom: Fund button */}
-          <div className="mt-6">
-            <Link
-              to="/fund"
-              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-[#4F46E5] transition-colors hover:bg-white/90"
-            >
-              <Wallet className="size-4" />
-              Fund Wallet
-            </Link>
-          </div>
-        </GradientCard>
-      )}
-
-      {/* Section 3: Quick Actions */}
-      <div className="flex flex-wrap gap-3">
-        {quickActions.map((action) => (
-          <Link
-            key={action.label}
-            to={action.to}
-            className="inline-flex items-center gap-2 rounded-full border border-[#E8E5E0] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] transition-colors hover:bg-[#F9FAFB]"
-          >
-            <action.icon className="size-4 text-[#6B7280]" />
-            {action.label}
-          </Link>
-        ))}
-      </div>
-
-      {/* Global Budget Utilization (preserved from original) */}
-      {budgetLoading ? (
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
-          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
-            Global Budget Utilization
-          </h2>
-          <span className="text-sm text-[#6B7280]">Loading...</span>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
-          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
-            Global Budget Utilization
-          </h2>
-          <GlobalBudget summary={globalBudget} />
-        </div>
-      )}
-
-      {/* Section 4: Your Agents */}
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Agents</h2>
-          <Link
-            to="/agents"
-            className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
-          >
-            View all
-          </Link>
-        </div>
-
-        {budgetLoading ? (
-          <span className="text-sm text-[#6B7280]">Loading...</span>
-        ) : agentBudgets.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {agentBudgets.map((agent) => (
-              <AgentCard key={agent.agent_id} agent={agent} />
-            ))}
-            <Link
-              to="/settings"
-              className="flex min-h-[160px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-white p-5 text-center transition-colors hover:border-[#4F46E5] hover:bg-[#EEF2FF]"
-            >
-              <Plus className="size-8 text-[#9CA3AF]" />
-              <span className="mt-2 text-sm font-medium text-[#6B7280]">
-                Add Agent
-              </span>
-            </Link>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-[#F0EDE8] bg-white p-8 text-center">
-            <Bot className="mx-auto size-12 text-[#D1D5DB]" />
-            <p className="mt-3 text-sm font-medium text-[#1A1A1A]">
-              No agents yet
-            </p>
-            <p className="mt-1 text-sm text-[#6B7280]">
-              Generate an invitation code to let an AI agent connect.
-            </p>
-            <Link
-              to="/settings"
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4338CA]"
-            >
-              <UserPlus className="size-4" />
-              Invite Agent
-            </Link>
-          </div>
-        )}
-      </div>
-
-      {/* Agent Budgets (preserved from original) */}
-      {!budgetLoading && agentBudgets.length > 0 && (
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
-          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
-            Agent Budgets
-          </h2>
-          <AgentBudgets summaries={agentBudgets} />
-        </div>
-      )}
-
-      {/* Section 5: Recent Transactions */}
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-[#1A1A1A]">
-            Recent Transactions
-          </h2>
-          <Link
-            to="/transactions"
-            className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
-          >
-            View all
-          </Link>
-        </div>
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8 text-center">
-          <ArrowUpDown className="mx-auto size-12 text-[#D1D5DB]" />
-          <p className="mt-3 text-sm font-medium text-[#1A1A1A]">
-            No transactions yet
-          </p>
-          <p className="mt-1 text-sm text-[#6B7280]">
-            Transactions will appear here once your agents start spending.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-================
-File: src/pages/Onboarding.tsx
-================
-import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
-import { EmailStep } from "@/components/onboarding/EmailStep";
-import { OtpStep } from "@/components/onboarding/OtpStep";
-import { FundStep } from "@/components/onboarding/FundStep";
-
-interface AuthLoginResponse {
-  status: "otp_sent" | "verified";
-  flow_id?: string;
-}
-
-interface AuthVerifyResponse {
-  status: "verified" | "otp_sent";
-}
-
-export function Onboarding() {
-  const [step, setStep] = useState(0);
-  const [email, setEmail] = useState("");
-  const [walletAddress, setWalletAddress] = useState("0x...");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleEmailSubmit(submittedEmail: string) {
-    setLoading(true);
-    setError(null);
+    setIsSaving(true);
     try {
-      const result = await invoke<AuthLoginResponse>("auth_login", {
-        email: submittedEmail,
+      await invoke("update_agent_spending_policy", { policy: editPolicy });
+      setPolicy(editPolicy);
+      setIsEditing(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditChange = (field: keyof SpendingPolicy, value: string) => {
+    if (!editPolicy) return;
+    setEditPolicy({ ...editPolicy, [field]: value });
+    // Clear validation error for this field on change
+    if (validationErrors[field]) {
+      setValidationErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
       });
-      setEmail(submittedEmail);
-      if (result.status === "otp_sent") {
-        setStep(2);
-      } else if (result.status === "verified") {
-        // Already verified (e.g. returning user), skip OTP
-        setStep(3);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
     }
-  }
+  };
 
-  async function handleOtpSubmit(otp: string) {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await invoke<AuthVerifyResponse>("auth_verify", { otp });
-      if (result.status === "verified") {
-        // Fetch wallet address after successful auth
-        try {
-          const status = await invoke<{ address?: string }>("auth_status");
-          if (status.address) {
-            setWalletAddress(status.address);
-          }
-        } catch {
-          // auth_status may not return address yet; use placeholder
-        }
-        setStep(3);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
+  const toggleEdit = async () => {
+    if (isEditing) {
+      await handleSaveLimits();
+    } else {
+      setSaveError(null);
+      setValidationErrors({});
+      setIsEditing(true);
     }
+  };
+
+  const formatDate = (timestamp: number | null) => {
+    if (!timestamp) return "Never";
+    return new Date(timestamp * 1000).toLocaleDateString();
+  };
+
+  const formatTime = (timestamp: number | null) => {
+    if (!timestamp) return "";
+    const d = new Date(timestamp * 1000);
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getStatusDotColor = (status: string) => {
+    switch (status) {
+      case "confirmed":
+        return "bg-[#10B981]";
+      case "pending":
+      case "awaiting_approval":
+        return "bg-[#F59E0B]";
+      case "failed":
+      case "denied":
+        return "bg-[#EF4444]";
+      default:
+        return "bg-[#9CA3AF]";
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <p className="text-[#6B7280]">Loading agent details...</p>
+      </div>
+    );
   }
 
-  function handleComplete() {
-    // Navigate to dashboard
-    window.location.href = "/";
+  if (!agent) {
+    return (
+      <div className="p-6">
+        <p className="text-[#6B7280]">Agent not found</p>
+      </div>
+    );
   }
 
-  function handleBackToEmail() {
-    setError(null);
-    setStep(1);
-  }
+  const policyRows = policy
+    ? [
+        {
+          label: "Per Transaction",
+          limit: parseFloat(policy.per_tx_max) || 0,
+          spent: 0,
+        },
+        {
+          label: "Daily",
+          limit: parseFloat(policy.daily_cap) || 0,
+          spent: budget ? parseFloat(budget.daily_spent) || 0 : 0,
+        },
+        {
+          label: "Weekly",
+          limit: parseFloat(policy.weekly_cap) || 0,
+          spent: budget ? parseFloat(budget.weekly_spent) || 0 : 0,
+        },
+        {
+          label: "Monthly",
+          limit: parseFloat(policy.monthly_cap) || 0,
+          spent: budget ? parseFloat(budget.monthly_spent) || 0 : 0,
+        },
+      ]
+    : [];
 
-  function handleBackToWelcome() {
-    setError(null);
-    setStep(0);
-  }
+  const getColor = (row: { spent: number; limit: number }): "indigo" | "green" | "amber" | "red" => {
+    if (row.limit === 0) return "indigo";
+    const ratio = row.spent / row.limit;
+    if (ratio >= 0.9) return "red";
+    if (ratio >= 0.7) return "amber";
+    return "indigo";
+  };
+
+  const recipients = policy?.allowlist ?? [];
 
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{
-        background:
-          "radial-gradient(ellipse at 50% 30%, #EEF2FF 0%, #FAFAF9 70%)",
-      }}
-    >
-      <div className="w-full max-w-[440px] px-4">
-        {step === 0 && <WelcomeStep onNext={() => setStep(1)} />}
-        {step === 1 && (
-          <EmailStep
-            onNext={handleEmailSubmit}
-            onBack={handleBackToWelcome}
-            loading={loading}
-            serverError={error}
-          />
-        )}
-        {step === 2 && (
-          <OtpStep
-            onNext={handleOtpSubmit}
-            onBack={handleBackToEmail}
-            loading={loading}
-            serverError={error}
-            email={email}
-          />
-        )}
-        {step === 3 && (
-          <FundStep address={walletAddress} onNext={handleComplete} />
-        )}
+    <div className="p-6 space-y-4">
+      {/* Breadcrumb + Header */}
+      <div className="space-y-4">
+        <nav className="flex items-center gap-2 text-sm text-[#6B7280]">
+          <Link to="/agents" className="hover:text-[#4F46E5]">
+            Agents
+          </Link>
+          <ChevronRight className="size-4" />
+          <span className="text-[#1A1A1A] font-medium">{agent.name}</span>
+        </nav>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex size-12 items-center justify-center rounded-full bg-[#EEF2FF]">
+              <Bot className="size-6 text-[#4F46E5]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-semibold text-[#1A1A1A]">{agent.name}</h1>
+                <StatusBadge status={agent.status} />
+              </div>
+              <p className="text-sm text-[#6B7280]">
+                {agent.purpose} · Created {formatDate(agent.created_at)}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {agent.status === "active" && (
+              <button
+                onClick={handleSuspend}
+                className="inline-flex items-center gap-2 rounded-lg border border-[#EF4444] px-4 py-2 text-sm font-medium text-[#EF4444] hover:bg-[#FEF2F2]"
+              >
+                <Pause className="size-4" />
+                Suspend Agent
+              </button>
+            )}
+            <button
+              disabled
+              title="Coming soon — available in Phase 4"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#E8E5E0] px-4 py-2 text-sm font-medium text-[#1A1A1A] opacity-50 cursor-not-allowed"
+            >
+              <RefreshCw className="size-4" />
+              Rotate Token
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Two-Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+        <div className="lg:col-span-2 space-y-6">
+          {/* Card 1: Spending Limits */}
+          <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-base font-semibold text-[#1A1A1A]">Spending Limits</h2>
+              <button
+                onClick={toggleEdit}
+                disabled={isSaving}
+                className={`text-sm font-medium ${isSaving ? "text-[#9CA3AF] cursor-not-allowed" : "text-[#4F46E5] hover:text-[#4338CA]"}`}
+              >
+                {isSaving ? "Saving..." : isEditing ? "Save" : "Edit"}
+              </button>
+            </div>
+
+            {isEditing && editPolicy ? (
+              <div className="space-y-4">
+                {saveError && (
+                  <div className="rounded-lg bg-[#FEF2F2] px-4 py-2 text-sm text-[#EF4444]">
+                    Failed to save: {saveError}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="per_tx_max" className="text-sm text-[#6B7280]">
+                      Per Transaction Max
+                    </label>
+                    <Input
+                      id="per_tx_max"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={editPolicy.per_tx_max}
+                      onChange={(e) => handleEditChange("per_tx_max", e.target.value)}
+                    />
+                    {validationErrors.per_tx_max && (
+                      <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.per_tx_max}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label htmlFor="daily_cap" className="text-sm text-[#6B7280]">
+                      Daily Cap
+                    </label>
+                    <Input
+                      id="daily_cap"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={editPolicy.daily_cap}
+                      onChange={(e) => handleEditChange("daily_cap", e.target.value)}
+                    />
+                    {validationErrors.daily_cap && (
+                      <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.daily_cap}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label htmlFor="weekly_cap" className="text-sm text-[#6B7280]">
+                      Weekly Cap
+                    </label>
+                    <Input
+                      id="weekly_cap"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={editPolicy.weekly_cap}
+                      onChange={(e) => handleEditChange("weekly_cap", e.target.value)}
+                    />
+                    {validationErrors.weekly_cap && (
+                      <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.weekly_cap}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label htmlFor="monthly_cap" className="text-sm text-[#6B7280]">
+                      Monthly Cap
+                    </label>
+                    <Input
+                      id="monthly_cap"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={editPolicy.monthly_cap}
+                      onChange={(e) => handleEditChange("monthly_cap", e.target.value)}
+                    />
+                    {validationErrors.monthly_cap && (
+                      <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.monthly_cap}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {policyRows.map((row) => (
+                  <div key={row.label}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm text-[#6B7280]">{row.label}</span>
+                      <span className="text-sm font-medium font-mono text-[#1A1A1A]">
+                        ${row.spent} / ${row.limit}
+                      </span>
+                    </div>
+                    <ProgressBar value={row.spent} max={row.limit} color={getColor(row)} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Allowed Recipients */}
+          <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+            <h2 className="text-base font-semibold text-[#1A1A1A] mb-4">Allowed Recipients</h2>
+            {recipients.length > 0 ? (
+              <div className="space-y-3">
+                {recipients.map((addr) => (
+                  <div
+                    key={addr}
+                    className="flex items-center justify-between rounded-lg bg-[#F9FAFB] px-3 py-2"
+                  >
+                    <MonoAddress address={addr} />
+                    <button className="text-[#9CA3AF] hover:text-[#EF4444]">
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[#9CA3AF]">All recipients allowed</p>
+            )}
+          </div>
+        </div>
+
+        {/* Card 3: Activity Feed */}
+        <div>
+          <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+            <h2 className="text-base font-semibold text-[#1A1A1A] mb-4">Activity</h2>
+            {transactions.length === 0 ? (
+              <p className="text-sm text-[#9CA3AF]">No transactions</p>
+            ) : (
+              <div className="space-y-4">
+                {transactions.map((tx) => (
+                  <div key={tx.id} className="flex items-start gap-3">
+                    <div className={`mt-1 size-2 rounded-full ${getStatusDotColor(tx.status)}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-[#1A1A1A]">${tx.amount}</span>
+                        <span className="text-xs text-[#9CA3AF]">{formatTime(tx.created_at)}</span>
+                      </div>
+                      <p className="text-xs text-[#6B7280] truncate">
+                        {tx.description || tx.recipient}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -4098,6 +3754,433 @@ File: src/index.css
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+================
+File: src/pages/Dashboard.tsx
+================
+import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Link } from "react-router-dom";
+import { useBalance } from "@/hooks/useBalance";
+import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
+import { GradientCard } from "@/components/shared/GradientCard";
+import { MonoAddress } from "@/components/shared/MonoAddress";
+import { ProgressBar } from "@/components/shared/ProgressBar";
+import { GlobalBudget } from "@/components/dashboard/GlobalBudget";
+import { AgentBudgets } from "@/components/dashboard/AgentBudgets";
+import {
+  ArrowUpRight,
+  Wallet,
+  UserPlus,
+  Settings,
+  Plus,
+  Bot,
+  ArrowUpDown,
+} from "lucide-react";
+import type { AgentBudgetSummary, GlobalBudgetSummary, AddressResponse } from "@/types";
+
+function formatBalance(amount: string): string {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return amount;
+  return num.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function getProgressColor(spent: number, cap: number): "green" | "amber" | "red" {
+  if (cap <= 0) return "green";
+  const pct = (spent / cap) * 100;
+  if (pct > 95) return "red";
+  if (pct > 80) return "amber";
+  return "green";
+}
+
+function AgentCard({ agent }: { agent: AgentBudgetSummary }) {
+  const dailySpent = parseFloat(agent.daily_spent) || 0;
+  const dailyCap = parseFloat(agent.daily_cap) || 0;
+
+  return (
+    <div className="flex flex-col rounded-xl border border-[#F0EDE8] bg-white p-5 transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-full bg-[#EEF2FF]">
+            <Bot className="size-5 text-[#4F46E5]" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[#1A1A1A]">{agent.agent_name}</p>
+            <p className="text-xs text-[#6B7280]">Agent</p>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4">
+        <ProgressBar
+          value={dailySpent}
+          max={dailyCap}
+          color={getProgressColor(dailySpent, dailyCap)}
+        />
+        <div className="mt-1.5 flex justify-between text-xs text-[#6B7280]">
+          <span>
+            <CurrencyDisplay amount={agent.daily_spent} /> spent
+          </span>
+          <span>
+            <CurrencyDisplay amount={agent.daily_cap} /> daily cap
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const quickActions = [
+  { label: "Send", icon: ArrowUpRight, to: "/transactions" },
+  { label: "Fund", icon: Wallet, to: "/fund" },
+  { label: "Invite Agent", icon: UserPlus, to: "/settings" },
+  { label: "Settings", icon: Settings, to: "/settings" },
+];
+
+export function Dashboard() {
+  const { balance, balances, isLoading } = useBalance();
+  const [agentBudgets, setAgentBudgets] = useState<AgentBudgetSummary[]>([]);
+  const [globalBudget, setGlobalBudget] = useState<GlobalBudgetSummary | null>(
+    null,
+  );
+  const [budgetLoading, setBudgetLoading] = useState(true);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+
+  useEffect(() => {
+    invoke<AddressResponse>("get_address")
+      .then((res) => setWalletAddress(res.address))
+      .catch(() => {
+        // Fallback if get_address not available
+        setWalletAddress("0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4");
+      });
+  }, []);
+
+  const fetchBudgets = useCallback(async () => {
+    setBudgetLoading(true);
+    try {
+      const [agents, global] = await Promise.all([
+        invoke<AgentBudgetSummary[]>("get_agent_budget_summaries"),
+        invoke<GlobalBudgetSummary>("get_global_budget_summary"),
+      ]);
+      setAgentBudgets(agents);
+      setGlobalBudget(global);
+    } catch {
+      // Budget data is non-critical, fail silently
+    } finally {
+      setBudgetLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBudgets();
+  }, [fetchBudgets]);
+
+  // Build secondary balance text from balances map
+  const secondaryBalances = balances
+    ? Object.entries(balances)
+        .filter(([key]) => key !== "USDC")
+        .map(([key, val]) => `${val.formatted} ${key}`)
+        .join(" | ")
+    : null;
+
+  return (
+    <div className="space-y-8 p-6">
+      {/* Section 1: Page Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Dashboard</h1>
+      </div>
+
+      {/* Section 2: Balance Card (HERO) */}
+      {isLoading ? (
+        <div className="flex h-[220px] max-w-[480px] items-center justify-center rounded-2xl bg-[#F9FAFB]">
+          <span className="text-sm text-[#6B7280]">Loading...</span>
+        </div>
+      ) : (
+        <GradientCard className="max-w-[480px] min-h-[220px] rounded-2xl p-8">
+          {/* Top: wallet address */}
+          <div className="flex items-center gap-2 text-white/80">
+            <MonoAddress
+              address={walletAddress ?? "0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4"}
+              className="text-xs text-white/80"
+            />
+          </div>
+
+          {/* Center: Hero balance */}
+          <div className="mt-6">
+            <div
+              className="text-5xl font-bold tracking-tight"
+              style={{ fontFeatureSettings: '"tnum"' }}
+            >
+              {balance ? `$${formatBalance(balance)}` : "--"}
+            </div>
+            <div className="mt-1 text-sm text-white/80">USDC</div>
+          </div>
+
+          {/* Secondary balances */}
+          {secondaryBalances && (
+            <div className="mt-2 text-sm text-white/70">{secondaryBalances}</div>
+          )}
+
+          {/* Bottom: Fund button */}
+          <div className="mt-6">
+            <Link
+              to="/fund"
+              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-[#4F46E5] transition-colors hover:bg-white/90"
+            >
+              <Wallet className="size-4" />
+              Fund Wallet
+            </Link>
+          </div>
+        </GradientCard>
+      )}
+
+      {/* Section 3: Quick Actions */}
+      <div className="flex flex-wrap gap-3">
+        {quickActions.map((action) => (
+          <Link
+            key={action.label}
+            to={action.to}
+            className="inline-flex items-center gap-2 rounded-full border border-[#E8E5E0] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] transition-colors hover:bg-[#F9FAFB]"
+          >
+            <action.icon className="size-4 text-[#6B7280]" />
+            {action.label}
+          </Link>
+        ))}
+      </div>
+
+      {/* Global Budget Utilization (preserved from original) */}
+      {budgetLoading ? (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
+            Global Budget Utilization
+          </h2>
+          <span className="text-sm text-[#6B7280]">Loading...</span>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
+            Global Budget Utilization
+          </h2>
+          <GlobalBudget summary={globalBudget} />
+        </div>
+      )}
+
+      {/* Section 4: Your Agents */}
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Agents</h2>
+          <Link
+            to="/agents"
+            className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
+          >
+            View all
+          </Link>
+        </div>
+
+        {budgetLoading ? (
+          <span className="text-sm text-[#6B7280]">Loading...</span>
+        ) : agentBudgets.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {agentBudgets.map((agent) => (
+              <AgentCard key={agent.agent_id} agent={agent} />
+            ))}
+            <Link
+              to="/settings"
+              className="flex min-h-[160px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-white p-5 text-center transition-colors hover:border-[#4F46E5] hover:bg-[#EEF2FF]"
+            >
+              <Plus className="size-8 text-[#9CA3AF]" />
+              <span className="mt-2 text-sm font-medium text-[#6B7280]">
+                Add Agent
+              </span>
+            </Link>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-[#F0EDE8] bg-white p-8 text-center">
+            <Bot className="mx-auto size-12 text-[#D1D5DB]" />
+            <p className="mt-3 text-sm font-medium text-[#1A1A1A]">
+              No agents yet
+            </p>
+            <p className="mt-1 text-sm text-[#6B7280]">
+              Generate an invitation code to let an AI agent connect.
+            </p>
+            <Link
+              to="/settings"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4338CA]"
+            >
+              <UserPlus className="size-4" />
+              Invite Agent
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Agent Budgets (preserved from original) */}
+      {!budgetLoading && agentBudgets.length > 0 && (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
+            Agent Budgets
+          </h2>
+          <AgentBudgets summaries={agentBudgets} />
+        </div>
+      )}
+
+      {/* Section 5: Recent Transactions */}
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[#1A1A1A]">
+            Recent Transactions
+          </h2>
+          <Link
+            to="/transactions"
+            className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
+          >
+            View all
+          </Link>
+        </div>
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8 text-center">
+          <ArrowUpDown className="mx-auto size-12 text-[#D1D5DB]" />
+          <p className="mt-3 text-sm font-medium text-[#1A1A1A]">
+            No transactions yet
+          </p>
+          <p className="mt-1 text-sm text-[#6B7280]">
+            Transactions will appear here once your agents start spending.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+================
+File: src/pages/Onboarding.tsx
+================
+import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
+import { EmailStep } from "@/components/onboarding/EmailStep";
+import { OtpStep } from "@/components/onboarding/OtpStep";
+import { FundStep } from "@/components/onboarding/FundStep";
+
+interface AuthLoginResponse {
+  status: "otp_sent" | "verified";
+  flow_id?: string;
+}
+
+interface AuthVerifyResponse {
+  status: "verified" | "otp_sent";
+}
+
+export function Onboarding() {
+  const [step, setStep] = useState(0);
+  const [email, setEmail] = useState("");
+  const [walletAddress, setWalletAddress] = useState("0x...");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleEmailSubmit(submittedEmail: string) {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await invoke<AuthLoginResponse>("auth_login", {
+        email: submittedEmail,
+      });
+      setEmail(submittedEmail);
+      if (result.status === "otp_sent") {
+        setStep(2);
+      } else if (result.status === "verified") {
+        // Already verified (e.g. returning user), skip OTP but fetch wallet address
+        try {
+          const status = await invoke<{ address?: string }>("auth_status");
+          if (status.address) {
+            setWalletAddress(status.address);
+          }
+        } catch {
+          // auth_status may not return address yet; use placeholder
+        }
+        setStep(3);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleOtpSubmit(otp: string) {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await invoke<AuthVerifyResponse>("auth_verify", { otp });
+      if (result.status === "verified") {
+        // Fetch wallet address after successful auth
+        try {
+          const status = await invoke<{ address?: string }>("auth_status");
+          if (status.address) {
+            setWalletAddress(status.address);
+          }
+        } catch {
+          // auth_status may not return address yet; use placeholder
+        }
+        setStep(3);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleComplete() {
+    // Navigate to dashboard
+    window.location.href = "/";
+  }
+
+  function handleBackToEmail() {
+    setError(null);
+    setStep(1);
+  }
+
+  function handleBackToWelcome() {
+    setError(null);
+    setStep(0);
+  }
+
+  return (
+    <div
+      className="flex min-h-screen items-center justify-center"
+      style={{
+        background:
+          "radial-gradient(ellipse at 50% 30%, #EEF2FF 0%, #FAFAF9 70%)",
+      }}
+    >
+      <div className="w-full max-w-[440px] px-4">
+        {step === 0 && <WelcomeStep onNext={() => setStep(1)} />}
+        {step === 1 && (
+          <EmailStep
+            onNext={handleEmailSubmit}
+            onBack={handleBackToWelcome}
+            loading={loading}
+            serverError={error}
+          />
+        )}
+        {step === 2 && (
+          <OtpStep
+            onNext={handleOtpSubmit}
+            onBack={handleBackToEmail}
+            loading={loading}
+            serverError={error}
+            email={email}
+          />
+        )}
+        {step === 3 && (
+          <FundStep address={walletAddress} onNext={handleComplete} />
+        )}
+      </div>
+    </div>
+  );
 }
 
 ================

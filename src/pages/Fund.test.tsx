@@ -1,7 +1,11 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Fund } from "./Fund";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockRejectedValue(new Error("not available")),
+}));
 
 function renderFund() {
   return render(

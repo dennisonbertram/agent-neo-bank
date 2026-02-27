@@ -1,16 +1,37 @@
-import { useState } from "react";
-import { Wallet, CreditCard, QrCode } from "lucide-react";
-
-const walletAddress = "0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Wallet, CreditCard, QrCode, AlertCircle } from "lucide-react";
 
 export function Fund() {
   const [activeTab, setActiveTab] = useState<"buy" | "deposit">("buy");
   const [copied, setCopied] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [addressError, setAddressError] = useState(false);
+
+  useEffect(() => {
+    invoke<string>("get_wallet_address")
+      .then(setWalletAddress)
+      .catch(() => {
+        invoke<{ address?: string }>("auth_status")
+          .then((res) => {
+            if (res.address) setWalletAddress(res.address);
+            else setAddressError(true);
+          })
+          .catch(() => setAddressError(true));
+      });
+  }, []);
+
+  const addressReady = walletAddress && walletAddress.length > 4;
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(walletAddress);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (!addressReady) return;
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard may fail
+    }
   };
 
   return (
@@ -78,15 +99,26 @@ export function Fund() {
           <div className="flex flex-col items-center text-center">
             <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Wallet Address</h2>
 
-            <div className="mt-4 flex w-full max-w-md items-center gap-2 rounded-lg border border-[#E8E5E0] bg-[#F9FAFB] px-4 py-3">
-              <code className="flex-1 truncate text-sm font-mono text-[#1A1A1A]">{walletAddress}</code>
-              <button
-                onClick={handleCopy}
-                className="rounded-md bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-[#4F46E5] hover:bg-[#4F46E5] hover:text-white"
-              >
-                {copied ? "Copied!" : "Copy"}
-              </button>
-            </div>
+            {addressError ? (
+              <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-4 py-3 text-sm text-[#EF4444]">
+                <AlertCircle className="size-4" />
+                Couldn't load wallet address. Please check your connection and try again.
+              </div>
+            ) : !addressReady ? (
+              <div className="mt-4 flex w-full max-w-md items-center justify-center rounded-lg border border-[#E8E5E0] bg-[#F9FAFB] px-4 py-3 text-sm text-[#9CA3AF]">
+                Loading wallet address...
+              </div>
+            ) : (
+              <div className="mt-4 flex w-full max-w-md items-center gap-2 rounded-lg border border-[#E8E5E0] bg-[#F9FAFB] px-4 py-3">
+                <code className="flex-1 truncate text-sm font-mono text-[#1A1A1A]">{walletAddress}</code>
+                <button
+                  onClick={handleCopy}
+                  className="rounded-md bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-[#4F46E5] hover:bg-[#4F46E5] hover:text-white"
+                >
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            )}
 
             <div className="mt-6 flex size-[200px] items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
               <div className="text-center">

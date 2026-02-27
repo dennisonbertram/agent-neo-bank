@@ -13,9 +13,13 @@ export function MonoAddress({ address, className, full = false }: MonoAddressPro
   const displayAddress = full ? address : `${address.slice(0, 6)}...${address.slice(-4)}`;
 
   const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may fail in some contexts
+    }
   }, [address]);
 
   return (
