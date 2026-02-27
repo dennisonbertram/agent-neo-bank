@@ -198,7 +198,7 @@ export function Transactions() {
         const query = searchQuery.toLowerCase();
         const agentName = tx.agent_id ? agentMap.get(tx.agent_id) ?? "" : "";
         return (
-          tx.description.toLowerCase().includes(query) ||
+          (tx.description ?? "").toLowerCase().includes(query) ||
           agentName.toLowerCase().includes(query) ||
           (tx.recipient ?? "").toLowerCase().includes(query) ||
           tx.amount.includes(query)
@@ -384,7 +384,7 @@ export function Transactions() {
                     </span>
                   </td>
                   <td className="max-w-[200px] truncate px-4 py-3 text-sm text-[#6B7280]">
-                    {tx.description}
+                    {tx.description || "—"}
                   </td>
                 </tr>
               ))}

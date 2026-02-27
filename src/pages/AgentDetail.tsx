@@ -193,7 +193,11 @@ export function AgentDetail() {
                 Suspend Agent
               </button>
             )}
-            <button className="inline-flex items-center gap-2 rounded-lg border border-[#E8E5E0] px-4 py-2 text-sm font-medium text-[#1A1A1A] hover:bg-[#F9FAFB]">
+            <button
+              disabled
+              title="Coming soon — available in Phase 4"
+              className="inline-flex items-center gap-2 rounded-lg border border-[#E8E5E0] px-4 py-2 text-sm font-medium text-[#1A1A1A] opacity-50 cursor-not-allowed"
+            >
               <RefreshCw className="size-4" />
               Rotate Token
             </button>

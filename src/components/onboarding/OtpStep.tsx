@@ -2,14 +2,16 @@ import { useState, useRef } from "react";
 import { ArrowLeft, Mail } from "lucide-react";
 
 interface OtpStepProps {
-  onNext: (otp: string) => void;
+  onNext: (otp: string) => void | Promise<void>;
   onBack: () => void;
+  loading?: boolean;
+  serverError?: string | null;
+  email?: string;
 }
 
-export function OtpStep({ onNext, onBack }: OtpStepProps) {
+export function OtpStep({ onNext, onBack, loading, serverError, email }: OtpStepProps) {
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const refs = [
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
@@ -54,7 +56,6 @@ export function OtpStep({ onNext, onBack }: OtpStepProps) {
       return;
     }
     setError(null);
-    setIsLoading(true);
     onNext(otp);
   }
 
@@ -76,7 +77,7 @@ export function OtpStep({ onNext, onBack }: OtpStepProps) {
           Check your email
         </h1>
         <p className="mt-2 text-sm text-[#6B7280]">
-          Enter the 6-digit code we sent you
+          Enter the 6-digit code we sent{email ? ` to ${email}` : " you"}
         </p>
       </div>
 
@@ -101,13 +102,16 @@ export function OtpStep({ onNext, onBack }: OtpStepProps) {
       {error && (
         <p className="mt-3 text-center text-sm text-[#EF4444]">{error}</p>
       )}
+      {serverError && (
+        <p className="mt-3 text-center text-sm text-[#EF4444]">{serverError}</p>
+      )}
 
       <button
         onClick={handleVerify}
-        disabled={isLoading}
+        disabled={loading}
         className="mt-6 w-full rounded-lg bg-[#4F46E5] px-6 py-3 text-base font-medium text-white transition-colors hover:bg-[#4338CA] disabled:opacity-50"
       >
-        {isLoading ? "Verifying..." : "Verify"}
+        {loading ? "Verifying..." : "Verify"}
       </button>
 
       <p className="mt-4 text-center text-sm text-[#6B7280]">

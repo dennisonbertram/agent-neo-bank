@@ -2,15 +2,17 @@ import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 
 interface EmailStepProps {
-  onNext: (email: string) => void;
+  onNext: (email: string) => void | Promise<void>;
   onBack: () => void;
+  loading?: boolean;
+  serverError?: string | null;
 }
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-export function EmailStep({ onNext, onBack }: EmailStepProps) {
+export function EmailStep({ onNext, onBack, loading, serverError }: EmailStepProps) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -61,12 +63,16 @@ export function EmailStep({ onNext, onBack }: EmailStepProps) {
             placeholder="you@example.com"
           />
           {error && <p className="mt-2 text-sm text-[#EF4444]">{error}</p>}
+          {serverError && (
+            <p className="mt-2 text-sm text-[#EF4444]">{serverError}</p>
+          )}
         </div>
         <button
           type="submit"
+          disabled={loading}
           className="w-full rounded-lg bg-[#4F46E5] px-6 py-3 text-base font-medium text-white transition-colors hover:bg-[#4338CA] disabled:opacity-50"
         >
-          Send Verification Code
+          {loading ? "Sending..." : "Send Verification Code"}
         </button>
       </form>
 

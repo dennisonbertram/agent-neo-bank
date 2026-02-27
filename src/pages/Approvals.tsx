@@ -51,16 +51,18 @@ export function Approvals() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [filter, setFilter] = useState<string>("pending");
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const loadApprovals = useCallback(async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const args =
         filter === "pending" ? { status: "pending" } : {};
       const result = await invoke<ApprovalRequest[]>("list_approvals", args);
       setApprovals(result);
     } catch {
-      // silently handle
+      setError("Couldn't load approvals");
     } finally {
       setIsLoading(false);
     }
@@ -184,7 +186,21 @@ export function Approvals() {
         </div>
       </div>
 
-      {!isLoading && approvals.length === 0 ? (
+      {!isLoading && error ? (
+        <div className="flex flex-col items-center py-16 text-center">
+          <div className="flex size-16 items-center justify-center rounded-full bg-[#FEF2F2]">
+            <X className="size-8 text-[#EF4444]" />
+          </div>
+          <h3 className="mt-4 text-lg font-medium text-[#1A1A1A]">{error}</h3>
+          <button
+            type="button"
+            onClick={loadApprovals}
+            className="mt-4 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white hover:bg-[#4338CA]"
+          >
+            Retry
+          </button>
+        </div>
+      ) : !isLoading && approvals.length === 0 ? (
         <div className="flex flex-col items-center py-16 text-center">
           <div className="flex size-16 items-center justify-center rounded-full bg-[#ECFDF5]">
             <CheckCircle className="size-8 text-[#10B981]" />
