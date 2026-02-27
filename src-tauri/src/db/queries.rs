@@ -1,4 +1,7 @@
 use rusqlite::params;
+use std::str::FromStr;
+
+use rust_decimal::Decimal;
 
 use crate::error::AppError;
 
@@ -543,32 +546,54 @@ pub fn upsert_spending_ledger(
     amount: &str,
     updated_at: i64,
 ) -> Result<(), AppError> {
+    let amount_dec = Decimal::from_str(amount)
+        .map_err(|e| AppError::Internal(format!("Invalid amount: {}", e)))?;
+
     let conn = db.get_connection()?;
     conn.execute_batch("BEGIN EXCLUSIVE")
         .map_err(|e| AppError::DatabaseError(format!("Failed to begin transaction: {}", e)))?;
 
-    let result = conn.execute(
-        "INSERT INTO spending_ledger (agent_id, period, total, tx_count, updated_at)
-         VALUES (?1, ?2, ?3, 1, ?4)
-         ON CONFLICT(agent_id, period) DO UPDATE SET
-           total = CAST((CAST(spending_ledger.total AS REAL) + CAST(?3 AS REAL)) AS TEXT),
-           tx_count = spending_ledger.tx_count + 1,
-           updated_at = ?4",
-        params![agent_id, period, amount, updated_at],
-    );
+    let result = (|| -> Result<(), AppError> {
+        // Read current total and tx_count (if row exists)
+        let (current_total, current_count) = match conn.query_row(
+            "SELECT total, tx_count FROM spending_ledger WHERE agent_id = ?1 AND period = ?2",
+            params![agent_id, period],
+            |row| {
+                let total: String = row.get(0)?;
+                let count: i64 = row.get(1)?;
+                Ok((total, count))
+            },
+        ) {
+            Ok((total_str, count)) => {
+                let total = Decimal::from_str(&total_str)
+                    .map_err(|e| AppError::Internal(format!("Invalid ledger total: {}", e)))?;
+                (total, count)
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => (Decimal::ZERO, 0),
+            Err(e) => return Err(AppError::DatabaseError(format!("Failed to read spending ledger: {}", e))),
+        };
+
+        let new_total = (current_total + amount_dec).to_string();
+        let new_count = current_count + 1;
+
+        conn.execute(
+            "INSERT OR REPLACE INTO spending_ledger (agent_id, period, total, tx_count, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![agent_id, period, new_total, new_count, updated_at],
+        ).map_err(|e| AppError::DatabaseError(format!("Failed to upsert spending ledger: {}", e)))?;
+
+        Ok(())
+    })();
 
     match result {
-        Ok(_) => {
+        Ok(()) => {
             conn.execute_batch("COMMIT")
                 .map_err(|e| AppError::DatabaseError(format!("Failed to commit: {}", e)))?;
             Ok(())
         }
         Err(e) => {
             let _ = conn.execute_batch("ROLLBACK");
-            Err(AppError::DatabaseError(format!(
-                "Failed to upsert spending ledger: {}",
-                e
-            )))
+            Err(e)
         }
     }
 }
@@ -866,32 +891,54 @@ pub fn upsert_global_spending_ledger(
     amount: &str,
     updated_at: i64,
 ) -> Result<(), AppError> {
+    let amount_dec = Decimal::from_str(amount)
+        .map_err(|e| AppError::Internal(format!("Invalid amount: {}", e)))?;
+
     let conn = db.get_connection()?;
     conn.execute_batch("BEGIN EXCLUSIVE")
         .map_err(|e| AppError::DatabaseError(format!("Failed to begin transaction: {}", e)))?;
 
-    let result = conn.execute(
-        "INSERT INTO global_spending_ledger (period, total, tx_count, updated_at)
-         VALUES (?1, ?2, 1, ?3)
-         ON CONFLICT(period) DO UPDATE SET
-           total = CAST((CAST(global_spending_ledger.total AS REAL) + CAST(?2 AS REAL)) AS TEXT),
-           tx_count = global_spending_ledger.tx_count + 1,
-           updated_at = ?3",
-        params![period, amount, updated_at],
-    );
+    let result = (|| -> Result<(), AppError> {
+        // Read current total and tx_count (if row exists)
+        let (current_total, current_count) = match conn.query_row(
+            "SELECT total, tx_count FROM global_spending_ledger WHERE period = ?1",
+            params![period],
+            |row| {
+                let total: String = row.get(0)?;
+                let count: i64 = row.get(1)?;
+                Ok((total, count))
+            },
+        ) {
+            Ok((total_str, count)) => {
+                let total = Decimal::from_str(&total_str)
+                    .map_err(|e| AppError::Internal(format!("Invalid global ledger total: {}", e)))?;
+                (total, count)
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => (Decimal::ZERO, 0),
+            Err(e) => return Err(AppError::DatabaseError(format!("Failed to read global spending ledger: {}", e))),
+        };
+
+        let new_total = (current_total + amount_dec).to_string();
+        let new_count = current_count + 1;
+
+        conn.execute(
+            "INSERT OR REPLACE INTO global_spending_ledger (period, total, tx_count, updated_at)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![period, new_total, new_count, updated_at],
+        ).map_err(|e| AppError::DatabaseError(format!("Failed to upsert global spending ledger: {}", e)))?;
+
+        Ok(())
+    })();
 
     match result {
-        Ok(_) => {
+        Ok(()) => {
             conn.execute_batch("COMMIT")
                 .map_err(|e| AppError::DatabaseError(format!("Failed to commit: {}", e)))?;
             Ok(())
         }
         Err(e) => {
             let _ = conn.execute_batch("ROLLBACK");
-            Err(AppError::DatabaseError(format!(
-                "Failed to upsert global spending ledger: {}",
-                e
-            )))
+            Err(e)
         }
     }
 }
@@ -962,6 +1009,9 @@ pub fn update_transaction_and_ledgers_atomic(
     period_monthly: &str,
     updated_at: i64,
 ) -> Result<(), AppError> {
+    let amount_dec = Decimal::from_str(amount)
+        .map_err(|e| AppError::Internal(format!("Invalid amount: {}", e)))?;
+
     let conn = db.get_connection()?;
     conn.execute_batch("BEGIN EXCLUSIVE")
         .map_err(|e| AppError::DatabaseError(format!("Failed to begin transaction: {}", e)))?;
@@ -977,37 +1027,12 @@ pub fn update_transaction_and_ledgers_atomic(
 
         // Upsert agent spending ledger for all three periods
         for period in &[period_daily, period_weekly, period_monthly] {
-            conn.execute(
-                "INSERT INTO spending_ledger (agent_id, period, total, tx_count, updated_at)
-                 VALUES (?1, ?2, ?3, 1, ?4)
-                 ON CONFLICT(agent_id, period) DO UPDATE SET
-                   total = CAST((CAST(spending_ledger.total AS REAL) + CAST(?3 AS REAL)) AS TEXT),
-                   tx_count = spending_ledger.tx_count + 1,
-                   updated_at = ?4",
-                params![agent_id, period, amount, updated_at],
-            )
-            .map_err(|e| {
-                AppError::DatabaseError(format!("Failed to upsert spending ledger: {}", e))
-            })?;
+            upsert_agent_ledger_inner(&conn, agent_id, period, amount_dec, updated_at)?;
         }
 
         // Upsert global spending ledger for all three periods
         for period in &[period_daily, period_weekly, period_monthly] {
-            conn.execute(
-                "INSERT INTO global_spending_ledger (period, total, tx_count, updated_at)
-                 VALUES (?1, ?2, 1, ?3)
-                 ON CONFLICT(period) DO UPDATE SET
-                   total = CAST((CAST(global_spending_ledger.total AS REAL) + CAST(?2 AS REAL)) AS TEXT),
-                   tx_count = global_spending_ledger.tx_count + 1,
-                   updated_at = ?3",
-                params![period, amount, updated_at],
-            )
-            .map_err(|e| {
-                AppError::DatabaseError(format!(
-                    "Failed to upsert global spending ledger: {}",
-                    e
-                ))
-            })?;
+            upsert_global_ledger_inner(&conn, period, amount_dec, updated_at)?;
         }
 
         Ok(())
@@ -1459,8 +1484,6 @@ pub fn update_agent_token(
 // Atomic Policy Check + Reserve (TOCTOU fix)
 // -------------------------------------------------------------------------
 
-use std::str::FromStr;
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Result of an atomic policy check + reservation.
@@ -1684,32 +1707,12 @@ pub fn check_policy_and_reserve_atomic(
 
         // 10. Reserve: UPSERT agent spending ledger for all three periods
         for period in &[period_daily, period_weekly, period_monthly] {
-            conn.execute(
-                "INSERT INTO spending_ledger (agent_id, period, total, tx_count, updated_at)
-                 VALUES (?1, ?2, ?3, 1, ?4)
-                 ON CONFLICT(agent_id, period) DO UPDATE SET
-                   total = CAST((CAST(spending_ledger.total AS REAL) + CAST(?3 AS REAL)) AS TEXT),
-                   tx_count = spending_ledger.tx_count + 1,
-                   updated_at = ?4",
-                params![agent_id, period, amount, now_ts],
-            ).map_err(|e| {
-                AppError::DatabaseError(format!("Failed to upsert spending ledger: {}", e))
-            })?;
+            upsert_agent_ledger_inner(&conn, agent_id, period, amount_dec, now_ts)?;
         }
 
         // 11. Reserve: UPSERT global spending ledger for all three periods
         for period in &[period_daily, period_weekly, period_monthly] {
-            conn.execute(
-                "INSERT INTO global_spending_ledger (period, total, tx_count, updated_at)
-                 VALUES (?1, ?2, 1, ?3)
-                 ON CONFLICT(period) DO UPDATE SET
-                   total = CAST((CAST(global_spending_ledger.total AS REAL) + CAST(?2 AS REAL)) AS TEXT),
-                   tx_count = global_spending_ledger.tx_count + 1,
-                   updated_at = ?3",
-                params![period, amount, now_ts],
-            ).map_err(|e| {
-                AppError::DatabaseError(format!("Failed to upsert global spending ledger: {}", e))
-            })?;
+            upsert_global_ledger_inner(&conn, period, amount_dec, now_ts)?;
         }
 
         Ok(decision)
@@ -1743,8 +1746,11 @@ pub fn rollback_reservation(
     period_daily: &str,
     period_weekly: &str,
     period_monthly: &str,
-    _now_ts: i64,
+    now_ts: i64,
 ) -> Result<(), AppError> {
+    let amount_dec = Decimal::from_str(amount)
+        .map_err(|e| AppError::Internal(format!("Invalid amount: {}", e)))?;
+
     let conn = db.get_connection()?;
     conn.execute_batch("BEGIN EXCLUSIVE")
         .map_err(|e| AppError::DatabaseError(format!("Failed to begin exclusive: {}", e)))?;
@@ -1752,28 +1758,12 @@ pub fn rollback_reservation(
     let result = (|| -> Result<(), AppError> {
         // Decrement agent spending ledger for all three periods
         for period in &[period_daily, period_weekly, period_monthly] {
-            conn.execute(
-                "UPDATE spending_ledger SET
-                   total = CAST((CAST(spending_ledger.total AS REAL) - CAST(?3 AS REAL)) AS TEXT),
-                   tx_count = spending_ledger.tx_count - 1
-                 WHERE agent_id = ?1 AND period = ?2",
-                params![agent_id, period, amount],
-            ).map_err(|e| {
-                AppError::DatabaseError(format!("Failed to decrement spending ledger: {}", e))
-            })?;
+            rollback_agent_ledger_inner(&conn, agent_id, period, amount_dec, now_ts)?;
         }
 
         // Decrement global spending ledger for all three periods
         for period in &[period_daily, period_weekly, period_monthly] {
-            conn.execute(
-                "UPDATE global_spending_ledger SET
-                   total = CAST((CAST(global_spending_ledger.total AS REAL) - CAST(?2 AS REAL)) AS TEXT),
-                   tx_count = global_spending_ledger.tx_count - 1
-                 WHERE period = ?1",
-                params![period, amount],
-            ).map_err(|e| {
-                AppError::DatabaseError(format!("Failed to decrement global spending ledger: {}", e))
-            })?;
+            rollback_global_ledger_inner(&conn, period, amount_dec, now_ts)?;
         }
 
         Ok(())
@@ -1790,6 +1780,156 @@ pub fn rollback_reservation(
             Err(e)
         }
     }
+}
+
+/// Helper: rollback agent spending ledger using Decimal arithmetic, clamping to zero.
+fn rollback_agent_ledger_inner(
+    conn: &r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+    agent_id: &str,
+    period: &str,
+    amount_dec: Decimal,
+    now_ts: i64,
+) -> Result<(), AppError> {
+    let (current_total, current_count) = match conn.query_row(
+        "SELECT total, tx_count FROM spending_ledger WHERE agent_id = ?1 AND period = ?2",
+        params![agent_id, period],
+        |row| {
+            let total: String = row.get(0)?;
+            let count: i64 = row.get(1)?;
+            Ok((total, count))
+        },
+    ) {
+        Ok((total_str, count)) => {
+            let total = Decimal::from_str(&total_str)
+                .map_err(|e| AppError::Internal(format!("Invalid ledger total: {}", e)))?;
+            (total, count)
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(()), // Nothing to rollback
+        Err(e) => return Err(AppError::DatabaseError(format!("Failed to read spending ledger: {}", e))),
+    };
+
+    let new_total = std::cmp::max(Decimal::ZERO, current_total - amount_dec);
+    let new_count = std::cmp::max(0i64, current_count - 1);
+
+    conn.execute(
+        "UPDATE spending_ledger SET total = ?3, tx_count = ?4, updated_at = ?5
+         WHERE agent_id = ?1 AND period = ?2",
+        params![agent_id, period, new_total.to_string(), new_count, now_ts],
+    ).map_err(|e| AppError::DatabaseError(format!("Failed to decrement spending ledger: {}", e)))?;
+
+    Ok(())
+}
+
+/// Helper: rollback global spending ledger using Decimal arithmetic, clamping to zero.
+fn rollback_global_ledger_inner(
+    conn: &r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+    period: &str,
+    amount_dec: Decimal,
+    now_ts: i64,
+) -> Result<(), AppError> {
+    let (current_total, current_count) = match conn.query_row(
+        "SELECT total, tx_count FROM global_spending_ledger WHERE period = ?1",
+        params![period],
+        |row| {
+            let total: String = row.get(0)?;
+            let count: i64 = row.get(1)?;
+            Ok((total, count))
+        },
+    ) {
+        Ok((total_str, count)) => {
+            let total = Decimal::from_str(&total_str)
+                .map_err(|e| AppError::Internal(format!("Invalid global ledger total: {}", e)))?;
+            (total, count)
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(()), // Nothing to rollback
+        Err(e) => return Err(AppError::DatabaseError(format!("Failed to read global spending ledger: {}", e))),
+    };
+
+    let new_total = std::cmp::max(Decimal::ZERO, current_total - amount_dec);
+    let new_count = std::cmp::max(0i64, current_count - 1);
+
+    conn.execute(
+        "UPDATE global_spending_ledger SET total = ?2, tx_count = ?3, updated_at = ?4
+         WHERE period = ?1",
+        params![period, new_total.to_string(), new_count, now_ts],
+    ).map_err(|e| AppError::DatabaseError(format!("Failed to decrement global spending ledger: {}", e)))?;
+
+    Ok(())
+}
+
+/// Helper: upsert agent spending ledger within an existing transaction using Decimal arithmetic.
+fn upsert_agent_ledger_inner(
+    conn: &r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+    agent_id: &str,
+    period: &str,
+    amount_dec: Decimal,
+    updated_at: i64,
+) -> Result<(), AppError> {
+    let (current_total, current_count) = match conn.query_row(
+        "SELECT total, tx_count FROM spending_ledger WHERE agent_id = ?1 AND period = ?2",
+        params![agent_id, period],
+        |row| {
+            let total: String = row.get(0)?;
+            let count: i64 = row.get(1)?;
+            Ok((total, count))
+        },
+    ) {
+        Ok((total_str, count)) => {
+            let total = Decimal::from_str(&total_str)
+                .map_err(|e| AppError::Internal(format!("Invalid ledger total: {}", e)))?;
+            (total, count)
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => (Decimal::ZERO, 0),
+        Err(e) => return Err(AppError::DatabaseError(format!("Failed to read spending ledger: {}", e))),
+    };
+
+    let new_total = (current_total + amount_dec).to_string();
+    let new_count = current_count + 1;
+
+    conn.execute(
+        "INSERT OR REPLACE INTO spending_ledger (agent_id, period, total, tx_count, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![agent_id, period, new_total, new_count, updated_at],
+    ).map_err(|e| AppError::DatabaseError(format!("Failed to upsert spending ledger: {}", e)))?;
+
+    Ok(())
+}
+
+/// Helper: upsert global spending ledger within an existing transaction using Decimal arithmetic.
+fn upsert_global_ledger_inner(
+    conn: &r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+    period: &str,
+    amount_dec: Decimal,
+    updated_at: i64,
+) -> Result<(), AppError> {
+    let (current_total, current_count) = match conn.query_row(
+        "SELECT total, tx_count FROM global_spending_ledger WHERE period = ?1",
+        params![period],
+        |row| {
+            let total: String = row.get(0)?;
+            let count: i64 = row.get(1)?;
+            Ok((total, count))
+        },
+    ) {
+        Ok((total_str, count)) => {
+            let total = Decimal::from_str(&total_str)
+                .map_err(|e| AppError::Internal(format!("Invalid global ledger total: {}", e)))?;
+            (total, count)
+        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => (Decimal::ZERO, 0),
+        Err(e) => return Err(AppError::DatabaseError(format!("Failed to read global spending ledger: {}", e))),
+    };
+
+    let new_total = (current_total + amount_dec).to_string();
+    let new_count = current_count + 1;
+
+    conn.execute(
+        "INSERT OR REPLACE INTO global_spending_ledger (period, total, tx_count, updated_at)
+         VALUES (?1, ?2, ?3, ?4)",
+        params![period, new_total, new_count, updated_at],
+    ).map_err(|e| AppError::DatabaseError(format!("Failed to upsert global spending ledger: {}", e)))?;
+
+    Ok(())
 }
 
 /// Helper: read agent spending ledger total for a period within an existing transaction.
@@ -2058,7 +2198,7 @@ mod tests {
         let ledger = get_spending_for_period(&db, &agent.id, period)
             .unwrap()
             .unwrap();
-        assert_eq!(ledger.total, "15.5");
+        assert_eq!(ledger.total, "15.50");
         assert_eq!(ledger.tx_count, 2);
     }
 
@@ -2234,5 +2374,277 @@ mod tests {
         delete_app_config(&db, "network").unwrap();
         let result = get_app_config(&db, "network").unwrap();
         assert!(result.is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Decimal precision and rollback safety tests
+    // -----------------------------------------------------------------------
+
+    fn setup_agent_with_policy(db: &Database) -> Agent {
+        let agent = make_agent("DecimalBot", AgentStatus::Active);
+        insert_agent(db, &agent).unwrap();
+        let policy = SpendingPolicy {
+            agent_id: agent.id.clone(),
+            per_tx_max: "1000".to_string(),
+            daily_cap: "10000".to_string(),
+            weekly_cap: "50000".to_string(),
+            monthly_cap: "200000".to_string(),
+            auto_approve_max: "500".to_string(),
+            allowlist: vec![],
+            updated_at: 1000000,
+        };
+        insert_spending_policy(db, &policy).unwrap();
+        agent
+    }
+
+    #[test]
+    fn test_decimal_precision_preserved() {
+        // Send "0.01" 100 times and verify the total is exactly "1.00"
+        let db = setup_db();
+        let agent = make_agent("PrecisionBot", AgentStatus::Active);
+        insert_agent(&db, &agent).unwrap();
+
+        let period = "daily:2026-02-27";
+
+        for _ in 0..100 {
+            upsert_spending_ledger(&db, &agent.id, period, "0.01", 1000000).unwrap();
+        }
+
+        let ledger = get_spending_for_period(&db, &agent.id, period)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            ledger.total, "1.00",
+            "After 100 x 0.01, total should be exactly 1.00, got {}",
+            ledger.total
+        );
+        assert_eq!(ledger.tx_count, 100);
+    }
+
+    #[test]
+    fn test_rollback_updates_timestamp() {
+        let db = setup_db();
+        let agent = setup_agent_with_policy(&db);
+
+        let period_d = "daily:2026-02-27";
+        let period_w = "weekly:2026-W09";
+        let period_m = "monthly:2026-02";
+
+        // Reserve
+        let result = check_policy_and_reserve_atomic(
+            &db,
+            &agent.id,
+            "10.00",
+            "0xRecipient",
+            "1000.00",
+            period_d,
+            period_w,
+            period_m,
+            1000000,
+        )
+        .unwrap();
+        assert_eq!(result, AtomicPolicyResult::AutoApproved);
+
+        let ledger_before = get_spending_for_period(&db, &agent.id, period_d)
+            .unwrap()
+            .unwrap();
+        assert_eq!(ledger_before.updated_at, 1000000);
+
+        // Rollback with a later timestamp
+        rollback_reservation(
+            &db,
+            &agent.id,
+            "10.00",
+            period_d,
+            period_w,
+            period_m,
+            2000000,
+        )
+        .unwrap();
+
+        let ledger_after = get_spending_for_period(&db, &agent.id, period_d)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            ledger_after.updated_at, 2000000,
+            "Rollback should update updated_at timestamp"
+        );
+    }
+
+    #[test]
+    fn test_rollback_tx_count_never_negative() {
+        let db = setup_db();
+        let agent = setup_agent_with_policy(&db);
+
+        let period_d = "daily:2026-02-27";
+        let period_w = "weekly:2026-W09";
+        let period_m = "monthly:2026-02";
+
+        // Reserve once
+        check_policy_and_reserve_atomic(
+            &db,
+            &agent.id,
+            "5.00",
+            "0xRecipient",
+            "1000.00",
+            period_d,
+            period_w,
+            period_m,
+            1000000,
+        )
+        .unwrap();
+
+        // Rollback twice (second is a double-rollback)
+        rollback_reservation(&db, &agent.id, "5.00", period_d, period_w, period_m, 2000000)
+            .unwrap();
+        rollback_reservation(&db, &agent.id, "5.00", period_d, period_w, period_m, 3000000)
+            .unwrap();
+
+        let ledger = get_spending_for_period(&db, &agent.id, period_d)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            ledger.tx_count, 0,
+            "tx_count should be clamped to 0, not negative, got {}",
+            ledger.tx_count
+        );
+    }
+
+    #[test]
+    fn test_rollback_total_never_negative() {
+        let db = setup_db();
+        let agent = setup_agent_with_policy(&db);
+
+        let period_d = "daily:2026-02-27";
+        let period_w = "weekly:2026-W09";
+        let period_m = "monthly:2026-02";
+
+        // Reserve 5.00
+        check_policy_and_reserve_atomic(
+            &db,
+            &agent.id,
+            "5.00",
+            "0xRecipient",
+            "1000.00",
+            period_d,
+            period_w,
+            period_m,
+            1000000,
+        )
+        .unwrap();
+
+        // Rollback 10.00 (more than was reserved)
+        rollback_reservation(
+            &db,
+            &agent.id,
+            "10.00",
+            period_d,
+            period_w,
+            period_m,
+            2000000,
+        )
+        .unwrap();
+
+        let ledger = get_spending_for_period(&db, &agent.id, period_d)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            ledger.total, "0",
+            "total should be clamped to 0, got {}",
+            ledger.total
+        );
+    }
+
+    #[test]
+    fn test_double_rollback_safety() {
+        // Reserve once, rollback twice: ledger should not go negative
+        let db = setup_db();
+        let agent = setup_agent_with_policy(&db);
+
+        let period_d = "daily:2026-02-27";
+        let period_w = "weekly:2026-W09";
+        let period_m = "monthly:2026-02";
+
+        // Reserve 20.00
+        check_policy_and_reserve_atomic(
+            &db,
+            &agent.id,
+            "20.00",
+            "0xRecipient",
+            "1000.00",
+            period_d,
+            period_w,
+            period_m,
+            1000000,
+        )
+        .unwrap();
+
+        // First rollback
+        rollback_reservation(
+            &db,
+            &agent.id,
+            "20.00",
+            period_d,
+            period_w,
+            period_m,
+            2000000,
+        )
+        .unwrap();
+
+        // Second rollback (double-rollback for same tx)
+        rollback_reservation(
+            &db,
+            &agent.id,
+            "20.00",
+            period_d,
+            period_w,
+            period_m,
+            3000000,
+        )
+        .unwrap();
+
+        // Verify agent ledger
+        let ledger = get_spending_for_period(&db, &agent.id, period_d)
+            .unwrap()
+            .unwrap();
+        assert_eq!(ledger.total, "0", "Double rollback should clamp total to 0");
+        assert_eq!(
+            ledger.tx_count, 0,
+            "Double rollback should clamp tx_count to 0"
+        );
+
+        // Verify global ledger
+        let global_ledger = get_global_spending_for_period(&db, period_d)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            global_ledger.total, "0",
+            "Double rollback should clamp global total to 0"
+        );
+        assert_eq!(
+            global_ledger.tx_count, 0,
+            "Double rollback should clamp global tx_count to 0"
+        );
+    }
+
+    #[test]
+    fn test_global_decimal_precision_preserved() {
+        // Send "0.01" 100 times to global ledger and verify exact total
+        let db = setup_db();
+        let period = "daily:2026-02-27";
+
+        for _ in 0..100 {
+            upsert_global_spending_ledger(&db, period, "0.01", 1000000).unwrap();
+        }
+
+        let ledger = get_global_spending_for_period(&db, period)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            ledger.total, "1.00",
+            "After 100 x 0.01, global total should be exactly 1.00, got {}",
+            ledger.total
+        );
+        assert_eq!(ledger.tx_count, 100);
     }
 }
