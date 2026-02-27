@@ -5,6 +5,8 @@
 
 mod common;
 
+use std::time::{Duration, Instant};
+
 use axum::body::Body;
 use common::{bearer_request, body_json, create_test_app, register_agent_with_policy, ServiceExt};
 
@@ -12,6 +14,41 @@ use agent_neo_bank_lib::api::rest_server::ApiServer;
 use agent_neo_bank_lib::core::approval_manager::ApprovalManager;
 use agent_neo_bank_lib::db::models::{ApprovalRequestType, ApprovalStatus, TxStatus};
 use agent_neo_bank_lib::db::queries;
+
+/// Poll a transaction until it reaches one of the expected terminal statuses.
+async fn wait_for_tx_status(
+    state: &std::sync::Arc<agent_neo_bank_lib::api::rest_server::AppStateAxum>,
+    tx_id: &str,
+    token: &str,
+    expected_statuses: &[&str],
+    timeout: Duration,
+) -> serde_json::Value {
+    let start = Instant::now();
+    loop {
+        let app = ApiServer::router(state.clone());
+        let resp = app
+            .oneshot(bearer_request(
+                "GET",
+                &format!("/v1/transactions/{}", tx_id),
+                token,
+                Body::empty(),
+            ))
+            .await
+            .unwrap();
+        let body = body_json(resp).await;
+        let status = body["status"].as_str().unwrap_or("");
+        if expected_statuses.contains(&status) {
+            return body;
+        }
+        if start.elapsed() > timeout {
+            panic!(
+                "Timed out waiting for tx {} to reach {:?}, current: {}",
+                tx_id, expected_statuses, status
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
 
 /// Helper: send a transaction and return (status_code, response_body).
 async fn send_amount(
@@ -218,23 +255,16 @@ async fn test_approval_flow_small_tx_auto_approved() {
         "Auto-approved tx should not create Transaction approval requests"
     );
 
-    // Wait for background execution to complete
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-    // Verify transaction is confirmed
+    // Poll until confirmed (instead of sleeping)
     let tx_id = body["tx_id"].as_str().unwrap();
-    let app = ApiServer::router(state.clone());
-    let response = app
-        .oneshot(bearer_request(
-            "GET",
-            &format!("/v1/transactions/{}", tx_id),
-            &token,
-            Body::empty(),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), 200);
-    let tx_body = body_json(response).await;
+    let tx_body = wait_for_tx_status(
+        &state,
+        tx_id,
+        &token,
+        &["confirmed"],
+        Duration::from_secs(10),
+    )
+    .await;
     assert_eq!(tx_body["status"], "confirmed");
 }
 

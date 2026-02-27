@@ -3,6 +3,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use rust_decimal::Decimal;
 
+use crate::core::spending_policy;
 use crate::db::models::GlobalPolicy;
 use crate::db::queries::{
     get_global_policy, get_global_spending_for_period, upsert_global_policy,
@@ -22,22 +23,19 @@ pub enum GlobalPolicyDecision {
 }
 
 // -------------------------------------------------------------------------
-// Period key helpers
+// Period key helpers — delegate to spending_policy for consistency
 // -------------------------------------------------------------------------
 
 pub fn daily_period_key() -> String {
-    let now = Utc::now();
-    format!("daily:{}", now.format("%Y-%m-%d"))
+    spending_policy::daily_period_key(&Utc::now())
 }
 
 pub fn weekly_period_key() -> String {
-    let now = Utc::now();
-    format!("weekly:{}", now.format("%G-W%V"))
+    spending_policy::weekly_period_key(&Utc::now())
 }
 
 pub fn monthly_period_key() -> String {
-    let now = Utc::now();
-    format!("monthly:{}", now.format("%Y-%m"))
+    spending_policy::monthly_period_key(&Utc::now())
 }
 
 // -------------------------------------------------------------------------
@@ -449,5 +447,39 @@ mod tests {
 
         let result = engine.evaluate(d("1000"), d("5000")).unwrap();
         assert_eq!(result, GlobalPolicyDecision::Allowed);
+    }
+
+    // Verify period key consistency between global_policy and spending_policy
+    #[test]
+    fn test_period_key_consistency_with_spending_policy() {
+        use crate::core::spending_policy;
+
+        let now = chrono::Utc::now();
+
+        // Global policy helpers (no args, use Utc::now() internally)
+        let global_daily = daily_period_key();
+        let global_weekly = weekly_period_key();
+        let global_monthly = monthly_period_key();
+
+        // Spending policy helpers (take a DateTime arg)
+        let spending_daily = spending_policy::daily_period_key(&now);
+        let spending_weekly = spending_policy::weekly_period_key(&now);
+        let spending_monthly = spending_policy::monthly_period_key(&now);
+
+        assert_eq!(
+            global_daily, spending_daily,
+            "Daily period keys must be identical: global='{}' vs spending='{}'",
+            global_daily, spending_daily
+        );
+        assert_eq!(
+            global_weekly, spending_weekly,
+            "Weekly period keys must be identical: global='{}' vs spending='{}'",
+            global_weekly, spending_weekly
+        );
+        assert_eq!(
+            global_monthly, spending_monthly,
+            "Monthly period keys must be identical: global='{}' vs spending='{}'",
+            global_monthly, spending_monthly
+        );
     }
 }

@@ -9,6 +9,7 @@ mod common;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use axum::body::Body;
@@ -77,6 +78,41 @@ fn create_failing_send_app(
     create_test_app_with_db_config_and_cli(db, config, cli)
 }
 
+/// Poll a transaction until it reaches one of the expected terminal statuses.
+async fn wait_for_tx_status(
+    state: &Arc<agent_neo_bank_lib::api::rest_server::AppStateAxum>,
+    tx_id: &str,
+    token: &str,
+    expected_statuses: &[&str],
+    timeout: Duration,
+) -> serde_json::Value {
+    let start = Instant::now();
+    loop {
+        let app = ApiServer::router(state.clone());
+        let resp = app
+            .oneshot(bearer_request(
+                "GET",
+                &format!("/v1/transactions/{}", tx_id),
+                token,
+                Body::empty(),
+            ))
+            .await
+            .unwrap();
+        let body = body_json(resp).await;
+        let status = body["status"].as_str().unwrap_or("");
+        if expected_statuses.contains(&status) {
+            return body;
+        }
+        if start.elapsed() > timeout {
+            panic!(
+                "Timed out waiting for tx {} to reach {:?}, current: {}",
+                tx_id, expected_statuses, status
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
 // =========================================================================
 // Test 1: CLI failure marks transaction as "failed"
 // =========================================================================
@@ -121,23 +157,16 @@ async fn test_cli_failure_tx_status_is_failed() {
     let tx_id = resp_body["tx_id"].as_str().unwrap().to_string();
     assert_eq!(resp_body["status"], "executing");
 
-    // Wait for background execution to fail
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // Poll until background execution fails (instead of sleeping)
+    let resp_body = wait_for_tx_status(
+        &state,
+        &tx_id,
+        &token,
+        &["failed"],
+        Duration::from_secs(10),
+    )
+    .await;
 
-    // Poll GET /v1/transactions/{tx_id} -> status should be "failed"
-    let app = ApiServer::router(state.clone());
-    let response = app
-        .oneshot(bearer_request(
-            "GET",
-            &format!("/v1/transactions/{}", tx_id),
-            &token,
-            Body::empty(),
-        ))
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), 200);
-    let resp_body = body_json(response).await;
     assert_eq!(
         resp_body["status"], "failed",
         "Transaction should be marked as failed after CLI error"
@@ -186,9 +215,18 @@ async fn test_cli_failure_spending_ledger_not_updated() {
         .await
         .unwrap();
     assert_eq!(response.status(), 202);
+    let fail_body = body_json(response).await;
+    let fail_tx_id = fail_body["tx_id"].as_str().unwrap().to_string();
 
-    // Wait for background failure
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // Poll until background execution fails (instead of sleeping)
+    wait_for_tx_status(
+        &state,
+        &fail_tx_id,
+        &token,
+        &["failed"],
+        Duration::from_secs(10),
+    )
+    .await;
 
     // Now switch CLI to succeed and send another 5.00
     // If the failed tx had incorrectly updated the ledger, this would count
@@ -220,23 +258,16 @@ async fn test_cli_failure_spending_ledger_not_updated() {
     let resp_body = body_json(response).await;
     let tx_id2 = resp_body["tx_id"].as_str().unwrap().to_string();
 
-    // Wait for background execution
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // Poll until confirmed (instead of sleeping)
+    let resp_body = wait_for_tx_status(
+        &state,
+        &tx_id2,
+        &token,
+        &["confirmed"],
+        Duration::from_secs(10),
+    )
+    .await;
 
-    // Poll -> confirmed
-    let app = ApiServer::router(state.clone());
-    let response = app
-        .oneshot(bearer_request(
-            "GET",
-            &format!("/v1/transactions/{}", tx_id2),
-            &token,
-            Body::empty(),
-        ))
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), 200);
-    let resp_body = body_json(response).await;
     assert_eq!(
         resp_body["status"], "confirmed",
         "Second send should succeed after CLI recovery"
@@ -284,21 +315,15 @@ async fn test_cli_failure_retry_succeeds() {
     let resp_body = body_json(response).await;
     let tx_id1 = resp_body["tx_id"].as_str().unwrap().to_string();
 
-    // Wait for background failure
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-    // Verify first tx is failed
-    let app = ApiServer::router(state.clone());
-    let response = app
-        .oneshot(bearer_request(
-            "GET",
-            &format!("/v1/transactions/{}", tx_id1),
-            &token,
-            Body::empty(),
-        ))
-        .await
-        .unwrap();
-    let resp_body = body_json(response).await;
+    // Poll until background execution fails (instead of sleeping)
+    let resp_body = wait_for_tx_status(
+        &state,
+        &tx_id1,
+        &token,
+        &["failed"],
+        Duration::from_secs(10),
+    )
+    .await;
     assert_eq!(resp_body["status"], "failed");
 
     // Reconfigure CLI to succeed
@@ -324,22 +349,16 @@ async fn test_cli_failure_retry_succeeds() {
     let resp_body = body_json(response).await;
     let tx_id2 = resp_body["tx_id"].as_str().unwrap().to_string();
 
-    // Wait for background execution
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // Poll until confirmed (instead of sleeping)
+    let resp_body = wait_for_tx_status(
+        &state,
+        &tx_id2,
+        &token,
+        &["confirmed"],
+        Duration::from_secs(10),
+    )
+    .await;
 
-    // Poll -> confirmed
-    let app = ApiServer::router(state.clone());
-    let response = app
-        .oneshot(bearer_request(
-            "GET",
-            &format!("/v1/transactions/{}", tx_id2),
-            &token,
-            Body::empty(),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), 200);
-    let resp_body = body_json(response).await;
     assert_eq!(
         resp_body["status"], "confirmed",
         "Retry send should succeed after CLI is fixed"

@@ -2,6 +2,7 @@
 #
 # Required jobs for merge to main:
 #   - lint-rust
+#   - lint-rust-macos
 #   - test-rust-unit
 #   - test-rust-integration
 #   - coverage-rust (80% threshold)
@@ -151,6 +152,30 @@ jobs:
         working-directory: src-tauri
         run: cargo tarpaulin --out xml --fail-under 80
 
+  lint-rust-macos:
+    name: Lint Rust (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: macos-clippy-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Clippy (macOS)
+        working-directory: src-tauri
+        run: cargo clippy -- -D warnings
+
   # ─── Frontend ───────────────────────────────────────────────────────
 
   lint-frontend:
@@ -168,8 +193,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # NOTE: No "lint" script exists in package.json yet.
-      # Add one (e.g. "lint": "eslint src/") before this job will pass.
       - name: Run lint
         run: npm run lint
 
@@ -260,7 +283,6 @@ jobs:
   e2e:
     name: E2E Tests (Playwright)
     runs-on: macos-latest
-    needs: build
     steps:
       - uses: actions/checkout@v4
 

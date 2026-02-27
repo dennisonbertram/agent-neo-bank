@@ -54,7 +54,7 @@ test.describe("Kill switch", () => {
     await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
   });
 
-  test("confirming activation calls toggle_kill_switch", async ({
+  test("confirming activation calls toggle_kill_switch with correct args", async ({
     page,
     mockTauri,
   }) => {
@@ -70,9 +70,17 @@ test.describe("Kill switch", () => {
 
     // After confirming, loadPolicy is called again; still on settings page
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+
+    // Verify toggle_kill_switch was called with activate=true
+    const calls = await page.evaluate(() => (window as any).__TAURI_INVOKE_CALLS__);
+    const toggleCall = calls.find(
+      (c: { cmd: string; args: unknown }) => c.cmd === "toggle_kill_switch"
+    );
+    expect(toggleCall).toBeTruthy();
+    expect(toggleCall.args).toMatchObject({ active: true });
   });
 
-  test("deactivate button shows when kill switch is active", async ({
+  test("deactivate button shows when kill switch is active and calls with active=false", async ({
     page,
     mockTauri,
   }) => {
@@ -88,8 +96,16 @@ test.describe("Kill switch", () => {
     });
     await page.goto("/settings");
 
-    await expect(
-      page.getByRole("button", { name: "Deactivate Kill Switch" })
-    ).toBeVisible();
+    const deactivateBtn = page.getByRole("button", { name: "Deactivate Kill Switch" });
+    await expect(deactivateBtn).toBeVisible();
+    await deactivateBtn.click();
+
+    // Verify toggle_kill_switch was called with active=false
+    const calls = await page.evaluate(() => (window as any).__TAURI_INVOKE_CALLS__);
+    const toggleCall = calls.find(
+      (c: { cmd: string; args: unknown }) => c.cmd === "toggle_kill_switch"
+    );
+    expect(toggleCall).toBeTruthy();
+    expect(toggleCall.args).toMatchObject({ active: false });
   });
 });

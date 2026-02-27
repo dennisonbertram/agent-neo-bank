@@ -124,7 +124,7 @@ impl ApprovalManager {
             if let Some(ref tx_id) = approval.tx_id {
                 // Rollback the spending reservation that was made during check_policy_and_reserve_atomic
                 if let Ok(tx) = queries::get_transaction(&self.db, tx_id) {
-                    let _ = queries::rollback_reservation(
+                    if let Err(e) = queries::rollback_reservation(
                         &self.db,
                         &approval.agent_id,
                         &tx.amount,
@@ -132,7 +132,14 @@ impl ApprovalManager {
                         &tx.period_weekly,
                         &tx.period_monthly,
                         now,
-                    );
+                    ) {
+                        tracing::error!(
+                            approval_id = %approval.id,
+                            tx_id = %tx_id,
+                            error = %e,
+                            "CRITICAL: rollback_reservation failed during expired approval cleanup — spending ledger is permanently overstated"
+                        );
+                    }
                 }
                 queries::update_transaction_status(
                     &self.db,

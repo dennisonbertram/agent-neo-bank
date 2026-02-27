@@ -52,7 +52,7 @@ test.describe("Approval queue", () => {
     await expect(page.getByRole("heading", { name: "Approvals" })).toBeVisible();
   });
 
-  test("approve button triggers resolve_approval", async ({
+  test("approve button triggers resolve_approval with correct args", async ({
     page,
     mockTauri,
   }) => {
@@ -66,5 +66,41 @@ test.describe("Approval queue", () => {
     await page.getByRole("button", { name: "Approve" }).click();
     // After resolving, the page reloads approvals
     await expect(page.getByRole("heading", { name: "Approvals" })).toBeVisible();
+
+    // Verify resolve_approval was called with the correct approval ID and decision
+    const calls = await page.evaluate(() => (window as any).__TAURI_INVOKE_CALLS__);
+    const resolveCall = calls.find(
+      (c: { cmd: string; args: unknown }) => c.cmd === "resolve_approval"
+    );
+    expect(resolveCall).toBeTruthy();
+    expect(resolveCall.args).toMatchObject({
+      approvalId: "approval-1",
+      decision: "approved",
+    });
+  });
+
+  test("deny button triggers resolve_approval with denied decision", async ({
+    page,
+    mockTauri,
+  }) => {
+    await mockTauri({
+      list_approvals: testApprovals,
+      list_agents: testAgents,
+      resolve_approval: null,
+    });
+    await page.goto("/approvals");
+
+    await page.getByRole("button", { name: "Deny" }).click();
+    await expect(page.getByRole("heading", { name: "Approvals" })).toBeVisible();
+
+    const calls = await page.evaluate(() => (window as any).__TAURI_INVOKE_CALLS__);
+    const resolveCall = calls.find(
+      (c: { cmd: string; args: unknown }) => c.cmd === "resolve_approval"
+    );
+    expect(resolveCall).toBeTruthy();
+    expect(resolveCall.args).toMatchObject({
+      approvalId: "approval-1",
+      decision: "denied",
+    });
   });
 });

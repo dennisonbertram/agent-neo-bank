@@ -207,6 +207,42 @@ pub fn list_all_agents(db: &Database) -> Result<Vec<Agent>, AppError> {
         .map_err(|e| AppError::DatabaseError(format!("Failed to collect agents: {}", e)))
 }
 
+/// Look up an active agent by their API token hash (O(1) via index).
+pub fn get_agent_by_token_hash(db: &Database, token_hash: &str) -> Option<Agent> {
+    let conn = db.get_connection().ok()?;
+    conn.query_row(
+        "SELECT id, name, description, purpose, agent_type, capabilities, status,
+         api_token_hash, token_prefix, balance_visible, invitation_code, created_at,
+         updated_at, last_active_at, metadata
+         FROM agents WHERE api_token_hash = ?1 AND status = 'active' LIMIT 1",
+        params![token_hash],
+        |row| {
+            let capabilities_str: String = row.get(5)?;
+            let capabilities: Vec<String> =
+                serde_json::from_str(&capabilities_str).unwrap_or_default();
+            let balance_visible: i32 = row.get(9)?;
+            Ok(Agent {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                purpose: row.get(3)?,
+                agent_type: row.get(4)?,
+                capabilities,
+                status: AgentStatus::Active,
+                api_token_hash: row.get(7)?,
+                token_prefix: row.get(8)?,
+                balance_visible: balance_visible != 0,
+                invitation_code: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
+                last_active_at: row.get(13)?,
+                metadata: row.get(14)?,
+            })
+        },
+    )
+    .ok()
+}
+
 pub fn delete_agent(db: &Database, id: &str) -> Result<(), AppError> {
     let conn = db.get_connection()?;
     let rows = conn

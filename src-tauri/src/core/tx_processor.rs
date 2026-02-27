@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -158,6 +159,7 @@ impl TransactionProcessor {
                 let pd = period_daily.clone();
                 let pw = period_weekly.clone();
                 let pm = period_monthly.clone();
+                let balance = self.current_balance.clone();
 
                 tokio::spawn(async move {
                     Self::execute_send(
@@ -173,6 +175,7 @@ impl TransactionProcessor {
                         pd,
                         pw,
                         pm,
+                        balance,
                     )
                     .await;
                 });
@@ -244,6 +247,7 @@ impl TransactionProcessor {
         period_daily: String,
         period_weekly: String,
         period_monthly: String,
+        current_balance: Arc<tokio::sync::RwLock<Decimal>>,
     ) {
         let cli_result = cli
             .run(AwalCommand::Send {
@@ -276,11 +280,20 @@ impl TransactionProcessor {
 
                 match update_result {
                     Ok(()) => {
+                        // Update cached balance after successful send
+                        let mut bal = current_balance.write().await;
+                        *bal -= amount;
+
                         let _ = event_tx.send(TxEvent::TransactionConfirmed(tx_id.clone()));
                     }
-                    Err(_e) => {
+                    Err(e) => {
+                        tracing::error!(
+                            tx_id = %tx_id,
+                            error = %e,
+                            "Transaction status update failed after CLI success"
+                        );
                         // Status update failed — rollback reservation and mark failed
-                        let _ = rollback_reservation(
+                        if let Err(rb_err) = rollback_reservation(
                             &db,
                             &agent_id,
                             &amount.to_string(),
@@ -288,7 +301,13 @@ impl TransactionProcessor {
                             &period_weekly,
                             &period_monthly,
                             now,
-                        );
+                        ) {
+                            tracing::error!(
+                                tx_id = %tx_id,
+                                error = %rb_err,
+                                "CRITICAL: rollback_reservation failed — spending ledger is permanently overstated"
+                            );
+                        }
                         let _ = update_transaction_status(
                             &db,
                             &tx_id,
@@ -302,8 +321,13 @@ impl TransactionProcessor {
                 }
             }
             Err(e) => {
+                tracing::warn!(
+                    tx_id = %tx_id,
+                    error = %e,
+                    "CLI execution failed for transaction"
+                );
                 // CLI failed — rollback the reservation and mark tx as failed
-                let _ = rollback_reservation(
+                if let Err(rb_err) = rollback_reservation(
                     &db,
                     &agent_id,
                     &amount.to_string(),
@@ -311,33 +335,78 @@ impl TransactionProcessor {
                     &period_weekly,
                     &period_monthly,
                     now,
-                );
-                let _ = update_transaction_status(
+                ) {
+                    tracing::error!(
+                        tx_id = %tx_id,
+                        error = %rb_err,
+                        "CRITICAL: rollback_reservation failed — spending ledger is permanently overstated"
+                    );
+                }
+                if let Err(status_err) = update_transaction_status(
                     &db,
                     &tx_id,
                     &TxStatus::Failed,
                     None,
                     Some(&e.to_string()),
                     now,
-                );
+                ) {
+                    tracing::error!(
+                        tx_id = %tx_id,
+                        error = %status_err,
+                        "Failed to update transaction status to Failed"
+                    );
+                }
                 let _ = event_tx.send(TxEvent::TransactionFailed(tx_id.clone()));
             }
         }
 
-        // Fire-and-forget webhook callback
+        // Webhook callback with retry (up to 3 attempts, 1s delay, 5s timeout)
         if let Some(url) = webhook_url {
             let status = match get_transaction(&db, &tx_id) {
                 Ok(tx) => tx.status.to_string(),
                 Err(_) => "unknown".to_string(),
             };
-            let _ = reqwest::Client::new()
-                .post(&url)
-                .json(&serde_json::json!({
-                    "tx_id": tx_id,
-                    "status": status,
-                }))
-                .send()
-                .await;
+            let client = reqwest::Client::builder()
+                .timeout(Duration::from_secs(5))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new());
+
+            for attempt in 1..=3u32 {
+                let result = client
+                    .post(&url)
+                    .json(&serde_json::json!({
+                        "tx_id": tx_id,
+                        "status": status,
+                    }))
+                    .send()
+                    .await;
+
+                match result {
+                    Ok(resp) if resp.status().is_success() => break,
+                    Ok(resp) => {
+                        tracing::warn!(
+                            tx_id = %tx_id,
+                            attempt = attempt,
+                            status = %resp.status(),
+                            url = %url,
+                            "Webhook delivery received non-success status"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            tx_id = %tx_id,
+                            attempt = attempt,
+                            error = %e,
+                            url = %url,
+                            "Webhook delivery failed"
+                        );
+                    }
+                }
+
+                if attempt < 3 {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
         }
     }
 

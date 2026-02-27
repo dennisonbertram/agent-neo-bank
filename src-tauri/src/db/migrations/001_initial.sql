@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS agents (
 );
 
 CREATE INDEX idx_agents_status ON agents(status);
+CREATE INDEX idx_agents_token_hash ON agents(api_token_hash);
 
 -- Spending policies (one per agent)
 CREATE TABLE IF NOT EXISTS spending_policies (

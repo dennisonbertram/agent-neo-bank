@@ -13,7 +13,7 @@
 mod common;
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::body::Body;
 use http::Request;
@@ -33,7 +33,10 @@ use agent_neo_bank_lib::db::queries::{
 };
 use agent_neo_bank_lib::db::schema::Database;
 
-use common::{register_agent_with_policy, body_json};
+use rust_decimal::Decimal;
+use std::str::FromStr;
+
+use common::{bearer_request, register_agent_with_policy, body_json};
 
 /// Create a file-based SQLite database for concurrency tests.
 /// File-based DB has pool_size=4, enabling real concurrent connections.
@@ -120,6 +123,93 @@ async fn send_via_router(
 fn global_daily_period_key() -> String {
     let now = chrono::Utc::now();
     format!("daily:{}", now.format("%Y-%m-%d"))
+}
+
+/// Poll a transaction until it reaches one of the expected terminal statuses.
+/// Returns the response body once a matching status is found, or panics on timeout.
+async fn wait_for_tx_status(
+    state: &Arc<AppStateAxum>,
+    tx_id: &str,
+    token: &str,
+    expected_statuses: &[&str],
+    timeout: Duration,
+) -> serde_json::Value {
+    let start = Instant::now();
+    loop {
+        let app = ApiServer::router(state.clone());
+        let resp = app
+            .oneshot(bearer_request(
+                "GET",
+                &format!("/v1/transactions/{}", tx_id),
+                token,
+                Body::empty(),
+            ))
+            .await
+            .unwrap();
+        let body = body_json(resp).await;
+        let status = body["status"].as_str().unwrap_or("");
+        if expected_statuses.contains(&status) {
+            return body;
+        }
+        if start.elapsed() > timeout {
+            panic!(
+                "Timed out waiting for tx {} to reach {:?}, current: {}",
+                tx_id, expected_statuses, status
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// Poll spending ledger until the expected tx_count is reached or timeout.
+async fn wait_for_ledger_tx_count(
+    db: &Arc<Database>,
+    period: &str,
+    expected_count: i64,
+    timeout: Duration,
+) {
+    let start = Instant::now();
+    loop {
+        if let Ok(Some(ledger)) = get_global_spending_for_period(db, period) {
+            if ledger.tx_count >= expected_count {
+                return;
+            }
+        }
+        if start.elapsed() > timeout {
+            panic!(
+                "Timed out waiting for global ledger tx_count to reach {}, period: {}",
+                expected_count, period
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// Poll per-agent spending ledger until the expected tx_count is reached or timeout.
+async fn wait_for_agent_ledger_tx_count(
+    db: &Arc<Database>,
+    agent_id: &str,
+    period: &str,
+    expected_count: i64,
+    timeout: Duration,
+) {
+    let start = Instant::now();
+    loop {
+        if let Ok(Some(ledger)) =
+            agent_neo_bank_lib::db::queries::get_spending_for_period(db, agent_id, period)
+        {
+            if ledger.tx_count >= expected_count {
+                return;
+            }
+        }
+        if start.elapsed() > timeout {
+            panic!(
+                "Timed out waiting for agent {} ledger tx_count to reach {}, period: {}",
+                agent_id, expected_count, period
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 // =========================================================================
@@ -209,18 +299,19 @@ async fn test_concurrent_sends_no_overspend() {
         status_a, status_b
     );
 
-    // Wait for background execution to complete and update ledgers
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    // Wait for background execution to complete (poll ledger instead of sleeping)
+    let period = global_daily_period_key();
+    wait_for_ledger_tx_count(&state.db, &period, 1, Duration::from_secs(10)).await;
 
     // Verify the global spending ledger reflects exactly one successful send
-    let period = global_daily_period_key();
     let global_ledger = get_global_spending_for_period(&state.db, &period)
         .unwrap()
         .expect("Global spending ledger should exist after one successful send");
 
-    let total: f64 = global_ledger.total.parse().unwrap();
-    assert!(
-        (total - 15.0).abs() < 0.01,
+    let total = Decimal::from_str(&global_ledger.total).unwrap();
+    assert_eq!(
+        total,
+        Decimal::from_str("15.00").unwrap(),
         "Global ledger total should be 15 (one send succeeded), got {}",
         total
     );
@@ -307,18 +398,19 @@ async fn test_concurrent_sends_both_succeed_within_caps() {
         body_b
     );
 
-    // Wait for background execution
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    // Wait for background execution to complete (poll ledger instead of sleeping)
+    let period = global_daily_period_key();
+    wait_for_ledger_tx_count(&state.db, &period, 2, Duration::from_secs(10)).await;
 
     // Verify global ledger totals
-    let period = global_daily_period_key();
     let global_ledger = get_global_spending_for_period(&state.db, &period)
         .unwrap()
         .expect("Global spending ledger should exist after two successful sends");
 
-    let total: f64 = global_ledger.total.parse().unwrap();
-    assert!(
-        (total - 30.0).abs() < 0.01,
+    let total = Decimal::from_str(&global_ledger.total).unwrap();
+    assert_eq!(
+        total,
+        Decimal::from_str("30.00").unwrap(),
         "Global ledger total should be 30 (15 + 15), got {}",
         total
     );
@@ -391,9 +483,6 @@ async fn test_concurrent_sends_serialization_correctness() {
         }
     }
 
-    // Wait for background execution to complete
-    tokio::time::sleep(Duration::from_secs(3)).await;
-
     // With atomic reserve-then-execute, exactly 4 should be accepted and 1 denied
     // because daily_cap=20 and each send is 5.00 (4*5=20, 5*5=25 > 20)
     assert!(
@@ -409,26 +498,35 @@ async fn test_concurrent_sends_serialization_correctness() {
         denied,
     );
 
-    // Verify the ledger total does not exceed the daily cap
+    // Wait for background execution to complete (poll ledger instead of sleeping)
     let period = agent_neo_bank_lib::core::spending_policy::daily_period_key(&chrono::Utc::now());
+    wait_for_agent_ledger_tx_count(
+        &state.db,
+        &_agent_id,
+        &period,
+        accepted as i64,
+        Duration::from_secs(10),
+    )
+    .await;
+
+    // Verify the ledger total does not exceed the daily cap
     let ledger =
         agent_neo_bank_lib::db::queries::get_spending_for_period(&state.db, &_agent_id, &period)
             .unwrap();
 
     if let Some(ledger) = ledger {
-        let total: f64 = ledger.total.parse().unwrap();
+        let total = Decimal::from_str(&ledger.total).unwrap();
+        let cap = Decimal::from_str("20.00").unwrap();
         assert!(
-            total <= 20.01,
+            total <= cap,
             "Ledger total must not exceed daily cap of 20.00, got {}",
             total
         );
-        let expected = accepted as f64 * 5.0;
-        assert!(
-            (total - expected).abs() < 0.01,
+        let expected = Decimal::from(accepted) * Decimal::from_str("5.00").unwrap();
+        assert_eq!(
+            total, expected,
             "Ledger total should be {} ({}*5), got {}. No lost updates allowed.",
-            expected,
-            accepted,
-            total
+            expected, accepted, total
         );
         assert_eq!(
             ledger.tx_count, accepted as i64,
@@ -506,9 +604,6 @@ async fn test_concurrent_sends_strict_cap_enforcement() {
         }
     }
 
-    // Wait for background execution to complete
-    tokio::time::sleep(Duration::from_secs(3)).await;
-
     // Strict enforcement: exactly 4 accepted, exactly 1 denied
     assert_eq!(
         accepted, 4,
@@ -521,16 +616,21 @@ async fn test_concurrent_sends_strict_cap_enforcement() {
         accepted, denied,
     );
 
-    // Verify ledger total is exactly 20.00
+    // Wait for background execution to complete (poll ledger instead of sleeping)
     let period = agent_neo_bank_lib::core::spending_policy::daily_period_key(&chrono::Utc::now());
+    wait_for_agent_ledger_tx_count(&state.db, &_agent_id, &period, 4, Duration::from_secs(10))
+        .await;
+
+    // Verify ledger total is exactly 20.00
     let ledger =
         agent_neo_bank_lib::db::queries::get_spending_for_period(&state.db, &_agent_id, &period)
             .unwrap()
             .expect("Spending ledger should exist after successful sends");
 
-    let total: f64 = ledger.total.parse().unwrap();
-    assert!(
-        (total - 20.0).abs() < 0.01,
+    let total = Decimal::from_str(&ledger.total).unwrap();
+    assert_eq!(
+        total,
+        Decimal::from_str("20.00").unwrap(),
         "Ledger total should be exactly 20.00, got {}",
         total
     );

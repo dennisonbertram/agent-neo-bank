@@ -13,11 +13,27 @@ export type InvokeMocks = Record<string, unknown>;
  */
 async function injectTauriMock(page: Page, mocks: InvokeMocks) {
   await page.addInitScript((mockData) => {
+    // Track all invoke calls for assertion in tests
+    const invokeCalls: Array<{ cmd: string; args: unknown }> = [];
+    (window as any).__TAURI_INVOKE_CALLS__ = invokeCalls;
+
     // Tauri v2 invoke goes through __TAURI_INTERNALS__
     (window as any).__TAURI_INTERNALS__ = {
-      invoke: (cmd: string, _args?: unknown) => {
+      invoke: (cmd: string, args?: unknown) => {
+        invokeCalls.push({ cmd, args });
         if (cmd in mockData) {
-          return Promise.resolve(mockData[cmd]);
+          const value = mockData[cmd];
+          // Support error simulation: if value is { __mock_error__: "msg" }, reject
+          if (
+            value &&
+            typeof value === "object" &&
+            "__mock_error__" in (value as Record<string, unknown>)
+          ) {
+            return Promise.reject(
+              (value as Record<string, unknown>).__mock_error__
+            );
+          }
+          return Promise.resolve(value);
         }
         // Return a sensible empty fallback so pages don't crash
         return Promise.resolve(null);

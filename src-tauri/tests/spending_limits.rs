@@ -5,12 +5,49 @@
 
 mod common;
 
+use std::time::{Duration, Instant};
+
 use axum::body::Body;
 use common::{bearer_request, body_json, create_test_app, register_agent_with_policy, ServiceExt};
 
 use agent_neo_bank_lib::api::rest_server::ApiServer;
 use agent_neo_bank_lib::core::approval_manager::ApprovalManager;
 use agent_neo_bank_lib::db::models::{ApprovalRequestType, ApprovalStatus};
+
+/// Poll a transaction until it reaches one of the expected terminal statuses.
+async fn wait_for_tx_status(
+    state: &std::sync::Arc<agent_neo_bank_lib::api::rest_server::AppStateAxum>,
+    tx_id: &str,
+    token: &str,
+    expected_statuses: &[&str],
+    timeout: Duration,
+) -> serde_json::Value {
+    let start = Instant::now();
+    loop {
+        let app = ApiServer::router(state.clone());
+        let resp = app
+            .oneshot(bearer_request(
+                "GET",
+                &format!("/v1/transactions/{}", tx_id),
+                token,
+                Body::empty(),
+            ))
+            .await
+            .unwrap();
+        let body = body_json(resp).await;
+        let status = body["status"].as_str().unwrap_or("");
+        if expected_statuses.contains(&status) {
+            return body;
+        }
+        if start.elapsed() > timeout {
+            panic!(
+                "Timed out waiting for tx {} to reach {:?}, current: {}",
+                tx_id, expected_statuses, status
+            );
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
 
 /// Helper: send a transaction and return (status_code, response_body).
 async fn send_amount(
@@ -116,17 +153,19 @@ async fn test_spending_daily_cap_cumulative_enforcement() {
     let (status, body) = send_amount(&state, &token, "8").await;
     assert_eq!(status, 202, "First send of 8 should succeed");
     assert_eq!(body["status"], "executing");
+    let tx_id_1 = body["tx_id"].as_str().unwrap();
 
-    // Wait for background execution to complete and update ledger
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // Poll until confirmed (instead of sleeping)
+    wait_for_tx_status(&state, tx_id_1, &token, &["confirmed"], Duration::from_secs(10)).await;
 
     // Step 5: POST /v1/send amount:9 -> 202 (daily: 8+9=17, within 25)
     let (status, body) = send_amount(&state, &token, "9").await;
     assert_eq!(status, 202, "Second send of 9 should succeed (daily total: 17)");
     assert_eq!(body["status"], "executing");
+    let tx_id_2 = body["tx_id"].as_str().unwrap();
 
-    // Wait for background execution
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // Poll until confirmed (instead of sleeping)
+    wait_for_tx_status(&state, tx_id_2, &token, &["confirmed"], Duration::from_secs(10)).await;
 
     // Step 6: POST /v1/send amount:9 -> 403 (17+9=26, exceeds daily cap of 25)
     let (status, body) = send_amount(&state, &token, "9").await;
@@ -169,9 +208,10 @@ async fn test_spending_auto_approve_boundary() {
     let (status, body) = send_amount(&state, &token, "10").await;
     assert_eq!(status, 202);
     assert_eq!(body["status"], "executing", "Amount at auto_approve_max should auto-approve");
+    let tx_id = body["tx_id"].as_str().unwrap();
 
-    // Wait for background execution
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // Poll until confirmed (instead of sleeping)
+    wait_for_tx_status(&state, tx_id, &token, &["confirmed"], Duration::from_secs(10)).await;
 
     // Amount just above auto_approve_max -> requires approval
     let (status, body) = send_amount(&state, &token, "10.01").await;

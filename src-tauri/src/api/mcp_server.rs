@@ -79,6 +79,9 @@ impl McpServer {
     /// Validate a raw API token against agents in the DB.
     /// Uses SHA-256 hash comparison against stored token hashes.
     /// Returns an McpServer bound to the validated agent.
+    ///
+    /// Uses an indexed lookup on `agents.api_token_hash` for O(1) performance
+    /// instead of loading all agents.
     pub fn validate_token(db: Arc<Database>, token: &str) -> Result<Self, AppError> {
         use sha2::{Digest, Sha256};
 
@@ -86,23 +89,14 @@ impl McpServer {
         hasher.update(token.as_bytes());
         let token_hash = format!("{:x}", hasher.finalize());
 
-        // Look up active agents and find one whose stored hash matches
-        let agents = queries::list_agents_by_status(&db, &AgentStatus::Active)?;
-        for agent in &agents {
-            if let Some(ref stored_hash) = agent.api_token_hash {
-                // For MCP we compare SHA-256 hashes directly.
-                // The auth_service uses argon2, but for the stdio MCP path
-                // we support a simpler SHA-256 prefix check or exact match.
-                if stored_hash == &token_hash {
-                    return Ok(Self {
-                        db,
-                        agent_id: agent.id.clone(),
-                    });
-                }
-            }
+        // O(1) indexed lookup by token hash
+        match queries::get_agent_by_token_hash(&db, &token_hash) {
+            Some(agent) => Ok(Self {
+                db,
+                agent_id: agent.id,
+            }),
+            None => Err(AppError::InvalidToken),
         }
-
-        Err(AppError::InvalidToken)
     }
 
     /// Get the bound agent_id for this server instance.

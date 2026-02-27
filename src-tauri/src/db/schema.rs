@@ -176,6 +176,7 @@ mod tests {
 
         let expected_indexes = [
             "idx_agents_status",
+            "idx_agents_token_hash",
             "idx_tx_agent",
             "idx_tx_status",
             "idx_tx_created",
