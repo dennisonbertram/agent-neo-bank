@@ -77,10 +77,10 @@ mod tests {
     #[tokio::test]
     async fn test_mock_mode_balance_returns_fake_data() {
         let state = AppState::new_mock().unwrap();
-        let result = state.cli.run(AwalCommand::GetBalance).await.unwrap();
+        let result = state.cli.run(AwalCommand::GetBalance { chain: None }).await.unwrap();
         assert!(result.success);
-        assert_eq!(result.data["balance"], "1247.83");
-        assert_eq!(result.data["asset"], "USDC");
+        assert_eq!(result.data["balances"]["USDC"]["formatted"], "1247.83");
+        assert!(result.data["address"].is_string());
     }
 
     #[tokio::test]
@@ -88,8 +88,8 @@ mod tests {
         let state = AppState::new_mock().unwrap();
         let result = state.cli.run(AwalCommand::AuthStatus).await.unwrap();
         assert!(result.success);
-        assert_eq!(result.data["authenticated"], true);
-        assert_eq!(result.data["email"], "test@example.com");
+        assert_eq!(result.data["auth"]["authenticated"], true);
+        assert_eq!(result.data["auth"]["email"], "test@example.com");
     }
 
     #[tokio::test]
@@ -97,7 +97,8 @@ mod tests {
         let state = AppState::new_mock().unwrap();
         let result = state.cli.run(AwalCommand::GetAddress).await.unwrap();
         assert!(result.success);
-        assert_eq!(result.data["address"], "0xMockWalletAddress123");
+        assert!(result.data.is_string());
+        assert_eq!(result.data.as_str().unwrap(), "0xMockWalletAddress123");
     }
 
     #[tokio::test]
@@ -108,7 +109,7 @@ mod tests {
             .run(AwalCommand::Send {
                 to: "0xRecipient".into(),
                 amount: rust_decimal::Decimal::new(500, 2),
-                asset: "USDC".into(),
+                chain: None,
             })
             .await
             .unwrap();

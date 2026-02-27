@@ -1,8 +1,8 @@
 # Agent Neo Bank -- Architecture Plan
 
-> **Version:** 2.0
+> **Version:** 2.1
 > **Date:** 2026-02-27
-> **Status:** Draft (Updated with Codex review fixes + user feedback)
+> **Status:** Draft (Updated with Codex review fixes + user feedback + onboarding flow addendum)
 
 ---
 
@@ -20,6 +20,8 @@
 10. [Agent Registration Skill](#10-agent-registration-skill) **(NEW)**
 11. [Build & Development](#11-build--development)
 12. [Implementation Phases](#12-implementation-phases)
+
+> **Addendum:** [User Onboarding & Wallet Linking Flow](./user-onboarding-flow.md) -- Defines the complete first-launch experience: state machine, screen-by-screen wireframes, Tauri commands, SQLite schema additions, and new Rust/React modules. This is the Phase 1a prerequisite -- the very first thing a user encounters before any agent functionality is available.
 
 ---
 
@@ -137,6 +139,7 @@ agent-neo-bank/
 |   |   |
 |   |   +-- commands/                  # Tauri IPC command handlers
 |   |   |   +-- mod.rs
+|   |   |   +-- onboarding.rs         # Onboarding + wallet linking commands (NEW -- see onboarding addendum)
 |   |   |   +-- auth.rs               # Login, verify, logout
 |   |   |   +-- agents.rs             # Agent CRUD, approval
 |   |   |   +-- transactions.rs       # Transaction queries, manual send
@@ -150,6 +153,8 @@ agent-neo-bank/
 |   |   +-- core/                     # Core service layer (transport-agnostic)
 |   |   |   +-- mod.rs
 |   |   |   +-- services.rs           # CoreServices struct definition (NEW)
+|   |   |   +-- user_service.rs       # User profile + onboarding state (NEW -- see onboarding addendum)
+|   |   |   +-- session_manager.rs    # CLI session health monitoring (NEW -- see onboarding addendum)
 |   |   |   +-- agent_registry.rs     # Agent lifecycle management
 |   |   |   +-- spending_policy.rs    # Budget validation engine
 |   |   |   +-- global_policy.rs      # Global wallet-level controls (NEW)
@@ -243,10 +248,11 @@ agent-neo-bank/
 |   |   |   +-- ApprovalQueue.tsx
 |   |   |
 |   |   +-- onboarding/
+|   |   |   +-- WelcomeStep.tsx
 |   |   |   +-- EmailStep.tsx
 |   |   |   +-- OtpStep.tsx
 |   |   |   +-- FundStep.tsx
-|   |   |   +-- WelcomeStep.tsx
+|   |   |   +-- SessionExpiredModal.tsx  # (NEW -- see onboarding addendum)
 |   |   |
 |   |   +-- shared/
 |   |       +-- CurrencyDisplay.tsx   # Format USD/USDC amounts
@@ -255,6 +261,8 @@ agent-neo-bank/
 |   |       +-- ConfirmDialog.tsx
 |   |
 |   +-- hooks/                        # Custom React hooks
+|   |   +-- useOnboarding.ts          # Onboarding state machine (NEW -- see onboarding addendum)
+|   |   +-- useSessionHealth.ts       # Session health polling (NEW -- see onboarding addendum)
 |   |   +-- useBalance.ts
 |   |   +-- useAgents.ts
 |   |   +-- useTransactions.ts
@@ -268,6 +276,7 @@ agent-neo-bank/
 |   |   +-- constants.ts
 |   |
 |   +-- stores/                       # State management (zustand)
+|   |   +-- onboardingStore.ts        # Onboarding state + user profile (NEW -- see onboarding addendum)
 |   |   +-- authStore.ts
 |   |   +-- agentStore.ts
 |   |   +-- transactionStore.ts
@@ -286,6 +295,7 @@ agent-neo-bank/
 +-- docs/                             # Documentation
 |   +-- architecture/
 |   |   +-- architecture-plan.md      # This file
+|   |   +-- user-onboarding-flow.md   # User onboarding & wallet linking (NEW)
 |   +-- reference/
 |   +-- investigations/
 |   +-- implementation/
@@ -2934,8 +2944,8 @@ Release:
 
 ## 12. Implementation Phases **(UPDATED -- Phase 1 split, items moved)**
 
-### Phase 1a: Plumbing **(NEW split)**
-**Goal:** Scaffold, database, CLI wrapper with integration tests, auth flow, mock mode, basic shell.
+### Phase 1a: Plumbing + User Onboarding **(UPDATED)**
+**Goal:** Scaffold, database, CLI wrapper with integration tests, **user onboarding & wallet linking flow**, auth flow, mock mode, basic shell. The onboarding flow is the FIRST thing a user encounters -- without it, nothing else in the app is reachable. See [User Onboarding & Wallet Linking Flow](./user-onboarding-flow.md) for full specification.
 
 > **TDD:** Tests for this phase's components must be written FIRST before implementation. See `docs/architecture/testing-specification.md` for all test cases. Start with test fixtures and helpers, then write failing tests for CLI wrapper, auth service, and database layer before implementing any of them.
 
@@ -2948,15 +2958,20 @@ Release:
 | CLI wrapper with trait | `cli/` | `CliExecutable` trait, `RealCliExecutor`, `MockCliExecutor`, parser, all command types |
 | CLI health check on startup | `main.rs` | Run `awal auth status`. If CLI missing: onboarding step. If session expired: re-auth redirect |
 | Mock mode | `cli/executor.rs`, `config.rs` | `--mock` flag / `ANB_MOCK=true` env var. Mock returns realistic fake data |
-| Auth flow (email OTP) | `commands::auth`, `core::auth_service` | Login, verify, logout, status |
+| **User profile table + migration** | `db/schema.rs` | New `user_profile` table, new `app_config` entries for onboarding state. See [onboarding addendum](./user-onboarding-flow.md) Section 5 |
+| **UserService** | `core/user_service.rs` | Profile CRUD, onboarding state machine management. See [onboarding addendum](./user-onboarding-flow.md) Section 6.1 |
+| **SessionManager** | `core/session_manager.rs` | Background health checks (every 5 min), session expiry detection + re-auth trigger. See [onboarding addendum](./user-onboarding-flow.md) Section 6.2 |
+| Auth flow (email OTP) | `commands::auth`, `core::auth_service` | Login, verify, logout, status. Now wrapped by `initiate_wallet_link` / `verify_wallet_link` onboarding commands |
+| **Onboarding Tauri commands** | `commands/onboarding.rs` | 8 new IPC commands: `get_onboarding_state`, `get_user_profile`, `set_display_name`, `initiate_wallet_link`, `verify_wallet_link`, `check_session_health`, `resend_otp`, `reset_onboarding` |
 | Two-tier token auth | `core::auth_service` | Argon2 for storage, SHA-256 in-memory cache (5min TTL) |
-| Onboarding UI | `pages/Onboarding` | 4-step flow (welcome, email, OTP, address) |
+| Onboarding UI | `pages/Onboarding`, `components/onboarding/*` | State-machine-driven flow: WelcomeStep, EmailStep, OtpStep, SessionExpiredModal. See [onboarding addendum](./user-onboarding-flow.md) Section 3 for wireframes |
+| **useOnboarding + useSessionHealth hooks** | `hooks/` | Frontend state machine management + background session health polling |
 | App shell + navigation | `components/layout/` | Sidebar, header, routing |
 | Basic dashboard (placeholder) | `pages/Dashboard` | Balance display, empty states |
 | CoreServices struct | `core/services.rs` | `Arc<CoreServices>` with all sub-services, `&self` methods, no Mutex |
 | Integration tests for CLI wrapper | `tests/` | Test real and mock executors end-to-end |
 
-**Deliverable:** App boots, user can authenticate, shell renders, CLI wrapper works (real and mock). Database is fully schemed. No agent functionality yet.
+**Deliverable:** App boots, user sees welcome screen, completes email + OTP onboarding, wallet is linked, dashboard renders with balance and empty states. Session health monitoring is active. CLI wrapper works (real and mock). Database is fully schemed. No agent functionality yet.
 
 ### Phase 1b: Agent Operations **(NEW split)**
 **Goal:** Agent creation, spending policy, REST API, rate limiting, transaction history.
@@ -3044,11 +3059,12 @@ Release:
 | Token rotation | UI + core | Regenerate agent tokens |
 | Backup/restore | DB utilities | Export/import SQLite database |
 | Onboarding tour | Frontend | Interactive guide for new users |
+| Agent platform auto-discovery | `core/platform_discovery`, `commands/platform_discovery`, `src/components/onboarding/` | Scan for installed AI agent platforms (Claude Code `~/.claude/`, Codex CLI, others). Auto-install Agent Neo Bank skill into each discovered platform. First-launch wizard step + periodic re-scan on app focus |
 | Production network support | Config | Mainnet toggle with safety warnings |
 | Performance optimization | All | Query optimization, lazy loading |
 | Production Transaction Monitor | Cloud service | Deploy cloud service, switch from local Alchemy to cloud proxy |
 
-**Deliverable:** Polished, production-ready desktop app with full feature set.
+**Deliverable:** Polished, production-ready desktop app with full feature set. Agent platform auto-discovery detects installed AI agent platforms (Claude Code, Codex, etc.) and auto-installs the Agent Neo Bank skill so agents can discover and use the local API.
 
 ---
 

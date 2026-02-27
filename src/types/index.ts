@@ -143,9 +143,18 @@ export interface GlobalBudgetSummary {
   kill_switch_active: boolean;
 }
 
+export interface AssetBalance {
+  raw: string;
+  formatted: string;
+  decimals: number;
+}
+
 export interface BalanceResponse {
-  balance: string;
-  asset: string;
+  balance: string | null;
+  asset: string | null;
+  balances: Record<string, AssetBalance> | null;
+  balance_visible: boolean;
+  cached: boolean;
 }
 
 export interface AddressResponse {

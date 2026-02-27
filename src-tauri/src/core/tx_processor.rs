@@ -253,7 +253,7 @@ impl TransactionProcessor {
             .run(AwalCommand::Send {
                 to: to.clone(),
                 amount,
-                asset: asset.clone(),
+                chain: None,
             })
             .await;
 

@@ -1,12 +1,13 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rust_decimal::Decimal;
 use serde::Serialize;
 use tokio::sync::RwLock;
 
 use crate::cli::commands::AwalCommand;
 use crate::cli::executor::{CliError, CliExecutable};
+use crate::cli::parser::AssetBalance;
 use crate::db::queries::get_agent;
 use crate::db::schema::Database;
 use crate::error::AppError;
@@ -17,8 +18,10 @@ use crate::error::AppError;
 
 #[derive(Debug, Clone)]
 pub struct CachedBalance {
-    pub balance: Decimal,
-    pub asset: String,
+    pub address: String,
+    pub chain: String,
+    pub balances: HashMap<String, AssetBalance>,
+    pub timestamp: String,
     pub fetched_at: Instant,
 }
 
@@ -71,7 +74,7 @@ impl BalanceCache {
 
             // Actually call the CLI
             let output = cli
-                .run(AwalCommand::GetBalance)
+                .run(AwalCommand::GetBalance { chain: None })
                 .await
                 .map_err(|e| match e {
                     CliError::Timeout => AppError::CliTimeout,
@@ -81,20 +84,14 @@ impl BalanceCache {
                     CliError::ParseError(msg) => AppError::CliError(msg),
                 })?;
 
-            let balance_str = output.data["balance"]
-                .as_str()
-                .ok_or_else(|| AppError::CliError("Missing 'balance' field in CLI response".into()))?;
-            let balance: Decimal = balance_str
-                .parse()
-                .map_err(|e| AppError::CliError(format!("Invalid balance value: {}", e)))?;
-            let asset = output.data["asset"]
-                .as_str()
-                .unwrap_or("USDC")
-                .to_string();
+            let parsed = crate::cli::parser::parse_balance(&output)
+                .map_err(|e| AppError::CliError(format!("Balance parse error: {}", e)))?;
 
             let cached = CachedBalance {
-                balance,
-                asset,
+                address: parsed.address,
+                chain: parsed.chain,
+                balances: parsed.balances,
+                timestamp: parsed.timestamp,
                 fetched_at: Instant::now(),
             };
             *guard = Some(cached.clone());
@@ -117,6 +114,7 @@ impl BalanceCache {
 pub struct BalanceResponse {
     pub balance: Option<String>,
     pub asset: Option<String>,
+    pub balances: Option<HashMap<String, AssetBalance>>,
     pub balance_visible: bool,
     pub cached: bool,
 }
@@ -160,15 +158,22 @@ impl WalletService {
             return Ok(BalanceResponse {
                 balance: None,
                 asset: None,
+                balances: None,
                 balance_visible: false,
                 cached: false,
             });
         }
 
         let cached = self.get_balance().await?;
+        // Pull USDC from the balances map for backward compat
+        let usdc_balance = cached
+            .balances
+            .get("USDC")
+            .map(|b| b.formatted.clone());
         Ok(BalanceResponse {
-            balance: Some(cached.balance.to_string()),
-            asset: Some(cached.asset),
+            balance: usdc_balance,
+            asset: Some("USDC".to_string()),
+            balances: Some(cached.balances),
             balance_visible: true,
             cached: true,
         })
@@ -188,10 +193,13 @@ impl WalletService {
                 CliError::ParseError(msg) => AppError::CliError(msg),
             })?;
 
-        output.data["address"]
+        // Real CLI returns bare string, try that first, then object format for backward compat
+        output
+            .data
             .as_str()
+            .or_else(|| output.data["address"].as_str())
             .map(|s| s.to_string())
-            .ok_or_else(|| AppError::CliError("Missing 'address' field in CLI response".into()))
+            .ok_or_else(|| AppError::CliError("Missing address in CLI response".into()))
     }
 }
 
@@ -262,13 +270,12 @@ mod tests {
 
         // First call — populates cache
         let bal = svc.get_balance().await.unwrap();
-        assert_eq!(bal.balance, Decimal::new(124783, 2)); // 1247.83
-        assert_eq!(bal.asset, "USDC");
+        assert_eq!(bal.balances["USDC"].formatted, "1247.83");
         assert_eq!(cli.count(), 1);
 
         // Second call within TTL — should return cached, CLI NOT called again
         let bal2 = svc.get_balance().await.unwrap();
-        assert_eq!(bal2.balance, Decimal::new(124783, 2));
+        assert_eq!(bal2.balances["USDC"].formatted, "1247.83");
         assert_eq!(cli.count(), 1); // still 1
     }
 
@@ -282,8 +289,7 @@ mod tests {
         assert_eq!(cli.count(), 0);
 
         let bal = svc.get_balance().await.unwrap();
-        assert_eq!(bal.balance, Decimal::new(124783, 2));
-        assert_eq!(bal.asset, "USDC");
+        assert_eq!(bal.balances["USDC"].formatted, "1247.83");
         assert_eq!(cli.count(), 1);
     }
 
@@ -331,7 +337,7 @@ mod tests {
         for h in handles {
             let result = h.await.unwrap();
             assert!(result.is_ok());
-            assert_eq!(result.unwrap().balance, Decimal::new(124783, 2));
+            assert_eq!(result.unwrap().balances["USDC"].formatted, "1247.83");
         }
 
         // With the double-check pattern, the CLI should be called at most once
@@ -373,8 +379,9 @@ mod tests {
 
         let resp = svc.get_balance_for_agent(&agent.id).await.unwrap();
         assert!(resp.balance_visible);
-        assert_eq!(resp.balance.unwrap(), "1247.83");
+        assert_eq!(resp.balance.unwrap(), "1247.83"); // USDC formatted balance
         assert_eq!(resp.asset.unwrap(), "USDC");
+        assert!(resp.balances.is_some());
         assert_eq!(cli.count(), 1);
     }
 
@@ -412,5 +419,39 @@ mod tests {
         let (svc, _cli) = make_service(30);
         let result = svc.get_balance_for_agent("nonexistent-agent-id").await;
         assert!(result.is_err());
+    }
+
+    // =====================================================================
+    // NEW TDD TESTS: Real CLI format matching
+    // =====================================================================
+
+    #[tokio::test]
+    async fn test_balance_fetches_all_assets() {
+        let (svc, _cli) = make_service(30);
+        let bal = svc.get_balance().await.unwrap();
+        assert!(bal.balances.contains_key("USDC"));
+        assert!(bal.balances.contains_key("ETH"));
+        assert!(bal.balances.contains_key("WETH"));
+    }
+
+    #[tokio::test]
+    async fn test_get_address_bare_string() {
+        let (svc, _cli) = make_service(30);
+        let addr = svc.get_address().await.unwrap();
+        assert!(addr.starts_with("0x"));
+    }
+
+    #[tokio::test]
+    async fn test_send_usdc_only_no_asset_in_args() {
+        use crate::cli::commands::AwalCommand;
+        use rust_decimal::Decimal;
+        let cmd = AwalCommand::Send {
+            to: "0xRecipient".into(),
+            amount: Decimal::new(100, 2),
+            chain: None,
+        };
+        let args = cmd.to_args();
+        assert!(!args.contains(&"--asset".to_string()));
+        assert_eq!(args[0], "send");
     }
 }

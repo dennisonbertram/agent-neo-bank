@@ -90,25 +90,19 @@ impl AuthService {
     }
 
     /// Verify OTP code. Uses the stored flow_id from the login step.
+    /// Real CLI expects: `awal auth verify <flowId> <otp> --json`
     pub async fn verify(&self, otp: &str) -> Result<AuthResult, AppError> {
-        let _flow_id = self
+        let flow_id = self
             .current_flow_id
             .read()
             .await
             .clone()
             .ok_or_else(|| AppError::AuthError("No active login flow".to_string()))?;
 
-        let email = self
-            .current_email
-            .read()
-            .await
-            .clone()
-            .ok_or_else(|| AppError::AuthError("No email stored for login flow".to_string()))?;
-
         let output = self
             .cli
             .run(AwalCommand::AuthVerify {
-                email,
+                flow_id,
                 otp: otp.to_string(),
             })
             .await
@@ -119,8 +113,8 @@ impl AuthService {
         }
 
         // Check for explicit verification failure in the response data
-        if let Some(verified) = output.data.get("verified") {
-            if verified == false {
+        if let Some(success) = output.data.get("success") {
+            if success == false {
                 return Err(AppError::InvalidOtp);
             }
         }
@@ -132,6 +126,7 @@ impl AuthService {
     }
 
     /// Check current auth status by calling CLI `status`.
+    /// Real CLI returns nested format: `{ "server": {...}, "auth": { "authenticated": ..., "email": ... } }`
     pub async fn check_status(&self) -> Result<AuthStatus, AppError> {
         let output = self
             .cli
@@ -139,16 +134,21 @@ impl AuthService {
             .await
             .map_err(|e| AppError::CliError(e.to_string()))?;
 
+        // Try nested format first (real CLI), then fall back to flat format (legacy)
         let authenticated = output
             .data
-            .get("authenticated")
+            .get("auth")
+            .and_then(|a| a.get("authenticated"))
             .and_then(|v| v.as_bool())
+            .or_else(|| output.data.get("authenticated").and_then(|v| v.as_bool()))
             .unwrap_or(false);
 
         let email = output
             .data
-            .get("email")
+            .get("auth")
+            .and_then(|a| a.get("email"))
             .and_then(|v| v.as_str())
+            .or_else(|| output.data.get("email").and_then(|v| v.as_str()))
             .map(|s| s.to_string());
 
         Ok(AuthStatus {
@@ -303,7 +303,7 @@ mod tests {
             "auth_login",
             CliOutput {
                 success: true,
-                data: serde_json::json!({"flowId": "flow-123"}),
+                data: serde_json::json!({"flowId": "flow-123", "message": "Verification code sent..."}),
                 raw: "{}".to_string(),
                 stderr: String::new(),
             },
@@ -312,8 +312,8 @@ mod tests {
             "auth_verify",
             CliOutput {
                 success: true,
-                data: serde_json::json!({"verified": true}),
-                raw: r#"{"verified": true}"#.to_string(),
+                data: serde_json::json!({"success": true, "message": "Successfully signed in."}),
+                raw: r#"{"success": true, "message": "Successfully signed in."}"#.to_string(),
                 stderr: String::new(),
             },
         );
@@ -337,7 +337,7 @@ mod tests {
             "auth_login",
             CliOutput {
                 success: true,
-                data: serde_json::json!({"flowId": "flow-123"}),
+                data: serde_json::json!({"flowId": "flow-123", "message": "Verification code sent..."}),
                 raw: "{}".to_string(),
                 stderr: String::new(),
             },
@@ -371,8 +371,11 @@ mod tests {
             "auth_status",
             CliOutput {
                 success: true,
-                data: serde_json::json!({"authenticated": true, "email": "test@example.com"}),
-                raw: r#"{"authenticated": true, "email": "test@example.com"}"#.to_string(),
+                data: serde_json::json!({
+                    "server": { "running": true, "pid": 12345 },
+                    "auth": { "authenticated": true, "email": "test@example.com" }
+                }),
+                raw: r#"{"server":{"running":true},"auth":{"authenticated":true,"email":"test@example.com"}}"#.to_string(),
                 stderr: String::new(),
             },
         );
@@ -391,8 +394,11 @@ mod tests {
             "auth_status",
             CliOutput {
                 success: true,
-                data: serde_json::json!({"authenticated": false}),
-                raw: r#"{"authenticated": false}"#.to_string(),
+                data: serde_json::json!({
+                    "server": { "running": true, "pid": 12345 },
+                    "auth": { "authenticated": false }
+                }),
+                raw: r#"{"server":{"running":true},"auth":{"authenticated":false}}"#.to_string(),
                 stderr: String::new(),
             },
         );
@@ -540,7 +546,7 @@ mod tests {
             "auth_login",
             CliOutput {
                 success: true,
-                data: serde_json::json!({"flowId": "flow-logout-test"}),
+                data: serde_json::json!({"flowId": "flow-logout-test", "message": "Verification code sent..."}),
                 raw: "{}".to_string(),
                 stderr: String::new(),
             },

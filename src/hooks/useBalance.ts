@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import type { BalanceResponse } from "../types";
 
 interface UseBalanceReturn {
   balance: string | null;
+  balances: BalanceResponse["balances"];
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
@@ -10,6 +12,7 @@ interface UseBalanceReturn {
 
 export function useBalance(): UseBalanceReturn {
   const [balance, setBalance] = useState<string | null>(null);
+  const [balances, setBalances] = useState<BalanceResponse["balances"]>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,8 +20,9 @@ export function useBalance(): UseBalanceReturn {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await invoke<{ balance: string; asset: string }>("get_balance");
+      const result = await invoke<BalanceResponse>("get_balance");
       setBalance(result.balance);
+      setBalances(result.balances);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -30,5 +34,5 @@ export function useBalance(): UseBalanceReturn {
     fetchBalance();
   }, [fetchBalance]);
 
-  return { balance, isLoading, error, refetch: fetchBalance };
+  return { balance, balances, isLoading, error, refetch: fetchBalance };
 }
