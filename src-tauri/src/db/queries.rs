@@ -272,6 +272,73 @@ pub fn list_transactions_by_status(
         .map_err(|e| AppError::DatabaseError(format!("Failed to collect transactions: {}", e)))
 }
 
+pub fn list_transactions_paginated(
+    db: &Database,
+    agent_id: Option<&str>,
+    status: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> Result<(Vec<Transaction>, i64), AppError> {
+    let conn = db.get_connection()?;
+
+    // Build WHERE clause dynamically
+    let mut conditions = Vec::new();
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(aid) = agent_id {
+        conditions.push(format!("agent_id = ?{}", param_values.len() + 1));
+        param_values.push(Box::new(aid.to_string()));
+    }
+    if let Some(s) = status {
+        conditions.push(format!("status = ?{}", param_values.len() + 1));
+        param_values.push(Box::new(s.to_string()));
+    }
+
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!(" WHERE {}", conditions.join(" AND "))
+    };
+
+    // Get total count
+    let count_sql = format!("SELECT COUNT(*) FROM transactions{}", where_clause);
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let total: i64 = conn
+        .query_row(&count_sql, params_ref.as_slice(), |row| row.get(0))
+        .map_err(|e| AppError::DatabaseError(format!("Failed to count transactions: {}", e)))?;
+
+    // Get paginated results
+    let select_sql = format!(
+        "SELECT id, agent_id, tx_type, amount, asset, recipient, sender, chain_tx_hash,
+         status, category, memo, description, service_name, service_url, reason,
+         webhook_url, error_message, period_daily, period_weekly, period_monthly,
+         created_at, updated_at
+         FROM transactions{} ORDER BY created_at DESC LIMIT ?{} OFFSET ?{}",
+        where_clause,
+        param_values.len() + 1,
+        param_values.len() + 2,
+    );
+
+    let mut all_params: Vec<Box<dyn rusqlite::types::ToSql>> = param_values;
+    all_params.push(Box::new(limit));
+    all_params.push(Box::new(offset));
+    let all_params_ref: Vec<&dyn rusqlite::types::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
+
+    let mut stmt = conn
+        .prepare(&select_sql)
+        .map_err(|e| AppError::DatabaseError(format!("Failed to prepare statement: {}", e)))?;
+
+    let txs = stmt
+        .query_map(all_params_ref.as_slice(), |row| row_to_transaction(row))
+        .map_err(|e| AppError::DatabaseError(format!("Failed to query transactions: {}", e)))?;
+
+    let results = txs
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| AppError::DatabaseError(format!("Failed to collect transactions: {}", e)))?;
+
+    Ok((results, total))
+}
+
 fn row_to_transaction(row: &rusqlite::Row<'_>) -> rusqlite::Result<Transaction> {
     let tx_type_str: String = row.get(2)?;
     let tx_type = match tx_type_str.as_str() {
