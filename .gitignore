@@ -3,3 +3,5 @@ dist/
 target/
 *.tsbuildinfo
 app-icon.png
+test-results/
+playwright-report/

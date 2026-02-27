@@ -25,7 +25,6 @@ export function useInvoke<T>(command: string, args?: Record<string, unknown>) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [command]);
 
   return { data, isLoading, error };
