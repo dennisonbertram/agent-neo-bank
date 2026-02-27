@@ -27,6 +27,7 @@ pub struct AppConfig {
     pub approval_expiry_check_interval: u64,
     pub approval_default_expiry_hours: u64,
     pub awal_binary_path: String,
+    pub db_path: String,
 }
 
 impl Default for AppConfig {
@@ -57,11 +58,25 @@ impl Default for AppConfig {
             approval_expiry_check_interval: 300,
             approval_default_expiry_hours: 24,
             awal_binary_path: "npx".to_string(),
+            db_path: "agent-neo-bank.db".to_string(),
         }
     }
 }
 
 impl AppConfig {
+    /// Build config from environment variables, falling back to defaults.
+    /// Reads ANB_MOCK env var to enable mock mode.
+    pub fn from_env() -> Self {
+        let mock_mode = std::env::var("ANB_MOCK")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
+        Self {
+            mock_mode,
+            ..Self::default()
+        }
+    }
+
     pub fn default_test() -> Self {
         Self {
             mock_mode: true,
@@ -89,6 +104,75 @@ impl AppConfig {
             approval_expiry_check_interval: 60,
             approval_default_expiry_hours: 1,
             awal_binary_path: "npx".to_string(),
+            db_path: ":memory:".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // Env var tests must be serialized since they share process-global state
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn test_mock_mode_from_env_var() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("ANB_MOCK", "true"); }
+        let config = AppConfig::from_env();
+        assert!(config.mock_mode, "ANB_MOCK=true should enable mock_mode");
+        unsafe { std::env::remove_var("ANB_MOCK"); }
+    }
+
+    #[test]
+    fn test_mock_mode_from_env_var_numeric() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("ANB_MOCK", "1"); }
+        let config = AppConfig::from_env();
+        assert!(config.mock_mode, "ANB_MOCK=1 should enable mock_mode");
+        unsafe { std::env::remove_var("ANB_MOCK"); }
+    }
+
+    #[test]
+    fn test_mock_mode_from_env_var_false() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("ANB_MOCK", "false"); }
+        let config = AppConfig::from_env();
+        assert!(!config.mock_mode, "ANB_MOCK=false should not enable mock_mode");
+        unsafe { std::env::remove_var("ANB_MOCK"); }
+    }
+
+    #[test]
+    fn test_mock_mode_unset() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::remove_var("ANB_MOCK"); }
+        let config = AppConfig::from_env();
+        assert!(!config.mock_mode, "Unset ANB_MOCK should default to false");
+    }
+
+    #[test]
+    fn test_default_config_mock_mode_false() {
+        let config = AppConfig::default();
+        assert!(!config.mock_mode, "Default config should have mock_mode=false");
+    }
+
+    #[test]
+    fn test_default_test_config_has_mock_mode() {
+        let config = AppConfig::default_test();
+        assert!(config.mock_mode, "default_test() should have mock_mode=true");
+    }
+
+    #[test]
+    fn test_default_config_has_db_path() {
+        let config = AppConfig::default();
+        assert_eq!(config.db_path, "agent-neo-bank.db");
+    }
+
+    #[test]
+    fn test_default_test_config_has_memory_db_path() {
+        let config = AppConfig::default_test();
+        assert_eq!(config.db_path, ":memory:");
     }
 }

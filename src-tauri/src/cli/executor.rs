@@ -176,6 +176,76 @@ impl MockCliExecutor {
         }
     }
 
+    /// Create a MockCliExecutor pre-loaded with standard mock responses
+    /// for all supported commands.
+    pub fn with_defaults() -> Self {
+        let mock = Self::new();
+        mock.set_response(
+            "auth_status",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({ "authenticated": true, "email": "test@example.com" }),
+                raw: r#"{"authenticated": true, "email": "test@example.com"}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        mock.set_response(
+            "auth_login",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({ "flow_id": "mock-flow-123" }),
+                raw: r#"{"flow_id": "mock-flow-123"}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        mock.set_response(
+            "auth_verify",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({ "authenticated": true, "email": "test@example.com" }),
+                raw: r#"{"authenticated": true, "email": "test@example.com"}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        mock.set_response(
+            "auth_logout",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({ "authenticated": false }),
+                raw: r#"{"authenticated": false}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        mock.set_response(
+            "get_balance",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({ "balance": "1247.83", "asset": "USDC" }),
+                raw: r#"{"balance": "1247.83", "asset": "USDC"}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        mock.set_response(
+            "get_address",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({ "address": "0xMockWalletAddress123" }),
+                raw: r#"{"address": "0xMockWalletAddress123"}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        mock.set_response(
+            "send",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({ "tx_hash": "0xmock_tx_hash_abc123" }),
+                raw: r#"{"tx_hash": "0xmock_tx_hash_abc123"}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        mock
+    }
+
     pub fn set_response(&self, command: &str, output: CliOutput) {
         self.responses
             .write()
@@ -263,6 +333,60 @@ mod tests {
         assert!(result.success);
         assert_eq!(result.data, serde_json::json!({}));
         assert_eq!(result.raw, "{}");
+    }
+
+    #[tokio::test]
+    async fn test_mock_with_defaults_balance() {
+        let mock = MockCliExecutor::with_defaults();
+        let result = mock.run(AwalCommand::GetBalance).await.unwrap();
+        assert!(result.success);
+        assert_eq!(result.data["balance"], "1247.83");
+        assert_eq!(result.data["asset"], "USDC");
+    }
+
+    #[tokio::test]
+    async fn test_mock_with_defaults_auth_status() {
+        let mock = MockCliExecutor::with_defaults();
+        let result = mock.run(AwalCommand::AuthStatus).await.unwrap();
+        assert!(result.success);
+        assert_eq!(result.data["authenticated"], true);
+        assert_eq!(result.data["email"], "test@example.com");
+    }
+
+    #[tokio::test]
+    async fn test_mock_with_defaults_auth_login() {
+        let mock = MockCliExecutor::with_defaults();
+        let result = mock
+            .run(AwalCommand::AuthLogin {
+                email: "test@example.com".into(),
+            })
+            .await
+            .unwrap();
+        assert!(result.success);
+        assert_eq!(result.data["flow_id"], "mock-flow-123");
+    }
+
+    #[tokio::test]
+    async fn test_mock_with_defaults_get_address() {
+        let mock = MockCliExecutor::with_defaults();
+        let result = mock.run(AwalCommand::GetAddress).await.unwrap();
+        assert!(result.success);
+        assert_eq!(result.data["address"], "0xMockWalletAddress123");
+    }
+
+    #[tokio::test]
+    async fn test_mock_with_defaults_send() {
+        let mock = MockCliExecutor::with_defaults();
+        let result = mock
+            .run(AwalCommand::Send {
+                to: "0xRecipient".into(),
+                amount: Decimal::new(500, 2),
+                asset: "USDC".into(),
+            })
+            .await
+            .unwrap();
+        assert!(result.success);
+        assert_eq!(result.data["tx_hash"], "0xmock_tx_hash_abc123");
     }
 
     #[tokio::test]
