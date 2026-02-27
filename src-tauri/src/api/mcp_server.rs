@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 
+use crate::core::spending_policy::{daily_period_key, weekly_period_key, monthly_period_key};
 use crate::db::models::*;
 use crate::db::queries;
+use crate::db::queries::AtomicPolicyResult;
 use crate::db::schema::Database;
 use crate::error::AppError;
 
@@ -216,42 +217,154 @@ impl McpServer {
             .to_string();
 
         let now = chrono::Utc::now();
+        let now_ts = now.timestamp();
         let tx_id = uuid::Uuid::new_v4().to_string();
 
-        let tx = Transaction {
-            id: tx_id.clone(),
-            agent_id: Some(self.agent_id.clone()),
-            tx_type: TxType::Send,
-            amount: amount.clone(),
-            asset: asset.clone(),
-            recipient: Some(to.clone()),
-            sender: None,
-            chain_tx_hash: None,
-            status: TxStatus::Pending,
-            category: "payment".to_string(),
-            memo,
-            description: format!("MCP send {} {} to {}", amount, asset, to),
-            service_name: "mcp".to_string(),
-            service_url: String::new(),
-            reason: String::new(),
-            webhook_url: None,
-            error_message: None,
-            period_daily: now.format("%Y-%m-%d").to_string(),
-            period_weekly: format!("{}-W{:02}", now.format("%Y"), now.iso_week().week()),
-            period_monthly: now.format("%Y-%m").to_string(),
-            created_at: now.timestamp(),
-            updated_at: now.timestamp(),
-        };
+        let period_d = daily_period_key(&now);
+        let period_w = weekly_period_key(&now);
+        let period_m = monthly_period_key(&now);
 
-        queries::insert_transaction(&self.db, &tx)?;
+        // Run atomic policy check + ledger reservation
+        let policy_result = queries::check_policy_and_reserve_atomic(
+            &self.db,
+            &self.agent_id,
+            &amount,
+            &to,
+            "0", // MCP doesn't track wallet balance; use 0 (min_reserve_balance check will be lenient)
+            &period_d,
+            &period_w,
+            &period_m,
+            now_ts,
+        )?;
 
-        Ok(serde_json::json!({
-            "tx_id": tx_id,
-            "status": "pending",
-            "amount": amount,
-            "asset": asset,
-            "to": to
-        }))
+        match policy_result {
+            AtomicPolicyResult::Denied { reason } => {
+                // Insert a denied transaction for audit trail
+                let tx = Transaction {
+                    id: tx_id.clone(),
+                    agent_id: Some(self.agent_id.clone()),
+                    tx_type: TxType::Send,
+                    amount: amount.clone(),
+                    asset: asset.clone(),
+                    recipient: Some(to.clone()),
+                    sender: None,
+                    chain_tx_hash: None,
+                    status: TxStatus::Denied,
+                    category: "payment".to_string(),
+                    memo,
+                    description: format!("MCP send {} {} to {}", amount, asset, to),
+                    service_name: "mcp".to_string(),
+                    service_url: String::new(),
+                    reason: reason.clone(),
+                    webhook_url: None,
+                    error_message: Some(reason.clone()),
+                    period_daily: period_d,
+                    period_weekly: period_w,
+                    period_monthly: period_m,
+                    created_at: now_ts,
+                    updated_at: now_ts,
+                };
+                queries::insert_transaction(&self.db, &tx)?;
+                Err(AppError::PolicyViolation(reason))
+            }
+            AtomicPolicyResult::AutoApproved => {
+                // Ledger already reserved; insert transaction as Pending (ready for execution)
+                let tx = Transaction {
+                    id: tx_id.clone(),
+                    agent_id: Some(self.agent_id.clone()),
+                    tx_type: TxType::Send,
+                    amount: amount.clone(),
+                    asset: asset.clone(),
+                    recipient: Some(to.clone()),
+                    sender: None,
+                    chain_tx_hash: None,
+                    status: TxStatus::Pending,
+                    category: "payment".to_string(),
+                    memo,
+                    description: format!("MCP send {} {} to {}", amount, asset, to),
+                    service_name: "mcp".to_string(),
+                    service_url: String::new(),
+                    reason: String::new(),
+                    webhook_url: None,
+                    error_message: None,
+                    period_daily: period_d,
+                    period_weekly: period_w,
+                    period_monthly: period_m,
+                    created_at: now_ts,
+                    updated_at: now_ts,
+                };
+                queries::insert_transaction(&self.db, &tx)?;
+
+                Ok(serde_json::json!({
+                    "tx_id": tx_id,
+                    "status": "pending",
+                    "amount": amount,
+                    "asset": asset,
+                    "to": to
+                }))
+            }
+            AtomicPolicyResult::RequiresApproval { reason } => {
+                // Ledger already reserved; insert transaction as AwaitingApproval
+                let tx = Transaction {
+                    id: tx_id.clone(),
+                    agent_id: Some(self.agent_id.clone()),
+                    tx_type: TxType::Send,
+                    amount: amount.clone(),
+                    asset: asset.clone(),
+                    recipient: Some(to.clone()),
+                    sender: None,
+                    chain_tx_hash: None,
+                    status: TxStatus::AwaitingApproval,
+                    category: "payment".to_string(),
+                    memo: memo.clone(),
+                    description: format!("MCP send {} {} to {}", amount, asset, to),
+                    service_name: "mcp".to_string(),
+                    service_url: String::new(),
+                    reason: reason.clone(),
+                    webhook_url: None,
+                    error_message: None,
+                    period_daily: period_d,
+                    period_weekly: period_w,
+                    period_monthly: period_m,
+                    created_at: now_ts,
+                    updated_at: now_ts,
+                };
+                queries::insert_transaction(&self.db, &tx)?;
+
+                // Create an approval request
+                let approval_id = uuid::Uuid::new_v4().to_string();
+                let payload = serde_json::json!({
+                    "amount": amount,
+                    "asset": asset,
+                    "to": to,
+                    "memo": memo,
+                    "reason": reason,
+                });
+                let approval = ApprovalRequest {
+                    id: approval_id.clone(),
+                    agent_id: self.agent_id.clone(),
+                    request_type: ApprovalRequestType::Transaction,
+                    payload: payload.to_string(),
+                    status: ApprovalStatus::Pending,
+                    tx_id: Some(tx_id.clone()),
+                    expires_at: now_ts + 86400,
+                    created_at: now_ts,
+                    resolved_at: None,
+                    resolved_by: None,
+                };
+                queries::insert_approval_request(&self.db, &approval)?;
+
+                Ok(serde_json::json!({
+                    "tx_id": tx_id,
+                    "status": "awaiting_approval",
+                    "approval_id": approval_id,
+                    "reason": reason,
+                    "amount": amount,
+                    "asset": asset,
+                    "to": to
+                }))
+            }
+        }
     }
 
     fn handle_check_balance(

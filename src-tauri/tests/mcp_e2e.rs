@@ -8,7 +8,8 @@ mod common;
 use std::sync::Arc;
 
 use agent_neo_bank_lib::api::mcp_server::{JsonRpcRequest, McpServer};
-use agent_neo_bank_lib::db::models::AgentStatus;
+use agent_neo_bank_lib::core::spending_policy::{daily_period_key, weekly_period_key, monthly_period_key};
+use agent_neo_bank_lib::db::models::{AgentStatus, GlobalPolicy};
 use agent_neo_bank_lib::db::queries;
 use agent_neo_bank_lib::db::schema::Database;
 use agent_neo_bank_lib::test_helpers::{
@@ -589,4 +590,162 @@ fn test_mcp_json_rpc_response_format() {
     assert!(err_json.get("error").is_some());
     assert!(err_json["error"]["code"].is_number());
     assert!(err_json["error"]["message"].is_string());
+}
+
+// =========================================================================
+// test_mcp_send_payment_enforces_spending_policy
+// Agent with per_tx_max:10, send 15 via MCP -> denied
+// =========================================================================
+
+#[test]
+fn test_mcp_send_payment_enforces_spending_policy() {
+    let (db, agent_id) = setup_agent_and_db("10", "1000", "5000", "20000", "5");
+    let server = McpServer::new_with_agent_id(db.clone(), agent_id.clone()).unwrap();
+
+    // Send 15 which exceeds per_tx_max of 10
+    let request = make_tools_call_request(1, "send_payment", serde_json::json!({
+        "to": "0xRecipient",
+        "amount": "15",
+        "asset": "USDC"
+    }));
+
+    let response = server.handle_request(&request);
+    assert!(response.error.is_some(), "Payment exceeding per_tx_max should be denied");
+
+    let error = response.error.unwrap();
+    assert_eq!(error.code, -32001, "Should return PolicyViolation error code");
+    assert!(
+        error.message.contains("per-tx limit") || error.message.contains("policy"),
+        "Error should mention policy violation, got: {}",
+        error.message
+    );
+
+    // Verify a denied transaction was recorded for audit
+    let (txs, _total) = queries::list_transactions_paginated(&db, Some(&agent_id), None, 10, 0).unwrap();
+    assert_eq!(txs.len(), 1, "Should have one denied transaction");
+    assert_eq!(txs[0].status.to_string(), "denied");
+}
+
+// =========================================================================
+// test_mcp_send_payment_enforces_daily_cap
+// Agent with daily_cap:20, send 15 (ok), send 10 (denied, 25>20)
+// =========================================================================
+
+#[test]
+fn test_mcp_send_payment_enforces_daily_cap() {
+    let (db, agent_id) = setup_agent_and_db("100", "20", "5000", "20000", "100");
+    let server = McpServer::new_with_agent_id(db.clone(), agent_id.clone()).unwrap();
+
+    // First payment: 15 under daily_cap of 20 -> should succeed
+    let req1 = make_tools_call_request(1, "send_payment", serde_json::json!({
+        "to": "0xRecipient",
+        "amount": "15",
+        "asset": "USDC"
+    }));
+    let resp1 = server.handle_request(&req1);
+    assert!(resp1.error.is_none(), "First payment of 15 should succeed (under daily cap 20): {:?}", resp1.error);
+
+    // Second payment: 10 would bring total to 25 > daily_cap of 20 -> denied
+    let req2 = make_tools_call_request(2, "send_payment", serde_json::json!({
+        "to": "0xRecipient",
+        "amount": "10",
+        "asset": "USDC"
+    }));
+    let resp2 = server.handle_request(&req2);
+    assert!(resp2.error.is_some(), "Second payment should be denied (25 > daily cap 20)");
+
+    let error = resp2.error.unwrap();
+    assert_eq!(error.code, -32001, "Should return PolicyViolation error code");
+    assert!(
+        error.message.contains("daily cap"),
+        "Error should mention daily cap, got: {}",
+        error.message
+    );
+}
+
+// =========================================================================
+// test_mcp_send_payment_enforces_kill_switch
+// Activate kill switch, send via MCP -> denied
+// =========================================================================
+
+#[test]
+fn test_mcp_send_payment_enforces_kill_switch() {
+    let (db, agent_id) = setup_agent_and_db("100", "1000", "5000", "20000", "50");
+    let server = McpServer::new_with_agent_id(db.clone(), agent_id.clone()).unwrap();
+
+    // Activate the kill switch via global policy
+    let global_policy = GlobalPolicy {
+        id: "default".to_string(),
+        daily_cap: "0".to_string(),
+        weekly_cap: "0".to_string(),
+        monthly_cap: "0".to_string(),
+        min_reserve_balance: "0".to_string(),
+        kill_switch_active: true,
+        kill_switch_reason: "Emergency shutdown".to_string(),
+        updated_at: chrono::Utc::now().timestamp(),
+    };
+    queries::upsert_global_policy(&db, &global_policy).unwrap();
+
+    // Try to send -- should be denied by kill switch
+    let request = make_tools_call_request(1, "send_payment", serde_json::json!({
+        "to": "0xRecipient",
+        "amount": "5",
+        "asset": "USDC"
+    }));
+    let response = server.handle_request(&request);
+    assert!(response.error.is_some(), "Payment should be denied when kill switch is active");
+
+    let error = response.error.unwrap();
+    assert!(
+        error.message.contains("kill switch") || error.message.contains("Emergency"),
+        "Error should mention kill switch, got: {}",
+        error.message
+    );
+}
+
+// =========================================================================
+// test_mcp_send_payment_updates_spending_ledger
+// Send via MCP, verify spending ledger updated with correct period key format
+// =========================================================================
+
+#[test]
+fn test_mcp_send_payment_updates_spending_ledger() {
+    let (db, agent_id) = setup_agent_and_db("100", "1000", "5000", "20000", "50");
+    let server = McpServer::new_with_agent_id(db.clone(), agent_id.clone()).unwrap();
+
+    let now = chrono::Utc::now();
+    let expected_daily_key = daily_period_key(&now);
+    let expected_weekly_key = weekly_period_key(&now);
+    let expected_monthly_key = monthly_period_key(&now);
+
+    // Send a payment
+    let request = make_tools_call_request(1, "send_payment", serde_json::json!({
+        "to": "0xRecipient",
+        "amount": "25.50",
+        "asset": "USDC"
+    }));
+    let response = server.handle_request(&request);
+    assert!(response.error.is_none(), "Payment should succeed: {:?}", response.error);
+
+    // Verify spending ledger entries exist with correct period key format
+    let daily_ledger = queries::get_spending_for_period(&db, &agent_id, &expected_daily_key)
+        .unwrap()
+        .expect("Daily ledger entry should exist");
+    assert_eq!(daily_ledger.total, "25.50", "Daily ledger should show 25.50, got {}", daily_ledger.total);
+    assert_eq!(daily_ledger.tx_count, 1, "Daily ledger should show 1 transaction");
+
+    let weekly_ledger = queries::get_spending_for_period(&db, &agent_id, &expected_weekly_key)
+        .unwrap()
+        .expect("Weekly ledger entry should exist");
+    assert_eq!(weekly_ledger.total, "25.50", "Weekly ledger should show 25.50");
+
+    let monthly_ledger = queries::get_spending_for_period(&db, &agent_id, &expected_monthly_key)
+        .unwrap()
+        .expect("Monthly ledger entry should exist");
+    assert_eq!(monthly_ledger.total, "25.50", "Monthly ledger should show 25.50");
+
+    // Verify the period key format uses the "daily:YYYY-MM-DD" format from spending_policy.rs
+    assert!(expected_daily_key.starts_with("daily:"), "Daily key should start with 'daily:', got {}", expected_daily_key);
+    assert!(expected_weekly_key.starts_with("weekly:"), "Weekly key should start with 'weekly:', got {}", expected_weekly_key);
+    assert!(expected_monthly_key.starts_with("monthly:"), "Monthly key should start with 'monthly:', got {}", expected_monthly_key);
 }
