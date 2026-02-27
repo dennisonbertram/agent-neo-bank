@@ -242,3 +242,78 @@ async fn test_mock_mode_multiple_sends_accumulate() {
         body["total"]
     );
 }
+
+// =========================================================================
+// Mock mode still enforces spending policy
+// =========================================================================
+
+#[tokio::test]
+async fn test_mock_mode_spending_policy_still_enforced() {
+    let (_router, state) = create_test_app();
+
+    // Create agent with per_tx_max:10
+    let (_agent_id, token) = register_agent_with_policy(
+        &state,
+        "INV-mock-004",
+        "MockPolicyBot",
+        "10",   // per_tx_max
+        "1000", // daily_cap
+        "5000",
+        "20000",
+        "50",   // auto_approve_max (high so we test policy, not approval)
+    )
+    .await;
+
+    // Send 15 -> 403 (exceeds per_tx_max of 10, policy denied even in mock mode)
+    let app = ApiServer::router(state.clone());
+    let send_body = serde_json::json!({
+        "to": "0xRecipient",
+        "amount": "15",
+        "asset": "USDC"
+    });
+    let response = app
+        .oneshot(bearer_request(
+            "POST",
+            "/v1/send",
+            &token,
+            Body::from(serde_json::to_string(&send_body).unwrap()),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        403,
+        "Amount 15 exceeds per_tx_max 10, should be denied even in mock mode"
+    );
+    let body = body_json(response).await;
+    assert_eq!(body["error"], "policy_denied");
+
+    // Send 5 -> 202 (within per_tx_max, succeeds in mock mode)
+    let app = ApiServer::router(state.clone());
+    let send_body = serde_json::json!({
+        "to": "0xRecipient",
+        "amount": "5",
+        "asset": "USDC"
+    });
+    let response = app
+        .oneshot(bearer_request(
+            "POST",
+            "/v1/send",
+            &token,
+            Body::from(serde_json::to_string(&send_body).unwrap()),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.status(),
+        202,
+        "Amount 5 within per_tx_max 10, should succeed in mock mode"
+    );
+    let body = body_json(response).await;
+    assert_eq!(
+        body["status"], "executing",
+        "Mock mode should auto-approve and execute (amount 5 <= auto_approve_max 50)"
+    );
+}

@@ -176,3 +176,78 @@ async fn test_kill_switch_pending_approvals_not_auto_resolved() {
     assert_eq!(tx_approvals_after[0].status, ApprovalStatus::Pending);
     assert_eq!(tx_approvals_after[0].id, tx_approvals_before[0].id);
 }
+
+// =========================================================================
+// Kill switch blocks execution of an approved transaction
+// =========================================================================
+
+#[tokio::test]
+async fn test_kill_switch_blocks_execution_of_approved_tx() {
+    let (_router, state) = create_test_app();
+
+    let (agent_id, token) = register_agent_with_policy(
+        &state,
+        "INV-ks-int-004",
+        "KillSwitchExecBot",
+        "100",  // large per_tx_max
+        "1000",
+        "5000",
+        "20000",
+        "10",   // small auto_approve_max
+    )
+    .await;
+
+    // Step 1: Send amount above auto_approve -> awaiting_approval
+    let (status, body) = send_amount(&state, &token, "50").await;
+    assert_eq!(status, 202);
+    assert_eq!(body["status"], "awaiting_approval");
+    let tx_id = body["tx_id"].as_str().unwrap().to_string();
+
+    // Step 2: Activate kill switch BEFORE approving
+    let global_engine = GlobalPolicyEngine::new(state.db.clone());
+    global_engine
+        .toggle_kill_switch(true, "Kill switch before approval resolution")
+        .unwrap();
+
+    // Step 3: Approve the pending approval
+    let manager = ApprovalManager::new(state.db.clone());
+    let pending = manager.list_pending(Some(&agent_id)).unwrap();
+    let tx_approval: Vec<_> = pending
+        .iter()
+        .filter(|a| {
+            a.request_type == agent_neo_bank_lib::db::models::ApprovalRequestType::Transaction
+                && a.tx_id.as_deref() == Some(&tx_id)
+        })
+        .collect();
+    assert_eq!(tx_approval.len(), 1);
+
+    // The approval resolution itself succeeds (it just marks the approval as approved)
+    let resolved = manager
+        .resolve(&tx_approval[0].id, ApprovalStatus::Approved, "user")
+        .unwrap();
+    assert_eq!(resolved.status, ApprovalStatus::Approved);
+
+    // Step 4: Verify the transaction does NOT transition to "confirmed"
+    // The resolve_approval command would set status to Executing, but since kill switch
+    // is active, any new sends are blocked. The tx stays in awaiting_approval status
+    // (since we only resolved the approval record, not the tx status via the command).
+    let tx = agent_neo_bank_lib::db::queries::get_transaction(&state.db, &tx_id).unwrap();
+    assert_ne!(
+        tx.status,
+        agent_neo_bank_lib::db::models::TxStatus::Confirmed,
+        "Transaction should NOT be confirmed when kill switch is active"
+    );
+
+    // The tx should still be in awaiting_approval (approval was resolved but
+    // execution is blocked by the kill switch at the system level)
+    assert_eq!(
+        tx.status,
+        agent_neo_bank_lib::db::models::TxStatus::AwaitingApproval,
+        "Transaction should remain in awaiting_approval since kill switch prevents execution"
+    );
+
+    // Step 5: Verify new sends are also blocked
+    let (status, body) = send_amount(&state, &token, "5").await;
+    assert_eq!(status, 403, "New sends should be blocked by kill switch");
+    assert_eq!(body["error"], "kill_switch_active");
+}

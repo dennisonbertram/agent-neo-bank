@@ -37,6 +37,15 @@ pub fn create_test_app_with_db_and_config(
 ) -> (Router, Arc<AppStateAxum>) {
     let cli: Arc<dyn agent_neo_bank_lib::cli::executor::CliExecutable> =
         Arc::new(MockCliExecutor::with_defaults());
+    create_test_app_with_db_config_and_cli(db, config, cli)
+}
+
+/// Build a full test app with an existing DB, config, and custom CLI executor.
+pub fn create_test_app_with_db_config_and_cli(
+    db: Arc<Database>,
+    config: AppConfig,
+    cli: Arc<dyn agent_neo_bank_lib::cli::executor::CliExecutable>,
+) -> (Router, Arc<AppStateAxum>) {
     let auth_service = Arc::new(AuthService::new(
         cli.clone(),
         db.clone(),
