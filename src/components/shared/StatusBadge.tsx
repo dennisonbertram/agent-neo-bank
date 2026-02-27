@@ -1,28 +1,23 @@
 import { cn } from "@/lib/utils";
 
-const statusColors: Record<string, string> = {
-  pending: "bg-yellow-500/20 text-yellow-400",
-  active: "bg-green-500/20 text-green-400",
-  suspended: "bg-red-500/20 text-red-400",
-  revoked: "bg-zinc-500/20 text-zinc-400",
-  confirmed: "bg-green-500/20 text-green-400",
-  failed: "bg-red-500/20 text-red-400",
-  denied: "bg-red-500/20 text-red-400",
-};
-
 interface StatusBadgeProps {
-  status: string;
+  status: "active" | "pending" | "suspended" | "revoked";
+  className?: string;
 }
 
-export function StatusBadge({ status }: StatusBadgeProps) {
+const statusConfig = {
+  active: { dot: "bg-[#10B981]", text: "text-[#10B981]", bg: "bg-[#ECFDF5]", label: "Active" },
+  pending: { dot: "bg-[#F59E0B] animate-pulse", text: "text-[#F59E0B]", bg: "bg-[#FFFBEB]", label: "Pending" },
+  suspended: { dot: "bg-[#EF4444]", text: "text-[#EF4444]", bg: "bg-[#FEF2F2]", label: "Suspended" },
+  revoked: { dot: "bg-[#6B7280]", text: "text-[#6B7280]", bg: "bg-[#F9FAFB]", label: "Revoked" },
+};
+
+export function StatusBadge({ status, className }: StatusBadgeProps) {
+  const config = statusConfig[status];
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium capitalize",
-        statusColors[status] ?? "bg-zinc-500/20 text-zinc-400"
-      )}
-    >
-      {status}
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium", config.bg, config.text, className)}>
+      <span className={cn("size-1.5 rounded-full", config.dot)} />
+      {config.label}
     </span>
   );
 }
