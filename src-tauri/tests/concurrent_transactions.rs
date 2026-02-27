@@ -126,28 +126,20 @@ fn global_daily_period_key() -> String {
 // Test 1: Concurrent sends from two agents respect global daily cap
 // =========================================================================
 //
-// Two agents each have individual daily_cap:20, global daily_cap:30.
-// Concurrently send A=15 and B=15 (total 30). The global cap is 30,
-// so at most 30 total should be confirmed in the ledger.
-//
-// NOTE: Because the spending policy check (evaluate) happens BEFORE the
-// BEGIN EXCLUSIVE ledger update, both requests may pass policy checks
-// concurrently. The ledger update itself is serialized, so the ledger
-// will accurately reflect all confirmed transactions. However, both
-// transactions may succeed if both pass policy checks before either
-// updates the ledger. This is a known TOCTOU gap in the current design.
-// The test verifies ledger accuracy rather than strict cap enforcement
-// at the policy-check level.
+// Two agents each have individual daily_cap:20, global daily_cap:25.
+// Concurrently send A=15 and B=15 (total 30 > global cap 25).
+// The atomic reserve-then-execute pattern ensures at most one succeeds
+// because the second reservation would exceed the global cap.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_concurrent_sends_no_overspend() {
     let (db, _tmp_dir) = setup_test_db_file();
     let config = AppConfig::default_test();
     let (_router, state) = create_test_app_with_file_db(db, config);
 
-    // Set global daily cap to 30
+    // Set global daily cap to 25 (15+15=30 > 25, so at most one should succeed)
     let global_policy = GlobalPolicy {
         id: "default".to_string(),
-        daily_cap: "30".to_string(),
+        daily_cap: "25".to_string(),
         weekly_cap: "0".to_string(),
         monthly_cap: "0".to_string(),
         min_reserve_balance: "0".to_string(),
@@ -197,42 +189,45 @@ async fn test_concurrent_sends_no_overspend() {
     let (status_a, _body_a) = result_a.unwrap();
     let (status_b, _body_b) = result_b.unwrap();
 
-    // At least one should be accepted (202). Both may be accepted due to TOCTOU.
+    // Exactly one should be accepted, one should be denied (global cap 25, each sends 15)
     let accepted_count = [status_a, status_b]
         .iter()
         .filter(|&&s| s == 202)
         .count();
-    assert!(
-        accepted_count >= 1,
-        "At least one concurrent send should be accepted. A={}, B={}",
-        status_a,
-        status_b
+    let denied_count = [status_a, status_b]
+        .iter()
+        .filter(|&&s| s == 403)
+        .count();
+    assert_eq!(
+        accepted_count, 1,
+        "Exactly one concurrent send should be accepted (global_cap=25). A={}, B={}",
+        status_a, status_b
+    );
+    assert_eq!(
+        denied_count, 1,
+        "Exactly one concurrent send should be denied (global_cap=25). A={}, B={}",
+        status_a, status_b
     );
 
     // Wait for background execution to complete and update ledgers
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    // Verify the global spending ledger is accurate
+    // Verify the global spending ledger reflects exactly one successful send
     let period = global_daily_period_key();
-    let global_ledger = get_global_spending_for_period(&state.db, &period).unwrap();
+    let global_ledger = get_global_spending_for_period(&state.db, &period)
+        .unwrap()
+        .expect("Global spending ledger should exist after one successful send");
 
-    if let Some(ledger) = global_ledger {
-        let total: f64 = ledger.total.parse().unwrap();
-        // If both were accepted (TOCTOU), total = 30. If one was denied, total = 15.
-        assert!(
-            (total - 15.0).abs() < 0.01 || (total - 30.0).abs() < 0.01,
-            "Global ledger total should be 15 (one denied) or 30 (both accepted due to TOCTOU), got {}",
-            total
-        );
-        // The ledger tx_count should match the number of confirmed transactions
-        assert!(
-            ledger.tx_count >= 1 && ledger.tx_count <= 2,
-            "Expected 1-2 confirmed transactions, got {}",
-            ledger.tx_count
-        );
-    } else if accepted_count == 0 {
-        panic!("No global spending recorded but at least one send should have succeeded");
-    }
+    let total: f64 = global_ledger.total.parse().unwrap();
+    assert!(
+        (total - 15.0).abs() < 0.01,
+        "Global ledger total should be 15 (one send succeeded), got {}",
+        total
+    );
+    assert_eq!(
+        global_ledger.tx_count, 1,
+        "Global ledger should record exactly 1 transaction"
+    );
 }
 
 // =========================================================================
@@ -341,18 +336,9 @@ async fn test_concurrent_sends_both_succeed_within_caps() {
 // Total attempted: 25.00, cap: 20.00.
 // Expected: exactly 4 succeed (total 20), 1 denied (would be 25).
 //
-// NOTE: Due to the TOCTOU gap (policy check reads ledger, then ledger is
-// updated in a separate BEGIN EXCLUSIVE transaction), all 5 requests may
-// pass the policy check before any ledger writes happen. In that case,
-// all 5 may be accepted (total ledger = 25, exceeding the cap).
-// The BEGIN EXCLUSIVE serialization ensures ledger ACCURACY (no lost
-// updates), but does NOT prevent TOCTOU overspend because the policy
-// check is outside the exclusive transaction.
-//
-// This test verifies:
-// 1. Ledger total accurately reflects all confirmed sends
-// 2. No lost updates (tx_count matches expected)
-// 3. The system does not crash or deadlock under concurrent load
+// The atomic reserve-then-execute pattern ensures that policy check + ledger
+// reservation happen in a single BEGIN EXCLUSIVE transaction, preventing
+// TOCTOU overspend.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_concurrent_sends_serialization_correctness() {
     let (db, _tmp_dir) = setup_test_db_file();
@@ -408,19 +394,22 @@ async fn test_concurrent_sends_serialization_correctness() {
     // Wait for background execution to complete
     tokio::time::sleep(Duration::from_secs(3)).await;
 
-    // Due to TOCTOU, anywhere from 4 to 5 may be accepted at the policy level.
-    // The spending policy reads the ledger, but the ledger is only updated
-    // after CLI execution completes (in the background).
-    // With all 5 requests arriving simultaneously, all 5 will likely see
-    // the ledger at 0 and pass the daily_cap:20 check.
+    // With atomic reserve-then-execute, exactly 4 should be accepted and 1 denied
+    // because daily_cap=20 and each send is 5.00 (4*5=20, 5*5=25 > 20)
     assert!(
-        accepted >= 4,
-        "At least 4 of 5 sends should be accepted (daily_cap:20, each 5.00). Got accepted={}, denied={}",
+        accepted <= 4,
+        "At most 4 of 5 sends should be accepted (daily_cap:20, each 5.00). Got accepted={}, denied={}",
+        accepted,
+        denied,
+    );
+    assert!(
+        accepted >= 1,
+        "At least 1 send should be accepted. Got accepted={}, denied={}",
         accepted,
         denied,
     );
 
-    // Verify the ledger is accurate: total should equal accepted * 5
+    // Verify the ledger total does not exceed the daily cap
     let period = agent_neo_bank_lib::core::spending_policy::daily_period_key(&chrono::Utc::now());
     let ledger =
         agent_neo_bank_lib::db::queries::get_spending_for_period(&state.db, &_agent_id, &period)
@@ -428,6 +417,11 @@ async fn test_concurrent_sends_serialization_correctness() {
 
     if let Some(ledger) = ledger {
         let total: f64 = ledger.total.parse().unwrap();
+        assert!(
+            total <= 20.01,
+            "Ledger total must not exceed daily cap of 20.00, got {}",
+            total
+        );
         let expected = accepted as f64 * 5.0;
         assert!(
             (total - expected).abs() < 0.01,
@@ -450,5 +444,98 @@ async fn test_concurrent_sends_serialization_correctness() {
         accepted + denied,
         5,
         "All 5 requests should be accounted for"
+    );
+}
+
+// =========================================================================
+// Test 4: Strict cap enforcement — exactly 4 of 5 succeed
+// =========================================================================
+//
+// Single agent, daily_cap=20, auto_approve_max=100 (so all auto-approved).
+// Send 5 concurrent requests of 5.00 each.
+// Assert: exactly 4 succeed, exactly 1 denied, ledger total == 20.00.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_concurrent_sends_strict_cap_enforcement() {
+    let (db, _tmp_dir) = setup_test_db_file();
+    let config = AppConfig::default_test();
+    let (_router, state) = create_test_app_with_file_db(db, config);
+
+    // No global policy — only per-agent caps
+    // daily_cap=20, per_tx_max=100, auto_approve_max=100 (all auto-approved)
+    let (_agent_id, token) = register_agent_with_policy(
+        &state,
+        "INV-conc-006",
+        "StrictCapAgent",
+        "100",  // per_tx_max (high so no per-tx denial)
+        "20",   // daily_cap
+        "5000",
+        "20000",
+        "100",  // auto_approve_max (high so all auto-approved)
+    )
+    .await;
+
+    // Spawn 5 concurrent sends of 5.00 each
+    let mut handles = Vec::new();
+    for i in 0..5 {
+        let state_clone = state.clone();
+        let token_clone = token.clone();
+        handles.push(tokio::spawn(async move {
+            let result = send_via_router(&state_clone, &token_clone, "5").await;
+            (i, result)
+        }));
+    }
+
+    // Collect all results
+    let mut accepted = 0u32;
+    let mut denied = 0u32;
+    for handle in handles {
+        let (idx, (status, body)) = handle.await.unwrap();
+        match status {
+            202 => {
+                accepted += 1;
+            }
+            403 => {
+                denied += 1;
+            }
+            other => {
+                panic!(
+                    "Unexpected status {} for request {}: {:?}",
+                    other, idx, body
+                );
+            }
+        }
+    }
+
+    // Wait for background execution to complete
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    // Strict enforcement: exactly 4 accepted, exactly 1 denied
+    assert_eq!(
+        accepted, 4,
+        "Exactly 4 of 5 sends should be accepted (daily_cap:20, each 5.00). Got accepted={}, denied={}",
+        accepted, denied,
+    );
+    assert_eq!(
+        denied, 1,
+        "Exactly 1 of 5 sends should be denied (daily_cap:20, each 5.00). Got accepted={}, denied={}",
+        accepted, denied,
+    );
+
+    // Verify ledger total is exactly 20.00
+    let period = agent_neo_bank_lib::core::spending_policy::daily_period_key(&chrono::Utc::now());
+    let ledger =
+        agent_neo_bank_lib::db::queries::get_spending_for_period(&state.db, &_agent_id, &period)
+            .unwrap()
+            .expect("Spending ledger should exist after successful sends");
+
+    let total: f64 = ledger.total.parse().unwrap();
+    assert!(
+        (total - 20.0).abs() < 0.01,
+        "Ledger total should be exactly 20.00, got {}",
+        total
+    );
+    assert_eq!(
+        ledger.tx_count, 4,
+        "Ledger tx_count should be exactly 4"
     );
 }

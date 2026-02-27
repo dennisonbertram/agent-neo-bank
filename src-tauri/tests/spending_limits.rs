@@ -225,27 +225,23 @@ async fn test_spending_approval_then_cumulative_tracking() {
         .unwrap();
     assert_eq!(resolved.status, ApprovalStatus::Approved);
 
-    // Simulate what the execution pipeline does: update tx status to Executing,
-    // then confirmed, and update spending ledgers atomically.
+    // With the reserve-then-execute pattern, the spending ledger is already
+    // updated by check_policy_and_reserve_atomic when process_send runs.
+    // So after the first send of 8, daily spending is already reserved as 8.
+    // We only need to update the transaction status (not the ledger).
     let now = chrono::Utc::now();
-    let period_daily = format!("daily:{}", now.format("%Y-%m-%d"));
-    let period_weekly = format!("weekly:{}", now.format("%G-W%V"));
-    let period_monthly = format!("monthly:{}", now.format("%Y-%m"));
 
-    agent_neo_bank_lib::db::queries::update_transaction_and_ledgers_atomic(
+    agent_neo_bank_lib::db::queries::update_transaction_status(
         &state.db,
         &tx_id,
-        "0xMockHash1",
-        &agent_id,
-        "8",
-        &period_daily,
-        &period_weekly,
-        &period_monthly,
+        &agent_neo_bank_lib::db::models::TxStatus::Confirmed,
+        Some("0xMockHash1"),
+        None,
         now.timestamp(),
     )
     .unwrap();
 
-    // Now daily spending is 8. Send 9 -> 202 (daily would be 17, within cap 25)
+    // Now daily spending is 8 (already reserved). Send 9 -> 202 (daily would be 17, within cap 25)
     // 9 > auto_approve_max 5, so it requires approval too, but it should be accepted (not denied)
     let (status, body) = send_amount(&state, &token, "9").await;
     assert_eq!(
@@ -254,43 +250,8 @@ async fn test_spending_approval_then_cumulative_tracking() {
     );
     assert_eq!(body["status"], "awaiting_approval");
 
-    // Send 9 again -> 403 (daily would be 8 + 9 + 9 = 26, exceeds cap 25)
-    // Note: the second 9 hasn't been executed yet (still awaiting approval),
-    // but the pending tx amount IS counted by the spending engine since it was recorded.
-    // Actually, the spending engine checks the ledger which only counts confirmed txs.
-    // So the pending 9 is NOT in the ledger yet. Daily = 8, and 8+9=17 < 25.
-    // But wait -- if we send another 9, daily would be 8+9=17 still (the second 9 is pending).
-    // We need to simulate execution of the second 9 to make daily = 17 before testing the third.
-
-    // Approve and execute the second tx
-    let tx_id_2 = body["tx_id"].as_str().unwrap().to_string();
-    let pending2 = manager.list_pending(Some(&agent_id)).unwrap();
-    let tx_approval2: Vec<_> = pending2
-        .iter()
-        .filter(|a| {
-            a.request_type == ApprovalRequestType::Transaction
-                && a.tx_id.as_deref() == Some(&tx_id_2)
-        })
-        .collect();
-    assert_eq!(tx_approval2.len(), 1);
-    manager
-        .resolve(&tx_approval2[0].id, ApprovalStatus::Approved, "user")
-        .unwrap();
-
-    agent_neo_bank_lib::db::queries::update_transaction_and_ledgers_atomic(
-        &state.db,
-        &tx_id_2,
-        "0xMockHash2",
-        &agent_id,
-        "9",
-        &period_daily,
-        &period_weekly,
-        &period_monthly,
-        now.timestamp(),
-    )
-    .unwrap();
-
-    // Daily spending is now 17. Send 9 -> 403 (17+9=26, exceeds daily cap 25)
+    // With reserve-then-execute, the second send of 9 is already reserved in the ledger.
+    // Daily spending is now 8 + 9 = 17. Send 9 again -> 403 (17+9=26, exceeds cap 25)
     let (status, body) = send_amount(&state, &token, "9").await;
     assert_eq!(
         status, 403,

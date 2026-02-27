@@ -7,16 +7,15 @@ use tokio::sync::broadcast;
 
 use crate::cli::commands::AwalCommand;
 use crate::cli::executor::CliExecutable;
-use crate::core::global_policy::{GlobalPolicyDecision, GlobalPolicyEngine};
 use crate::core::spending_policy::{
-    daily_period_key, monthly_period_key, weekly_period_key, PolicyDecision, SpendingPolicyEngine,
+    daily_period_key, monthly_period_key, weekly_period_key,
 };
 use crate::db::models::{
     ApprovalRequest, ApprovalRequestType, ApprovalStatus, Transaction, TxStatus, TxType,
 };
 use crate::db::queries::{
-    get_transaction, insert_approval_request, insert_transaction,
-    update_transaction_and_ledgers_atomic, update_transaction_status,
+    check_policy_and_reserve_atomic, get_transaction, insert_approval_request,
+    insert_transaction, rollback_reservation, update_transaction_status, AtomicPolicyResult,
 };
 use crate::db::schema::Database;
 use crate::error::AppError;
@@ -55,8 +54,6 @@ pub enum TxEvent {
 pub struct TransactionProcessor {
     db: Arc<Database>,
     cli: Arc<dyn CliExecutable>,
-    spending_engine: SpendingPolicyEngine,
-    global_engine: GlobalPolicyEngine,
     current_balance: Arc<tokio::sync::RwLock<Decimal>>,
     event_tx: broadcast::Sender<TxEvent>,
 }
@@ -68,15 +65,11 @@ impl TransactionProcessor {
         current_balance: Decimal,
         event_channel_capacity: usize,
     ) -> (Self, broadcast::Receiver<TxEvent>) {
-        let spending_engine = SpendingPolicyEngine::new(db.clone());
-        let global_engine = GlobalPolicyEngine::new(db.clone());
         let (event_tx, event_rx) = broadcast::channel(event_channel_capacity);
 
         let processor = Self {
             db,
             cli,
-            spending_engine,
-            global_engine,
             current_balance: Arc::new(tokio::sync::RwLock::new(current_balance)),
             event_tx,
         };
@@ -91,6 +84,9 @@ impl TransactionProcessor {
 
     /// Process a send request. Returns immediately with Accepted or Denied.
     /// For auto-approved transactions, spawns background execution.
+    ///
+    /// Uses atomic reserve-then-execute pattern: policy check + ledger reservation
+    /// happen in a single BEGIN EXCLUSIVE transaction to prevent TOCTOU race conditions.
     pub async fn process_send(
         &self,
         agent_id: &str,
@@ -103,58 +99,39 @@ impl TransactionProcessor {
         let period_weekly = weekly_period_key(&now);
         let period_monthly = monthly_period_key(&now);
 
-        // 1. Evaluate spending policy
-        let spending_decision =
-            self.spending_engine
-                .evaluate(agent_id, request.amount, &request.to)?;
-
-        if let PolicyDecision::Denied { reason } = &spending_decision {
-            let tx = self.build_transaction(
-                &tx_id,
-                agent_id,
-                &request,
-                &asset,
-                TxStatus::Denied,
-                &period_daily,
-                &period_weekly,
-                &period_monthly,
-                now.timestamp(),
-            );
-            insert_transaction(&self.db, &tx)?;
-            let _ = self.event_tx.send(TxEvent::TransactionDenied(tx_id.clone()));
-            return Ok(TransactionResult::Denied {
-                tx_id,
-                reason: reason.clone(),
-            });
-        }
-
-        // 2. Evaluate global policy
+        // 1. Atomic policy check + reservation (eliminates TOCTOU)
         let balance = *self.current_balance.read().await;
-        let global_decision = self.global_engine.evaluate(request.amount, balance)?;
+        let atomic_result = check_policy_and_reserve_atomic(
+            &self.db,
+            agent_id,
+            &request.amount.to_string(),
+            &request.to,
+            &balance.to_string(),
+            &period_daily,
+            &period_weekly,
+            &period_monthly,
+            now.timestamp(),
+        )?;
 
-        if let GlobalPolicyDecision::Denied { reason } = &global_decision {
-            let tx = self.build_transaction(
-                &tx_id,
-                agent_id,
-                &request,
-                &asset,
-                TxStatus::Denied,
-                &period_daily,
-                &period_weekly,
-                &period_monthly,
-                now.timestamp(),
-            );
-            insert_transaction(&self.db, &tx)?;
-            let _ = self.event_tx.send(TxEvent::TransactionDenied(tx_id.clone()));
-            return Ok(TransactionResult::Denied {
-                tx_id,
-                reason: reason.clone(),
-            });
-        }
-
-        // 3. Determine status based on spending decision
-        match spending_decision {
-            PolicyDecision::AutoApproved => {
+        match atomic_result {
+            AtomicPolicyResult::Denied { reason } => {
+                let tx = self.build_transaction(
+                    &tx_id,
+                    agent_id,
+                    &request,
+                    &asset,
+                    TxStatus::Denied,
+                    &period_daily,
+                    &period_weekly,
+                    &period_monthly,
+                    now.timestamp(),
+                );
+                insert_transaction(&self.db, &tx)?;
+                let _ = self.event_tx.send(TxEvent::TransactionDenied(tx_id.clone()));
+                Ok(TransactionResult::Denied { tx_id, reason })
+            }
+            AtomicPolicyResult::AutoApproved => {
+                // Ledger already reserved — insert tx and spawn execution
                 let tx = self.build_transaction(
                     &tx_id,
                     agent_id,
@@ -205,7 +182,8 @@ impl TransactionProcessor {
                     status: "executing".to_string(),
                 })
             }
-            PolicyDecision::RequiresApproval { .. } => {
+            AtomicPolicyResult::RequiresApproval { .. } => {
+                // Ledger already reserved — insert tx and create approval request
                 let tx = self.build_transaction(
                     &tx_id,
                     agent_id,
@@ -245,14 +223,14 @@ impl TransactionProcessor {
                     status: "awaiting_approval".to_string(),
                 })
             }
-            PolicyDecision::Denied { .. } => {
-                // Already handled above
-                unreachable!()
-            }
         }
     }
 
     /// Background execution of a send transaction.
+    ///
+    /// The spending ledger was already reserved by check_policy_and_reserve_atomic().
+    /// On CLI success: update tx status to Confirmed (ledger already reserved).
+    /// On CLI failure: rollback the reservation and mark tx as Failed.
     async fn execute_send(
         db: Arc<Database>,
         cli: Arc<dyn CliExecutable>,
@@ -286,31 +264,37 @@ impl TransactionProcessor {
                     .unwrap_or("")
                     .to_string();
 
-                // Atomic update: tx status + spending ledgers
-                let atomic_result = update_transaction_and_ledgers_atomic(
+                // Ledger already reserved — just update tx status + chain hash
+                let update_result = update_transaction_status(
                     &db,
                     &tx_id,
-                    &chain_tx_hash,
-                    &agent_id,
-                    &amount.to_string(),
-                    &period_daily,
-                    &period_weekly,
-                    &period_monthly,
+                    &TxStatus::Confirmed,
+                    Some(&chain_tx_hash),
+                    None,
                     now,
                 );
 
-                match atomic_result {
+                match update_result {
                     Ok(()) => {
                         let _ = event_tx.send(TxEvent::TransactionConfirmed(tx_id.clone()));
                     }
                     Err(_e) => {
-                        // Atomic update failed - mark tx as failed, do NOT update ledger
+                        // Status update failed — rollback reservation and mark failed
+                        let _ = rollback_reservation(
+                            &db,
+                            &agent_id,
+                            &amount.to_string(),
+                            &period_daily,
+                            &period_weekly,
+                            &period_monthly,
+                            now,
+                        );
                         let _ = update_transaction_status(
                             &db,
                             &tx_id,
                             &TxStatus::Failed,
                             None,
-                            Some("Ledger update failed"),
+                            Some("Transaction status update failed"),
                             now,
                         );
                         let _ = event_tx.send(TxEvent::TransactionFailed(tx_id.clone()));
@@ -318,7 +302,16 @@ impl TransactionProcessor {
                 }
             }
             Err(e) => {
-                // CLI failed - mark tx as failed, do NOT update ledger
+                // CLI failed — rollback the reservation and mark tx as failed
+                let _ = rollback_reservation(
+                    &db,
+                    &agent_id,
+                    &amount.to_string(),
+                    &period_daily,
+                    &period_weekly,
+                    &period_monthly,
+                    now,
+                );
                 let _ = update_transaction_status(
                     &db,
                     &tx_id,
@@ -626,11 +619,21 @@ mod tests {
         assert_eq!(tx.status, TxStatus::Failed);
         assert!(tx.error_message.is_some());
 
-        // Verify spending ledger NOT updated
+        // Verify spending ledger is effectively zero (reservation was rolled back)
         let now = Utc::now();
         let daily_key = daily_period_key(&now);
         let ledger = get_spending_for_period(&db, &agent.id, &daily_key).unwrap();
-        assert!(ledger.is_none(), "Spending ledger should not be updated on CLI failure");
+        match ledger {
+            None => {} // No ledger entry — OK
+            Some(l) => {
+                let total: f64 = l.total.parse().unwrap_or(0.0);
+                assert!(
+                    total.abs() < 0.01,
+                    "Spending ledger total should be 0 after rollback, got {}",
+                    total
+                );
+            }
+        }
     }
 
     // ---------------------------------------------------------------
@@ -785,83 +788,70 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // Test 9: Rollback on ledger update error
+    // Test 9: Rollback reservation restores ledger to zero
     // ---------------------------------------------------------------
     #[tokio::test]
-    async fn test_tx_processor_rollback_on_ledger_update_error() {
-        // This test verifies that if CLI succeeds but the atomic ledger
-        // update fails, the tx is marked "failed" and ledger is NOT updated.
-        // We test this by verifying the normal success path works, and
-        // the error handling path (tested in test 5 with CLI failure)
-        // also properly handles the case.
-        //
-        // For a true ledger-update-failure test, we would need to corrupt
-        // the DB mid-transaction, which is impractical in unit tests.
-        // Instead, we verify the contract: on CLI success, if atomic
-        // update succeeds, both tx and ledger are updated. We test this
-        // contract in test 6.
-        //
-        // Here we verify the rollback behavior via the update_transaction_and_ledgers_atomic
-        // function directly with an invalid agent_id that doesn't exist in agents table.
+    async fn test_tx_processor_rollback_reservation_restores_ledger() {
+        // This test verifies that rollback_reservation properly decrements
+        // the spending ledger entries that were reserved.
+        use crate::db::queries::{
+            check_policy_and_reserve_atomic, rollback_reservation,
+        };
+
         let db = setup_test_db();
         let agent = create_test_agent("RollbackBot", AgentStatus::Active);
         insert_agent(&db, &agent).unwrap();
+        let policy = create_test_spending_policy(&agent.id, "100", "1000", "5000", "20000", "50");
+        insert_spending_policy(&db, &policy).unwrap();
 
-        // Create a tx record manually
-        let tx_id = uuid::Uuid::new_v4().to_string();
-        let tx = Transaction {
-            id: tx_id.clone(),
-            agent_id: Some(agent.id.clone()),
-            tx_type: TxType::Send,
-            amount: "10".to_string(),
-            asset: "USDC".to_string(),
-            recipient: Some("0xRecipient".to_string()),
-            sender: None,
-            chain_tx_hash: None,
-            status: TxStatus::Executing,
-            category: "test".to_string(),
-            memo: String::new(),
-            description: String::new(),
-            service_name: String::new(),
-            service_url: String::new(),
-            reason: String::new(),
-            webhook_url: None,
-            error_message: None,
-            period_daily: "daily:2026-02-27".to_string(),
-            period_weekly: "weekly:2026-W09".to_string(),
-            period_monthly: "monthly:2026-02".to_string(),
-            created_at: Utc::now().timestamp(),
-            updated_at: Utc::now().timestamp(),
-        };
-        insert_transaction(&db, &tx).unwrap();
+        let now = Utc::now();
+        let daily = daily_period_key(&now);
+        let weekly = weekly_period_key(&now);
+        let monthly = monthly_period_key(&now);
 
-        // Attempt atomic update with a non-existent agent (spending_ledger FK fails)
-        // Actually SQLite spending_ledger doesn't have FK on agent_id in the schema,
-        // so we test the success path to confirm atomicity.
-        let result = update_transaction_and_ledgers_atomic(
+        // Reserve via atomic policy check
+        let result = check_policy_and_reserve_atomic(
             &db,
-            &tx_id,
-            "0xhash",
             &agent.id,
             "10",
-            "daily:2026-02-27",
-            "weekly:2026-W09",
-            "monthly:2026-02",
-            Utc::now().timestamp(),
-        );
+            "0xRecipient",
+            "10000",
+            &daily,
+            &weekly,
+            &monthly,
+            now.timestamp(),
+        )
+        .unwrap();
+        assert_eq!(result, crate::db::queries::AtomicPolicyResult::AutoApproved);
 
-        // Should succeed - atomically updates tx + ledgers
-        assert!(result.is_ok());
-
-        let updated_tx = get_transaction(&db, &tx_id).unwrap();
-        assert_eq!(updated_tx.status, TxStatus::Confirmed);
-        assert_eq!(updated_tx.chain_tx_hash, Some("0xhash".to_string()));
-
-        // Verify ledger was updated
-        let ledger = get_spending_for_period(&db, &agent.id, "daily:2026-02-27")
+        // Verify ledger was reserved
+        let ledger = get_spending_for_period(&db, &agent.id, &daily)
             .unwrap()
             .unwrap();
         assert_eq!(ledger.total, "10");
+
+        // Rollback the reservation
+        rollback_reservation(
+            &db,
+            &agent.id,
+            "10",
+            &daily,
+            &weekly,
+            &monthly,
+            now.timestamp(),
+        )
+        .unwrap();
+
+        // Verify ledger is back to zero
+        let ledger = get_spending_for_period(&db, &agent.id, &daily)
+            .unwrap()
+            .unwrap();
+        let total: f64 = ledger.total.parse().unwrap();
+        assert!(
+            total.abs() < 0.01,
+            "Ledger total should be 0 after rollback, got {}",
+            total
+        );
     }
 
     // ---------------------------------------------------------------

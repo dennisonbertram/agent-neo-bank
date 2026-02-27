@@ -120,8 +120,20 @@ impl ApprovalManager {
                 Some("auto"),
             )?;
 
-            // If there's an associated transaction, mark it as failed
+            // If there's an associated transaction, rollback the reservation and mark it as failed
             if let Some(ref tx_id) = approval.tx_id {
+                // Rollback the spending reservation that was made during check_policy_and_reserve_atomic
+                if let Ok(tx) = queries::get_transaction(&self.db, tx_id) {
+                    let _ = queries::rollback_reservation(
+                        &self.db,
+                        &approval.agent_id,
+                        &tx.amount,
+                        &tx.period_daily,
+                        &tx.period_weekly,
+                        &tx.period_monthly,
+                        now,
+                    );
+                }
                 queries::update_transaction_status(
                     &self.db,
                     tx_id,

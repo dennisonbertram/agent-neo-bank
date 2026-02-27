@@ -86,6 +86,36 @@ pub async fn resolve_approval(
                     None,
                     chrono::Utc::now().timestamp(),
                 );
+                // Note: ledger was already reserved by check_policy_and_reserve_atomic.
+                // execute_send will confirm the tx or rollback on failure.
+            }
+        }
+
+        // Side effect: if transaction was denied, rollback the reservation
+        if status == ApprovalStatus::Denied
+            && resolved.request_type == ApprovalRequestType::Transaction
+        {
+            if let Some(ref tx_id) = resolved.tx_id {
+                // Get the transaction to retrieve amount and period keys
+                if let Ok(tx) = queries::get_transaction(&db, tx_id) {
+                    let _ = queries::rollback_reservation(
+                        &db,
+                        &resolved.agent_id,
+                        &tx.amount,
+                        &tx.period_daily,
+                        &tx.period_weekly,
+                        &tx.period_monthly,
+                        chrono::Utc::now().timestamp(),
+                    );
+                    let _ = queries::update_transaction_status(
+                        &db,
+                        tx_id,
+                        &crate::db::models::TxStatus::Denied,
+                        None,
+                        Some("Approval denied by user"),
+                        chrono::Utc::now().timestamp(),
+                    );
+                }
             }
         }
 

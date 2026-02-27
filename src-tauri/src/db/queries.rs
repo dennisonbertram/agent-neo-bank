@@ -1456,6 +1456,384 @@ pub fn update_agent_token(
 }
 
 // -------------------------------------------------------------------------
+// Atomic Policy Check + Reserve (TOCTOU fix)
+// -------------------------------------------------------------------------
+
+use std::str::FromStr;
+use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
+
+/// Result of an atomic policy check + reservation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum AtomicPolicyResult {
+    AutoApproved,
+    RequiresApproval { reason: String },
+    Denied { reason: String },
+}
+
+/// Atomically: read ledger + check policy + reserve spend in a single BEGIN EXCLUSIVE.
+///
+/// For AutoApproved: reserves the amount in the ledger immediately.
+/// For RequiresApproval: reserves the amount (will be rolled back if denied/expired).
+/// For Denied: no ledger changes.
+///
+/// This eliminates the TOCTOU race condition where concurrent requests could all
+/// pass policy checks before any ledger updates occur.
+pub fn check_policy_and_reserve_atomic(
+    db: &Database,
+    agent_id: &str,
+    amount: &str,
+    recipient: &str,
+    current_balance: &str,
+    period_daily: &str,
+    period_weekly: &str,
+    period_monthly: &str,
+    now_ts: i64,
+) -> Result<AtomicPolicyResult, AppError> {
+    let conn = db.get_connection()?;
+
+    // Parse the amount
+    let amount_dec = Decimal::from_str(amount)
+        .map_err(|e| AppError::Internal(format!("Invalid amount: {}", e)))?;
+    let balance_dec = Decimal::from_str(current_balance)
+        .map_err(|e| AppError::Internal(format!("Invalid balance: {}", e)))?;
+
+    // BEGIN EXCLUSIVE — blocks all other writers until we COMMIT/ROLLBACK
+    conn.execute_batch("BEGIN EXCLUSIVE")
+        .map_err(|e| AppError::DatabaseError(format!("Failed to begin exclusive: {}", e)))?;
+
+    let result = (|| -> Result<AtomicPolicyResult, AppError> {
+        // 1. Read spending policy for this agent
+        let policy = conn.query_row(
+            "SELECT agent_id, per_tx_max, daily_cap, weekly_cap, monthly_cap, auto_approve_max, allowlist, updated_at
+             FROM spending_policies WHERE agent_id = ?1",
+            params![agent_id],
+            |row| {
+                let allowlist_str: String = row.get(6)?;
+                let allowlist: Vec<String> =
+                    serde_json::from_str(&allowlist_str).unwrap_or_default();
+                Ok(SpendingPolicy {
+                    agent_id: row.get(0)?,
+                    per_tx_max: row.get(1)?,
+                    daily_cap: row.get(2)?,
+                    weekly_cap: row.get(3)?,
+                    monthly_cap: row.get(4)?,
+                    auto_approve_max: row.get(5)?,
+                    allowlist,
+                    updated_at: row.get(7)?,
+                })
+            },
+        ).map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                AppError::NotFound(format!("Spending policy not found for agent: {}", agent_id))
+            }
+            _ => AppError::DatabaseError(format!("Failed to get spending policy: {}", e)),
+        })?;
+
+        let per_tx_max = Decimal::from_str(&policy.per_tx_max)
+            .map_err(|e| AppError::Internal(format!("Invalid per_tx_max: {}", e)))?;
+        let daily_cap = Decimal::from_str(&policy.daily_cap)
+            .map_err(|e| AppError::Internal(format!("Invalid daily_cap: {}", e)))?;
+        let weekly_cap = Decimal::from_str(&policy.weekly_cap)
+            .map_err(|e| AppError::Internal(format!("Invalid weekly_cap: {}", e)))?;
+        let monthly_cap = Decimal::from_str(&policy.monthly_cap)
+            .map_err(|e| AppError::Internal(format!("Invalid monthly_cap: {}", e)))?;
+        let auto_approve_max = Decimal::from_str(&policy.auto_approve_max)
+            .map_err(|e| AppError::Internal(format!("Invalid auto_approve_max: {}", e)))?;
+
+        // 2. Check per_tx_max
+        if amount_dec > per_tx_max {
+            return Ok(AtomicPolicyResult::Denied {
+                reason: format!("Amount {} exceeds per-tx limit of {}", amount_dec, per_tx_max),
+            });
+        }
+
+        // 3. Check allowlist
+        if !policy.allowlist.is_empty()
+            && !policy.allowlist.iter().any(|a| a == recipient)
+        {
+            return Ok(AtomicPolicyResult::Denied {
+                reason: "Recipient not in allowlist".to_string(),
+            });
+        }
+
+        // 4. Read agent spending ledger for daily period (inside the exclusive tx)
+        let daily_spent = read_ledger_total(&conn, agent_id, period_daily)?;
+        if daily_spent + amount_dec > daily_cap {
+            return Ok(AtomicPolicyResult::Denied {
+                reason: format!(
+                    "Amount {} would exceed daily cap of {} (already spent {})",
+                    amount_dec, daily_cap, daily_spent
+                ),
+            });
+        }
+
+        // 5. Read agent spending ledger for weekly period
+        let weekly_spent = read_ledger_total(&conn, agent_id, period_weekly)?;
+        if weekly_spent + amount_dec > weekly_cap {
+            return Ok(AtomicPolicyResult::Denied {
+                reason: format!(
+                    "Amount {} would exceed weekly cap of {} (already spent {})",
+                    amount_dec, weekly_cap, weekly_spent
+                ),
+            });
+        }
+
+        // 6. Read agent spending ledger for monthly period
+        let monthly_spent = read_ledger_total(&conn, agent_id, period_monthly)?;
+        if monthly_spent + amount_dec > monthly_cap {
+            return Ok(AtomicPolicyResult::Denied {
+                reason: format!(
+                    "Amount {} would exceed monthly cap of {} (already spent {})",
+                    amount_dec, monthly_cap, monthly_spent
+                ),
+            });
+        }
+
+        // 7. Read global policy (optional)
+        let global_policy = match conn.query_row(
+            "SELECT id, daily_cap, weekly_cap, monthly_cap, min_reserve_balance,
+             kill_switch_active, kill_switch_reason, updated_at
+             FROM global_policy WHERE id = 'default'",
+            [],
+            |row| {
+                let kill_switch: i32 = row.get(5)?;
+                Ok(GlobalPolicy {
+                    id: row.get(0)?,
+                    daily_cap: row.get(1)?,
+                    weekly_cap: row.get(2)?,
+                    monthly_cap: row.get(3)?,
+                    min_reserve_balance: row.get(4)?,
+                    kill_switch_active: kill_switch != 0,
+                    kill_switch_reason: row.get(6)?,
+                    updated_at: row.get(7)?,
+                })
+            },
+        ) {
+            Ok(p) => Some(p),
+            Err(rusqlite::Error::QueryReturnedNoRows) => None,
+            Err(e) => return Err(AppError::DatabaseError(format!("Failed to get global policy: {}", e))),
+        };
+
+        // 8. Evaluate global policy if it exists
+        if let Some(gp) = &global_policy {
+            // Kill switch
+            if gp.kill_switch_active {
+                return Ok(AtomicPolicyResult::Denied {
+                    reason: format!("Emergency kill switch active: {}", gp.kill_switch_reason),
+                });
+            }
+
+            // Min reserve balance
+            let min_reserve: Decimal = gp.min_reserve_balance.parse()
+                .map_err(|e| AppError::Internal(format!("Invalid min_reserve_balance: {}", e)))?;
+            if min_reserve > Decimal::ZERO && balance_dec - amount_dec < min_reserve {
+                return Ok(AtomicPolicyResult::Denied {
+                    reason: format!("Would drop balance below minimum reserve of {}", min_reserve),
+                });
+            }
+
+            // Global daily cap
+            let g_daily_cap: Decimal = gp.daily_cap.parse()
+                .map_err(|e| AppError::Internal(format!("Invalid global daily_cap: {}", e)))?;
+            if g_daily_cap > Decimal::ZERO {
+                let g_daily_spent = read_global_ledger_total(&conn, period_daily)?;
+                if g_daily_spent + amount_dec > g_daily_cap {
+                    return Ok(AtomicPolicyResult::Denied {
+                        reason: format!("Global daily spending cap of {} would be exceeded", g_daily_cap),
+                    });
+                }
+            }
+
+            // Global weekly cap
+            let g_weekly_cap: Decimal = gp.weekly_cap.parse()
+                .map_err(|e| AppError::Internal(format!("Invalid global weekly_cap: {}", e)))?;
+            if g_weekly_cap > Decimal::ZERO {
+                let g_weekly_spent = read_global_ledger_total(&conn, period_weekly)?;
+                if g_weekly_spent + amount_dec > g_weekly_cap {
+                    return Ok(AtomicPolicyResult::Denied {
+                        reason: format!("Global weekly spending cap of {} would be exceeded", g_weekly_cap),
+                    });
+                }
+            }
+
+            // Global monthly cap
+            let g_monthly_cap: Decimal = gp.monthly_cap.parse()
+                .map_err(|e| AppError::Internal(format!("Invalid global monthly_cap: {}", e)))?;
+            if g_monthly_cap > Decimal::ZERO {
+                let g_monthly_spent = read_global_ledger_total(&conn, period_monthly)?;
+                if g_monthly_spent + amount_dec > g_monthly_cap {
+                    return Ok(AtomicPolicyResult::Denied {
+                        reason: format!("Global monthly spending cap of {} would be exceeded", g_monthly_cap),
+                    });
+                }
+            }
+        }
+
+        // 9. Determine auto-approve vs requires-approval
+        let decision = if amount_dec <= auto_approve_max {
+            AtomicPolicyResult::AutoApproved
+        } else {
+            AtomicPolicyResult::RequiresApproval {
+                reason: format!(
+                    "Amount {} exceeds auto-approve threshold of {}",
+                    amount_dec, auto_approve_max
+                ),
+            }
+        };
+
+        // 10. Reserve: UPSERT agent spending ledger for all three periods
+        for period in &[period_daily, period_weekly, period_monthly] {
+            conn.execute(
+                "INSERT INTO spending_ledger (agent_id, period, total, tx_count, updated_at)
+                 VALUES (?1, ?2, ?3, 1, ?4)
+                 ON CONFLICT(agent_id, period) DO UPDATE SET
+                   total = CAST((CAST(spending_ledger.total AS REAL) + CAST(?3 AS REAL)) AS TEXT),
+                   tx_count = spending_ledger.tx_count + 1,
+                   updated_at = ?4",
+                params![agent_id, period, amount, now_ts],
+            ).map_err(|e| {
+                AppError::DatabaseError(format!("Failed to upsert spending ledger: {}", e))
+            })?;
+        }
+
+        // 11. Reserve: UPSERT global spending ledger for all three periods
+        for period in &[period_daily, period_weekly, period_monthly] {
+            conn.execute(
+                "INSERT INTO global_spending_ledger (period, total, tx_count, updated_at)
+                 VALUES (?1, ?2, 1, ?3)
+                 ON CONFLICT(period) DO UPDATE SET
+                   total = CAST((CAST(global_spending_ledger.total AS REAL) + CAST(?2 AS REAL)) AS TEXT),
+                   tx_count = global_spending_ledger.tx_count + 1,
+                   updated_at = ?3",
+                params![period, amount, now_ts],
+            ).map_err(|e| {
+                AppError::DatabaseError(format!("Failed to upsert global spending ledger: {}", e))
+            })?;
+        }
+
+        Ok(decision)
+    })();
+
+    match &result {
+        Ok(AtomicPolicyResult::Denied { .. }) => {
+            // Denied — rollback (no ledger changes)
+            let _ = conn.execute_batch("ROLLBACK");
+        }
+        Ok(_) => {
+            // AutoApproved or RequiresApproval — commit the reservation
+            conn.execute_batch("COMMIT")
+                .map_err(|e| AppError::DatabaseError(format!("Failed to commit reservation: {}", e)))?;
+        }
+        Err(_) => {
+            // Error — rollback
+            let _ = conn.execute_batch("ROLLBACK");
+        }
+    }
+
+    result
+}
+
+/// Roll back a spending reservation when CLI fails or approval is denied.
+/// Decrements the spending ledger entries that were reserved.
+pub fn rollback_reservation(
+    db: &Database,
+    agent_id: &str,
+    amount: &str,
+    period_daily: &str,
+    period_weekly: &str,
+    period_monthly: &str,
+    _now_ts: i64,
+) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    conn.execute_batch("BEGIN EXCLUSIVE")
+        .map_err(|e| AppError::DatabaseError(format!("Failed to begin exclusive: {}", e)))?;
+
+    let result = (|| -> Result<(), AppError> {
+        // Decrement agent spending ledger for all three periods
+        for period in &[period_daily, period_weekly, period_monthly] {
+            conn.execute(
+                "UPDATE spending_ledger SET
+                   total = CAST((CAST(spending_ledger.total AS REAL) - CAST(?3 AS REAL)) AS TEXT),
+                   tx_count = spending_ledger.tx_count - 1
+                 WHERE agent_id = ?1 AND period = ?2",
+                params![agent_id, period, amount],
+            ).map_err(|e| {
+                AppError::DatabaseError(format!("Failed to decrement spending ledger: {}", e))
+            })?;
+        }
+
+        // Decrement global spending ledger for all three periods
+        for period in &[period_daily, period_weekly, period_monthly] {
+            conn.execute(
+                "UPDATE global_spending_ledger SET
+                   total = CAST((CAST(global_spending_ledger.total AS REAL) - CAST(?2 AS REAL)) AS TEXT),
+                   tx_count = global_spending_ledger.tx_count - 1
+                 WHERE period = ?1",
+                params![period, amount],
+            ).map_err(|e| {
+                AppError::DatabaseError(format!("Failed to decrement global spending ledger: {}", e))
+            })?;
+        }
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT")
+                .map_err(|e| AppError::DatabaseError(format!("Failed to commit rollback: {}", e)))?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(e)
+        }
+    }
+}
+
+/// Helper: read agent spending ledger total for a period within an existing transaction.
+fn read_ledger_total(
+    conn: &r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+    agent_id: &str,
+    period: &str,
+) -> Result<Decimal, AppError> {
+    match conn.query_row(
+        "SELECT total FROM spending_ledger WHERE agent_id = ?1 AND period = ?2",
+        params![agent_id, period],
+        |row| {
+            let total: String = row.get(0)?;
+            Ok(total)
+        },
+    ) {
+        Ok(total_str) => Decimal::from_str(&total_str)
+            .map_err(|e| AppError::Internal(format!("Invalid ledger total: {}", e))),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(Decimal::ZERO),
+        Err(e) => Err(AppError::DatabaseError(format!("Failed to read spending ledger: {}", e))),
+    }
+}
+
+/// Helper: read global spending ledger total for a period within an existing transaction.
+fn read_global_ledger_total(
+    conn: &r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+    period: &str,
+) -> Result<Decimal, AppError> {
+    match conn.query_row(
+        "SELECT total FROM global_spending_ledger WHERE period = ?1",
+        params![period],
+        |row| {
+            let total: String = row.get(0)?;
+            Ok(total)
+        },
+    ) {
+        Ok(total_str) => Decimal::from_str(&total_str)
+            .map_err(|e| AppError::Internal(format!("Invalid global ledger total: {}", e))),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(Decimal::ZERO),
+        Err(e) => Err(AppError::DatabaseError(format!("Failed to read global spending ledger: {}", e))),
+    }
+}
+
+// -------------------------------------------------------------------------
 // Tests
 // -------------------------------------------------------------------------
 
