@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Bot, ArrowUpDown, Settings } from "lucide-react";
+import { LayoutDashboard, Bot, ArrowUpDown, CheckCircle, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
@@ -13,6 +13,7 @@ const navItems: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/agents", label: "Agents", icon: Bot },
   { to: "/transactions", label: "Transactions", icon: ArrowUpDown },
+  { to: "/approvals", label: "Approvals", icon: CheckCircle },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

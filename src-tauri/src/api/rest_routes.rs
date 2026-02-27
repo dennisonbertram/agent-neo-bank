@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::rest_server::AppStateAxum;
 use crate::core::agent_registry::AgentRegistrationRequest;
+use crate::core::approval_manager::ApprovalManager;
 use crate::core::tx_processor::{SendRequest, TransactionResult};
+use crate::db::models::ApprovalRequestType;
 use crate::db::queries;
 use crate::error::AppError;
 
@@ -37,6 +39,15 @@ pub struct ApiSendRequest {
     pub description: Option<String>,
     pub memo: Option<String>,
     pub webhook_url: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct LimitIncreaseRequest {
+    pub new_per_tx_max: Option<String>,
+    pub new_daily_cap: Option<String>,
+    pub new_weekly_cap: Option<String>,
+    pub new_monthly_cap: Option<String>,
+    pub reason: String,
 }
 
 #[derive(Deserialize)]
@@ -319,6 +330,83 @@ pub async fn get_transaction_handler(
             }
             (StatusCode::OK, Json(tx)).into_response()
         }
+        Ok(Err(err)) => error_to_response(err).into_response(),
+        Err(err) => error_to_response(err).into_response(),
+    }
+}
+
+/// POST /v1/limits/request-increase — requires bearer auth
+pub async fn request_limit_increase(
+    State(state): State<Arc<AppStateAxum>>,
+    Extension(agent_id): Extension<String>,
+    Json(body): Json<LimitIncreaseRequest>,
+) -> impl IntoResponse {
+    if body.reason.trim().is_empty() {
+        return error_to_response(AppError::InvalidInput(
+            "Reason is required and cannot be empty".to_string(),
+        ))
+        .into_response();
+    }
+
+    // At least one new limit must be proposed
+    if body.new_per_tx_max.is_none()
+        && body.new_daily_cap.is_none()
+        && body.new_weekly_cap.is_none()
+        && body.new_monthly_cap.is_none()
+    {
+        return error_to_response(AppError::InvalidInput(
+            "At least one new limit must be proposed".to_string(),
+        ))
+        .into_response();
+    }
+
+    let db = state.db.clone();
+    let aid = agent_id.clone();
+
+    let result = tokio::task::spawn_blocking(move || {
+        // Get current spending policy
+        let current_policy = queries::get_spending_policy(&db, &aid)?;
+
+        // Build payload with current vs proposed limits
+        let payload = serde_json::json!({
+            "current": {
+                "per_tx_max": current_policy.per_tx_max,
+                "daily_cap": current_policy.daily_cap,
+                "weekly_cap": current_policy.weekly_cap,
+                "monthly_cap": current_policy.monthly_cap,
+            },
+            "proposed": {
+                "new_per_tx_max": body.new_per_tx_max,
+                "new_daily_cap": body.new_daily_cap,
+                "new_weekly_cap": body.new_weekly_cap,
+                "new_monthly_cap": body.new_monthly_cap,
+            },
+            "reason": body.reason,
+        });
+
+        // Create approval request of type LimitIncrease
+        let manager = ApprovalManager::new(db);
+        manager.create_request(
+            &aid,
+            ApprovalRequestType::LimitIncrease,
+            payload,
+            None,
+            None,
+        )
+    })
+    .await
+    .map_err(|e| AppError::Internal(format!("Task join error: {}", e)));
+
+    match result {
+        Ok(Ok(approval)) => (
+            StatusCode::ACCEPTED,
+            Json(serde_json::json!({
+                "approval_id": approval.id,
+                "status": "pending",
+                "message": "Limit increase request submitted for approval",
+            })),
+        )
+            .into_response(),
         Ok(Err(err)) => error_to_response(err).into_response(),
         Err(err) => error_to_response(err).into_response(),
     }
@@ -955,5 +1043,232 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), 429, "61st request should be rate limited");
+    }
+
+    // =================================================================
+    // Test 14: test_limit_increase_request_creates_approval
+    // =================================================================
+    #[tokio::test]
+    async fn test_limit_increase_request_creates_approval() {
+        let (state, agent_id, token) = create_state_with_active_agent();
+        let app = ApiServer::router(state.clone());
+
+        let body = serde_json::json!({
+            "new_daily_cap": "2000",
+            "reason": "Need higher limits for operations"
+        });
+
+        let response = app
+            .oneshot(bearer_request(
+                "POST",
+                "/v1/limits/request-increase",
+                &token,
+                Body::from(serde_json::to_string(&body).unwrap()),
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), 202);
+        let resp_body = body_json(response).await;
+        assert!(resp_body["approval_id"].is_string());
+        assert_eq!(resp_body["status"], "pending");
+
+        // Verify the approval request was created in the DB
+        let approval_id = resp_body["approval_id"].as_str().unwrap();
+        let approval =
+            crate::db::queries::get_approval_request(&state.db, approval_id).unwrap();
+        assert_eq!(approval.agent_id, agent_id);
+        assert_eq!(
+            approval.request_type,
+            crate::db::models::ApprovalRequestType::LimitIncrease
+        );
+        assert_eq!(approval.status, crate::db::models::ApprovalStatus::Pending);
+
+        // Verify the payload contains current and proposed limits
+        let payload: serde_json::Value =
+            serde_json::from_str(&approval.payload).unwrap();
+        assert!(payload.get("current").is_some());
+        assert!(payload.get("proposed").is_some());
+        assert_eq!(payload["reason"], "Need higher limits for operations");
+        assert_eq!(payload["proposed"]["new_daily_cap"], "2000");
+    }
+
+    // =================================================================
+    // Test 15: test_limit_increase_approval_updates_policy
+    // =================================================================
+    #[tokio::test]
+    async fn test_limit_increase_approval_updates_policy() {
+        let (state, agent_id, _token) = create_state_with_active_agent();
+
+        // Get current policy to verify initial state
+        let old_policy =
+            crate::db::queries::get_spending_policy(&state.db, &agent_id).unwrap();
+        assert_eq!(old_policy.daily_cap, "1000");
+
+        // Create a limit_increase approval request
+        let manager =
+            crate::core::approval_manager::ApprovalManager::new(state.db.clone());
+        let payload = serde_json::json!({
+            "current": {
+                "per_tx_max": old_policy.per_tx_max,
+                "daily_cap": old_policy.daily_cap,
+                "weekly_cap": old_policy.weekly_cap,
+                "monthly_cap": old_policy.monthly_cap,
+            },
+            "proposed": {
+                "new_daily_cap": "5000",
+                "new_per_tx_max": "500",
+            },
+            "reason": "Need more capacity"
+        });
+        let approval = manager
+            .create_request(
+                &agent_id,
+                crate::db::models::ApprovalRequestType::LimitIncrease,
+                payload,
+                None,
+                None,
+            )
+            .unwrap();
+
+        // Resolve as approved -- use the same logic as the command
+        let db = state.db.clone();
+        let resolved = manager
+            .resolve(&approval.id, crate::db::models::ApprovalStatus::Approved, "user")
+            .unwrap();
+
+        // Apply side effect (simulating what resolve_approval command does)
+        if let Ok(payload) =
+            serde_json::from_str::<serde_json::Value>(&resolved.payload)
+        {
+            let proposed = payload.get("proposed").cloned().unwrap_or(payload.clone());
+            if let Ok(mut policy) =
+                crate::db::queries::get_spending_policy(&db, &resolved.agent_id)
+            {
+                if let Some(v) = proposed.get("new_per_tx_max").and_then(|v| v.as_str())
+                {
+                    policy.per_tx_max = v.to_string();
+                }
+                if let Some(v) = proposed.get("new_daily_cap").and_then(|v| v.as_str()) {
+                    policy.daily_cap = v.to_string();
+                }
+                if let Some(v) = proposed.get("new_weekly_cap").and_then(|v| v.as_str())
+                {
+                    policy.weekly_cap = v.to_string();
+                }
+                if let Some(v) =
+                    proposed.get("new_monthly_cap").and_then(|v| v.as_str())
+                {
+                    policy.monthly_cap = v.to_string();
+                }
+                policy.updated_at = chrono::Utc::now().timestamp();
+                crate::db::queries::update_spending_policy(&db, &policy).unwrap();
+            }
+        }
+
+        // Verify the spending policy was updated
+        let updated_policy =
+            crate::db::queries::get_spending_policy(&state.db, &agent_id).unwrap();
+        assert_eq!(updated_policy.daily_cap, "5000");
+        assert_eq!(updated_policy.per_tx_max, "500");
+        // weekly_cap and monthly_cap should remain unchanged
+        assert_eq!(updated_policy.weekly_cap, old_policy.weekly_cap);
+        assert_eq!(updated_policy.monthly_cap, old_policy.monthly_cap);
+    }
+
+    // =================================================================
+    // Test 16: test_limit_increase_denial_preserves_old_limits
+    // =================================================================
+    #[tokio::test]
+    async fn test_limit_increase_denial_preserves_old_limits() {
+        let (state, agent_id, _token) = create_state_with_active_agent();
+
+        let old_policy =
+            crate::db::queries::get_spending_policy(&state.db, &agent_id).unwrap();
+
+        // Create and deny a limit_increase approval
+        let manager =
+            crate::core::approval_manager::ApprovalManager::new(state.db.clone());
+        let payload = serde_json::json!({
+            "proposed": {
+                "new_daily_cap": "999999",
+            },
+            "reason": "Want more"
+        });
+        let approval = manager
+            .create_request(
+                &agent_id,
+                crate::db::models::ApprovalRequestType::LimitIncrease,
+                payload,
+                None,
+                None,
+            )
+            .unwrap();
+
+        // Resolve as denied
+        manager
+            .resolve(&approval.id, crate::db::models::ApprovalStatus::Denied, "admin")
+            .unwrap();
+
+        // Verify spending policy is unchanged
+        let current_policy =
+            crate::db::queries::get_spending_policy(&state.db, &agent_id).unwrap();
+        assert_eq!(current_policy.daily_cap, old_policy.daily_cap);
+        assert_eq!(current_policy.per_tx_max, old_policy.per_tx_max);
+        assert_eq!(current_policy.weekly_cap, old_policy.weekly_cap);
+        assert_eq!(current_policy.monthly_cap, old_policy.monthly_cap);
+    }
+
+    // =================================================================
+    // Test 17: test_limit_increase_request_requires_reason
+    // =================================================================
+    #[tokio::test]
+    async fn test_limit_increase_request_requires_reason() {
+        let (state, _agent_id, token) = create_state_with_active_agent();
+        let app = ApiServer::router(state);
+
+        // Empty reason
+        let body = serde_json::json!({
+            "new_daily_cap": "2000",
+            "reason": "   "
+        });
+
+        let response = app
+            .oneshot(bearer_request(
+                "POST",
+                "/v1/limits/request-increase",
+                &token,
+                Body::from(serde_json::to_string(&body).unwrap()),
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), 400);
+    }
+
+    // =================================================================
+    // Test 18: test_limit_increase_request_requires_at_least_one_limit
+    // =================================================================
+    #[tokio::test]
+    async fn test_limit_increase_request_requires_at_least_one_limit() {
+        let (state, _agent_id, token) = create_state_with_active_agent();
+        let app = ApiServer::router(state);
+
+        // No new limits proposed
+        let body = serde_json::json!({
+            "reason": "I want more"
+        });
+
+        let response = app
+            .oneshot(bearer_request(
+                "POST",
+                "/v1/limits/request-increase",
+                &token,
+                Body::from(serde_json::to_string(&body).unwrap()),
+            ))
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), 400);
     }
 }

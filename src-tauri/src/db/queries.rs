@@ -487,6 +487,27 @@ pub fn get_spending_policy(db: &Database, agent_id: &str) -> Result<SpendingPoli
     })
 }
 
+pub fn update_spending_policy(db: &Database, policy: &SpendingPolicy) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    let allowlist_json = serde_json::to_string(&policy.allowlist)
+        .map_err(|e| AppError::DatabaseError(format!("Failed to serialize allowlist: {}", e)))?;
+    conn.execute(
+        "UPDATE spending_policies SET per_tx_max = ?2, daily_cap = ?3, weekly_cap = ?4, monthly_cap = ?5, auto_approve_max = ?6, allowlist = ?7, updated_at = ?8 WHERE agent_id = ?1",
+        params![
+            policy.agent_id,
+            policy.per_tx_max,
+            policy.daily_cap,
+            policy.weekly_cap,
+            policy.monthly_cap,
+            policy.auto_approve_max,
+            allowlist_json,
+            policy.updated_at,
+        ],
+    )
+    .map_err(|e| AppError::DatabaseError(format!("Failed to update spending policy: {}", e)))?;
+    Ok(())
+}
+
 // -------------------------------------------------------------------------
 // Spending Ledger (BEGIN EXCLUSIVE)
 // -------------------------------------------------------------------------

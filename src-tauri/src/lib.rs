@@ -57,6 +57,8 @@ pub fn run() {
             commands::invitation_codes::list_invitation_codes,
             commands::invitation_codes::generate_invitation_code,
             commands::invitation_codes::revoke_invitation_code,
+            commands::notifications::get_notification_preferences,
+            commands::notifications::update_notification_preferences,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

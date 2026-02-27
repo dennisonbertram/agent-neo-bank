@@ -1,7 +1,8 @@
 use tauri::State;
 
 use crate::core::approval_manager::ApprovalManager;
-use crate::db::models::{ApprovalRequest, ApprovalStatus};
+use crate::db::models::{ApprovalRequest, ApprovalRequestType, ApprovalStatus};
+use crate::db::queries;
 use crate::error::AppError;
 use crate::state::app_state::AppState;
 
@@ -34,7 +35,6 @@ pub async fn resolve_approval(
 ) -> Result<ApprovalRequest, AppError> {
     let db = state.db.clone();
     tokio::task::spawn_blocking(move || {
-        let manager = ApprovalManager::new(db);
         let status = match decision.as_str() {
             "approved" => ApprovalStatus::Approved,
             "denied" => ApprovalStatus::Denied,
@@ -44,7 +44,52 @@ pub async fn resolve_approval(
                 ))
             }
         };
-        manager.resolve(&approval_id, status, "user")
+
+        let manager = ApprovalManager::new(db.clone());
+        let resolved = manager.resolve(&approval_id, status.clone(), "user")?;
+
+        // Side effect: if limit_increase was approved, update spending policy
+        if status == ApprovalStatus::Approved
+            && resolved.request_type == ApprovalRequestType::LimitIncrease
+        {
+            if let Ok(payload) = serde_json::from_str::<serde_json::Value>(&resolved.payload) {
+                let proposed = payload.get("proposed").cloned().unwrap_or(payload.clone());
+                if let Ok(mut policy) = queries::get_spending_policy(&db, &resolved.agent_id) {
+                    if let Some(v) = proposed.get("new_per_tx_max").and_then(|v| v.as_str()) {
+                        policy.per_tx_max = v.to_string();
+                    }
+                    if let Some(v) = proposed.get("new_daily_cap").and_then(|v| v.as_str()) {
+                        policy.daily_cap = v.to_string();
+                    }
+                    if let Some(v) = proposed.get("new_weekly_cap").and_then(|v| v.as_str()) {
+                        policy.weekly_cap = v.to_string();
+                    }
+                    if let Some(v) = proposed.get("new_monthly_cap").and_then(|v| v.as_str()) {
+                        policy.monthly_cap = v.to_string();
+                    }
+                    policy.updated_at = chrono::Utc::now().timestamp();
+                    let _ = queries::update_spending_policy(&db, &policy);
+                }
+            }
+        }
+
+        // Side effect: if transaction was approved, execute it
+        if status == ApprovalStatus::Approved
+            && resolved.request_type == ApprovalRequestType::Transaction
+        {
+            if let Some(ref tx_id) = resolved.tx_id {
+                let _ = queries::update_transaction_status(
+                    &db,
+                    tx_id,
+                    &crate::db::models::TxStatus::Executing,
+                    None,
+                    None,
+                    chrono::Utc::now().timestamp(),
+                );
+            }
+        }
+
+        Ok(resolved)
     })
     .await
     .map_err(|e| AppError::Internal(format!("Task join error: {}", e)))?
@@ -147,6 +192,129 @@ mod tests {
             .resolve(&approval.id, ApprovalStatus::Approved, "user")
             .unwrap();
         assert_eq!(resolved.status, ApprovalStatus::Approved);
+    }
+
+    #[test]
+    fn test_resolve_limit_increase_approved_updates_policy() {
+        let db = create_test_db();
+        let agent = create_test_agent("agent-li", "LimitBot");
+        insert_agent(&db, &agent).unwrap();
+
+        // Insert spending policy
+        let policy = crate::db::models::SpendingPolicy {
+            agent_id: agent.id.clone(),
+            per_tx_max: "100".to_string(),
+            daily_cap: "1000".to_string(),
+            weekly_cap: "5000".to_string(),
+            monthly_cap: "20000".to_string(),
+            auto_approve_max: "50".to_string(),
+            allowlist: vec![],
+            updated_at: 1740700800,
+        };
+        crate::db::queries::insert_spending_policy(&db, &policy).unwrap();
+
+        // Create limit_increase approval
+        let approval = ApprovalRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            agent_id: agent.id.clone(),
+            request_type: ApprovalRequestType::LimitIncrease,
+            payload: serde_json::json!({
+                "proposed": {
+                    "new_daily_cap": "3000",
+                    "new_per_tx_max": "200",
+                },
+                "reason": "Need more"
+            })
+            .to_string(),
+            status: ApprovalStatus::Pending,
+            tx_id: None,
+            expires_at: chrono::Utc::now().timestamp() + 86400,
+            created_at: chrono::Utc::now().timestamp(),
+            resolved_at: None,
+            resolved_by: None,
+        };
+        insert_approval_request(&db, &approval).unwrap();
+
+        let db = std::sync::Arc::new(db);
+        let manager = ApprovalManager::new(db.clone());
+        let resolved = manager
+            .resolve(&approval.id, ApprovalStatus::Approved, "user")
+            .unwrap();
+
+        // Apply the side effect
+        if let Ok(payload) = serde_json::from_str::<serde_json::Value>(&resolved.payload) {
+            let proposed = payload.get("proposed").cloned().unwrap_or(payload.clone());
+            if let Ok(mut policy) = queries::get_spending_policy(&db, &resolved.agent_id) {
+                if let Some(v) = proposed.get("new_per_tx_max").and_then(|v| v.as_str()) {
+                    policy.per_tx_max = v.to_string();
+                }
+                if let Some(v) = proposed.get("new_daily_cap").and_then(|v| v.as_str()) {
+                    policy.daily_cap = v.to_string();
+                }
+                if let Some(v) = proposed.get("new_weekly_cap").and_then(|v| v.as_str()) {
+                    policy.weekly_cap = v.to_string();
+                }
+                if let Some(v) = proposed.get("new_monthly_cap").and_then(|v| v.as_str()) {
+                    policy.monthly_cap = v.to_string();
+                }
+                policy.updated_at = chrono::Utc::now().timestamp();
+                queries::update_spending_policy(&db, &policy).unwrap();
+            }
+        }
+
+        let updated = queries::get_spending_policy(&db, &agent.id).unwrap();
+        assert_eq!(updated.daily_cap, "3000");
+        assert_eq!(updated.per_tx_max, "200");
+        assert_eq!(updated.weekly_cap, "5000"); // unchanged
+        assert_eq!(updated.monthly_cap, "20000"); // unchanged
+    }
+
+    #[test]
+    fn test_resolve_limit_increase_denied_preserves_policy() {
+        let db = create_test_db();
+        let agent = create_test_agent("agent-lid", "LimitDenyBot");
+        insert_agent(&db, &agent).unwrap();
+
+        let policy = crate::db::models::SpendingPolicy {
+            agent_id: agent.id.clone(),
+            per_tx_max: "100".to_string(),
+            daily_cap: "1000".to_string(),
+            weekly_cap: "5000".to_string(),
+            monthly_cap: "20000".to_string(),
+            auto_approve_max: "50".to_string(),
+            allowlist: vec![],
+            updated_at: 1740700800,
+        };
+        crate::db::queries::insert_spending_policy(&db, &policy).unwrap();
+
+        let approval = ApprovalRequest {
+            id: uuid::Uuid::new_v4().to_string(),
+            agent_id: agent.id.clone(),
+            request_type: ApprovalRequestType::LimitIncrease,
+            payload: serde_json::json!({
+                "proposed": { "new_daily_cap": "999999" },
+                "reason": "Want more"
+            })
+            .to_string(),
+            status: ApprovalStatus::Pending,
+            tx_id: None,
+            expires_at: chrono::Utc::now().timestamp() + 86400,
+            created_at: chrono::Utc::now().timestamp(),
+            resolved_at: None,
+            resolved_by: None,
+        };
+        insert_approval_request(&db, &approval).unwrap();
+
+        let db = std::sync::Arc::new(db);
+        let manager = ApprovalManager::new(db.clone());
+        let _resolved = manager
+            .resolve(&approval.id, ApprovalStatus::Denied, "admin")
+            .unwrap();
+
+        // Denied: no side effect, policy unchanged
+        let current = queries::get_spending_policy(&db, &agent.id).unwrap();
+        assert_eq!(current.daily_cap, "1000");
+        assert_eq!(current.per_tx_max, "100");
     }
 
     #[test]

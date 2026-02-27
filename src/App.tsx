@@ -4,6 +4,7 @@ import { Onboarding } from "./pages/Onboarding";
 import { Agents } from "./pages/Agents";
 import { Transactions } from "./pages/Transactions";
 import { Settings } from "./pages/Settings";
+import { Approvals } from "./pages/Approvals";
 import { Shell } from "./components/layout/Shell";
 
 export function App() {
@@ -14,6 +15,7 @@ export function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/agents" element={<Agents />} />
         <Route path="/transactions" element={<Transactions />} />
+        <Route path="/approvals" element={<Approvals />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
     </Routes>

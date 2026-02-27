@@ -68,6 +68,10 @@ impl ApiServer {
                 "/v1/transactions/{tx_id}",
                 get(rest_routes::get_transaction_handler),
             )
+            .route(
+                "/v1/limits/request-increase",
+                post(rest_routes::request_limit_increase),
+            )
             .layer(middleware::from_fn_with_state(
                 state.clone(),
                 auth_middleware,
