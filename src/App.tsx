@@ -6,6 +6,7 @@ import { AgentDetail } from "./pages/AgentDetail";
 import { Transactions } from "./pages/Transactions";
 import { Settings } from "./pages/Settings";
 import { Approvals } from "./pages/Approvals";
+import { Fund } from "./pages/Fund";
 import { Shell } from "./components/layout/Shell";
 
 export function App() {
@@ -18,6 +19,7 @@ export function App() {
         <Route path="/agents/:id" element={<AgentDetail />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/approvals" element={<Approvals />} />
+        <Route path="/fund" element={<Fund />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
     </Routes>
