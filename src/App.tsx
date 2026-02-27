@@ -1,15 +1,21 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Onboarding } from "./pages/Onboarding";
+import { Routes, Route } from "react-router-dom";
 import { Dashboard } from "./pages/Dashboard";
+import { Onboarding } from "./pages/Onboarding";
+import { Agents } from "./pages/Agents";
+import { Transactions } from "./pages/Transactions";
+import { Settings } from "./pages/Settings";
+import { Shell } from "./components/layout/Shell";
 
 export function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/onboarding" element={<Onboarding />} />
+    <Routes>
+      <Route path="/onboarding" element={<Onboarding />} />
+      <Route element={<Shell />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+        <Route path="/agents" element={<Agents />} />
+        <Route path="/transactions" element={<Transactions />} />
+        <Route path="/settings" element={<Settings />} />
+      </Route>
+    </Routes>
   );
 }

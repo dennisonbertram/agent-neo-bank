@@ -1,2 +1,3 @@
-// Tauri API wrapper utilities will be implemented in the app shell task
-export {};
+// TODO: implement in Phase 1a
+// Re-exports and typed wrappers around @tauri-apps/api/core invoke
+export { invoke } from "@tauri-apps/api/core";

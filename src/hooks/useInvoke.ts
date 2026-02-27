@@ -1,32 +1,32 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
-interface InvokeState<T> {
-  data: T | null;
-  loading: boolean;
-  error: string | null;
-  invoke: (...args: unknown[]) => Promise<T | null>;
-}
-
-export function useInvoke<T>(_command: string): InvokeState<T> {
+export function useInvoke<T>(command: string, args?: Record<string, unknown>) {
   const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const invoke = useCallback(async (..._args: unknown[]): Promise<T | null> => {
-    setLoading(true);
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
     setError(null);
-    try {
-      // Will use @tauri-apps/api/core invoke
-      const result = null as T | null;
-      setData(result);
-      setLoading(false);
-      return result;
-    } catch (err) {
-      setError(String(err));
-      setLoading(false);
-      return null;
-    }
-  }, []);
 
-  return { data, loading, error, invoke };
+    invoke<T>(command, args)
+      .then((result) => {
+        if (!cancelled) setData(result);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [command]);
+
+  return { data, isLoading, error };
 }

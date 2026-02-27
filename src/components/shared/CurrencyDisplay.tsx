@@ -3,10 +3,11 @@ interface CurrencyDisplayProps {
   asset?: string;
 }
 
-export function CurrencyDisplay({ amount, asset = "USDC" }: CurrencyDisplayProps) {
-  return (
-    <span className="font-mono">
-      {amount} {asset}
-    </span>
-  );
+export function CurrencyDisplay({ amount }: CurrencyDisplayProps) {
+  const num = parseFloat(amount);
+  const formatted = isNaN(num)
+    ? amount
+    : `$${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return <span className="font-mono">{formatted}</span>;
 }

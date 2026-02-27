@@ -1,23 +1,34 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
-interface BalanceState {
+interface UseBalanceReturn {
   balance: string | null;
-  asset: string;
-  loading: boolean;
+  isLoading: boolean;
   error: string | null;
+  refetch: () => void;
 }
 
-export function useBalance(): BalanceState {
-  const [state, setState] = useState<BalanceState>({
-    balance: null,
-    asset: "USDC",
-    loading: true,
-    error: null,
-  });
+export function useBalance(): UseBalanceReturn {
+  const [balance, setBalance] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setState((prev) => ({ ...prev, loading: false }));
+  const fetchBalance = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await invoke<{ balance: string; asset: string }>("get_balance");
+      setBalance(result.balance);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  return state;
+  useEffect(() => {
+    fetchBalance();
+  }, [fetchBalance]);
+
+  return { balance, isLoading, error, refetch: fetchBalance };
 }

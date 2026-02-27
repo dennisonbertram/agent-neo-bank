@@ -1,15 +1,15 @@
 import { create } from "zustand";
 
 interface SettingsState {
-  network: string;
   mockMode: boolean;
+  network: string;
+  setMockMode: (enabled: boolean) => void;
   setNetwork: (network: string) => void;
-  setMockMode: (mockMode: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
-  network: "base-sepolia",
   mockMode: false,
-  setNetwork: (network) => set({ network }),
-  setMockMode: (mockMode) => set({ mockMode }),
+  network: "base-sepolia",
+  setMockMode: (enabled: boolean) => set({ mockMode: enabled }),
+  setNetwork: (network: string) => set({ network }),
 }));

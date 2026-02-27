@@ -1,7 +1,3 @@
-use std::sync::Arc;
-
-use crate::core::services::CoreServices;
-
-pub struct AppState {
-    pub core: Arc<CoreServices>,
-}
+// TODO: implement in Phase 1a
+// AppState wraps Arc<CoreServices> for Tauri state management.
+// Stored via app.manage(AppState::new(...)) in the Tauri setup hook.
