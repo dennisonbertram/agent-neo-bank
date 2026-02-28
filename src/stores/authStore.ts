@@ -1,8 +1,9 @@
 import { create } from 'zustand'
-import { tauriApi } from '../lib/tauri'
+import { tauriApi, isTauri } from '../lib/tauri'
 
 interface AuthState {
   isAuthenticated: boolean
+  isLoading: boolean
   email: string | null
   flowId: string | null
 
@@ -14,29 +15,31 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
+  isLoading: true,
   email: null,
   flowId: null,
 
-  setAuthenticated: (email) => set({ isAuthenticated: true, email }),
+  setAuthenticated: (email) => set({ isAuthenticated: true, email, flowId: null }),
 
   setFlowId: (id) => set({ flowId: id }),
 
   logout: () => set({ isAuthenticated: false, email: null, flowId: null }),
 
   checkAuthStatus: async () => {
+    if (!isTauri()) {
+      // In browser (non-Tauri), skip auth check and mark as loaded
+      set({ isLoading: false })
+      return
+    }
     try {
       const result = await tauriApi.auth.status()
       if (result.authenticated && result.email) {
-        set({ isAuthenticated: true, email: result.email })
+        set({ isAuthenticated: true, email: result.email, isLoading: false })
       } else {
-        // In browser (non-Tauri), keep current state
-        if (typeof window !== 'undefined' && !(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__) return
-        set({ isAuthenticated: false, email: null, flowId: null })
+        set({ isAuthenticated: false, email: null, flowId: null, isLoading: false })
       }
     } catch {
-      // In browser (non-Tauri), keep current state for visual testing
-      if (typeof window !== 'undefined' && !(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__) return
-      set({ isAuthenticated: false, email: null, flowId: null })
+      set({ isAuthenticated: false, email: null, flowId: null, isLoading: false })
     }
   },
 }))

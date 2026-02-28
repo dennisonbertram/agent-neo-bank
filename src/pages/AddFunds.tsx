@@ -1,13 +1,23 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Copy, Grid3X3, Check, CreditCard } from 'lucide-react'
 import { Button } from '../components/ui/Button'
-import placeholderData from '../data/placeholder_data.json'
+import { safeTauriCall, tauriApi, placeholderData } from '../lib/tauri'
 
 export default function AddFunds() {
   const navigate = useNavigate()
   const [copied, setCopied] = useState(false)
-  const address = placeholderData.wallet.address
+  const [address, setAddress] = useState(placeholderData.wallet.address)
+  useEffect(() => {
+    const loadAddress = async () => {
+      const result = await safeTauriCall(
+        () => tauriApi.wallet.getAddress(),
+        { address: placeholderData.wallet.address },
+      )
+      setAddress(result.address)
+    }
+    loadAddress()
+  }, [])
 
   const handleCopy = async () => {
     try {

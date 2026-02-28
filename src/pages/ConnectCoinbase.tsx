@@ -4,7 +4,7 @@ import { ChevronLeft } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { InputGroup } from '../components/ui/InputGroup'
 import { useAuthStore } from '../stores/authStore'
-import { tauriApi } from '../lib/tauri'
+import { tauriApi, isTauri } from '../lib/tauri'
 
 export default function ConnectCoinbase() {
   const [email, setEmail] = useState('')
@@ -19,9 +19,11 @@ export default function ConnectCoinbase() {
     setError(null)
 
     try {
-      const result = await tauriApi.auth.login(email.trim())
-      if (result.flow_id) {
-        setFlowId(result.flow_id)
+      if (isTauri()) {
+        const result = await tauriApi.auth.login(email.trim())
+        if (result.flow_id) {
+          setFlowId(result.flow_id)
+        }
       }
       navigate('/setup/verify', { state: { email: email.trim() } })
     } catch (err) {

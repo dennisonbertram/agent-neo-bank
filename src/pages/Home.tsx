@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Users, Search, Rocket, Landmark, ArrowDownLeft, Code } from 'lucide-react'
 import { TopBar } from '../components/layout/TopBar'
@@ -7,14 +7,141 @@ import { Button } from '../components/ui/Button'
 import { SegmentControl } from '../components/ui/SegmentControl'
 import { AgentPillRow } from '../components/agent/AgentPillRow'
 import { TransactionItem } from '../components/transaction/TransactionItem'
-import placeholderData from '../data/placeholder_data.json'
+import { safeTauriCall, tauriApi, placeholderData } from '../lib/tauri'
+import type { Transaction, Agent, AgentBudgetSummary, BalanceResponse, AddressResponse } from '../types'
+
+/** Map placeholder agent data to the shape the Agent pills need */
+const placeholderAgents = placeholderData.agents.samples
+const placeholderBudgets = placeholderData.budgetSummaries.samples
+
+/** Icon lookup for agent types */
+const AGENT_ICON: Record<string, typeof Search> = {
+  research: Search,
+  deployment: Rocket,
+  treasury: Landmark,
+}
+
+/** Accent colour lookup for agent types */
+const AGENT_ACCENT: Record<string, string> = {
+  research: '#8FB5AA',
+  deployment: '#F2D48C',
+  treasury: '#D9A58B',
+}
 
 export default function Home() {
   const navigate = useNavigate()
   const [segment, setSegment] = useState('Overview')
-  const wallet = placeholderData.wallet
+  const [loading, setLoading] = useState(true)
+
+  // Data states
+  const [balance, setBalance] = useState<BalanceResponse | null>(null)
+  const [address, setAddress] = useState<string>(placeholderData.wallet.address)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [budgets, setBudgets] = useState<AgentBudgetSummary[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      const [balRes, addrRes, txRes, agentRes, budgetRes] = await Promise.all([
+        safeTauriCall(
+          () => tauriApi.wallet.getBalance(),
+          null,
+        ),
+        safeTauriCall(
+          () => tauriApi.wallet.getAddress(),
+          { address: placeholderData.wallet.address } as AddressResponse,
+        ),
+        safeTauriCall(
+          () => tauriApi.transactions.list({ limit: 5, offset: 0 }),
+          null,
+        ),
+        safeTauriCall(
+          () => tauriApi.agents.list(),
+          [] as Agent[],
+        ),
+        safeTauriCall(
+          () => tauriApi.budget.getAgentSummaries(),
+          [] as AgentBudgetSummary[],
+        ),
+      ])
+
+      if (cancelled) return
+
+      setBalance(balRes)
+      setAddress(addrRes.address)
+      setTransactions(txRes?.transactions ?? [])
+      setAgents(agentRes)
+      setBudgets(budgetRes)
+      setLoading(false)
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  // Derive display values — fall back to placeholder when backend returns empty / null
+  const totalBalanceUsd = balance?.balance ?? placeholderData.wallet.totalBalanceUsd
+  const ethFormatted = balance?.balances?.ETH?.formatted ?? placeholderData.wallet.balances.ETH.formatted
+  const usdcFormatted = balance?.balances?.USDC?.formatted ?? placeholderData.wallet.balances.USDC.formatted
+  const walletAddress = address
+
+  // Use real transactions if available, otherwise placeholder samples
+  const displayTransactions: Array<{
+    id: string
+    agent_name: string | null
+    tx_type: string
+    amount: string
+    asset: string
+    category: string
+    description: string
+  }> = transactions.length > 0
+    ? transactions.map(tx => ({
+        id: tx.id,
+        agent_name: agents.find(a => a.id === tx.agent_id)?.name ?? null,
+        tx_type: tx.tx_type,
+        amount: tx.amount,
+        asset: tx.asset,
+        category: tx.category,
+        description: tx.description,
+      }))
+    : placeholderData.transactions.samples
+
+  // Build agent pills from real data or placeholder
+  const agentPills = agents.length > 0
+    ? agents.map(agent => {
+        const budget = budgets.find(b => b.agent_id === agent.id)
+        return {
+          id: agent.id,
+          label: agent.name,
+          value: budget ? `$${budget.daily_spent}` : '$0.00',
+          subValue: agent.status === 'active' ? 'today' : agent.status,
+          accentColor: AGENT_ACCENT[agent.agent_type] ?? '#8FB5AA',
+          icon: AGENT_ICON[agent.agent_type] ?? Search,
+        }
+      })
+    : placeholderAgents.map((a, i) => ({
+        id: a.id,
+        label: a.name,
+        value: `$${placeholderBudgets[i]?.daily_spent ?? '0.00'}`,
+        subValue: a.status === 'active' ? 'today' : a.status,
+        accentColor: a.accentColor,
+        icon: AGENT_ICON[a.agent_type] ?? Search,
+      }))
+
   const user = placeholderData.user
-  const transactions = placeholderData.transactions.samples
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-full relative">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+        </div>
+        <BottomNav activeTab="home" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full relative">
@@ -34,7 +161,7 @@ export default function Home() {
             <div className="flex justify-between items-start mb-6 relative z-[1]">
               <div>
                 <p className="text-[11px] text-white/60">Base Network Balance</p>
-                <p className="text-[40px] font-semibold mt-1 leading-none">{wallet.totalBalanceUsd}</p>
+                <p className="text-[40px] font-semibold mt-1 leading-none">{totalBalanceUsd}</p>
               </div>
               <div className="bg-white/10 px-2 py-1 rounded-[8px] flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-[#0052FF]" />
@@ -44,11 +171,11 @@ export default function Home() {
 
             <div className="flex justify-between items-center relative z-[1]">
               <span className="font-mono text-[13px] text-white/50">
-                {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
               </span>
               <div className="flex gap-3">
-                <span className="text-[12px] font-medium">{wallet.balances.ETH.formatted} ETH</span>
-                <span className="text-[12px] font-medium">{wallet.balances.USDC.formatted} USDC</span>
+                <span className="text-[12px] font-medium">{ethFormatted} ETH</span>
+                <span className="text-[12px] font-medium">{usdcFormatted} USDC</span>
               </div>
             </div>
           </div>
@@ -76,27 +203,16 @@ export default function Home() {
           {segment === 'Agents' ? (
             /* Agent Pills */
             <div className="flex flex-col gap-3 mb-8">
-              <AgentPillRow
-                icon={Search}
-                label="Research"
-                value="$3.50"
-                subValue="today"
-                accentColor="#8FB5AA"
-              />
-              <AgentPillRow
-                icon={Rocket}
-                label="Deploy Bot"
-                value="$0.01"
-                subValue="today"
-                accentColor="#F2D48C"
-              />
-              <AgentPillRow
-                icon={Landmark}
-                label="Treasury"
-                value="$0.00"
-                subValue="paused"
-                accentColor="#D9A58B"
-              />
+              {agentPills.map(pill => (
+                <AgentPillRow
+                  key={pill.id}
+                  icon={pill.icon}
+                  label={pill.label}
+                  value={pill.value}
+                  subValue={pill.subValue}
+                  accentColor={pill.accentColor}
+                />
+              ))}
             </div>
           ) : (
             /* Activity Feed */
@@ -111,7 +227,7 @@ export default function Home() {
                 </button>
               </div>
 
-              {transactions.map((tx, i) => (
+              {displayTransactions.map((tx, i) => (
                 <TransactionItem
                   key={tx.id}
                   icon={
@@ -129,7 +245,7 @@ export default function Home() {
                   amount={`${tx.amount} ${tx.asset}`}
                   tag={tx.category.toUpperCase()}
                   isPositive={tx.tx_type === 'receive'}
-                  isLast={i === transactions.length - 1}
+                  isLast={i === displayTransactions.length - 1}
                   onClick={() => navigate(`/transactions/${tx.id}`)}
                 />
               ))}

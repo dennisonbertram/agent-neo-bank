@@ -1,24 +1,92 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Toggle } from '../components/ui/Toggle'
 import { BottomNav } from '../components/layout/BottomNav'
-import placeholderData from '../data/placeholder_data.json'
+import { safeTauriCall, tauriApi, isTauri, placeholderData } from '../lib/tauri'
+import { useAuthStore } from '../stores/authStore'
+import type { NotificationPreferences } from '../types'
 
 export default function Settings() {
   const navigate = useNavigate()
+  const { email, logout } = useAuthStore()
   const user = placeholderData.user
-  const defaults = placeholderData.notifications.defaults
 
-  const [agentRequests, setAgentRequests] = useState(defaults.on_agent_registration)
-  const [txCompleted, setTxCompleted] = useState(defaults.on_all_tx)
-  const [approvalRequired, setApprovalRequired] = useState(defaults.on_limit_requests)
+  const [agentRequests, setAgentRequests] = useState(false)
+  const [txCompleted, setTxCompleted] = useState(false)
+  const [approvalRequired, setApprovalRequired] = useState(false)
   const [dailyLimit, setDailyLimit] = useState(false)
-  const [lowBalance, setLowBalance] = useState(defaults.on_errors)
+  const [lowBalance, setLowBalance] = useState(false)
+  const [prefsId, setPrefsId] = useState('default')
 
-  const handleLogout = () => {
+  // Load notification preferences from backend
+  useEffect(() => {
+    const loadPrefs = async () => {
+      const defaults = placeholderData.notifications.defaults
+      const fallback: NotificationPreferences = {
+        id: 'default',
+        enabled: defaults.enabled,
+        on_all_tx: defaults.on_all_tx,
+        on_large_tx: defaults.on_large_tx,
+        large_tx_threshold: defaults.large_tx_threshold,
+        on_errors: defaults.on_errors,
+        on_limit_requests: defaults.on_limit_requests,
+        on_agent_registration: defaults.on_agent_registration,
+      }
+      const prefs = await safeTauriCall(() => tauriApi.notifications.getPreferences(), fallback)
+      setPrefsId(prefs.id)
+      setAgentRequests(prefs.on_agent_registration)
+      setTxCompleted(prefs.on_all_tx)
+      setApprovalRequired(prefs.on_limit_requests)
+      setLowBalance(prefs.on_errors)
+      setDailyLimit(prefs.on_large_tx)
+    }
+    loadPrefs()
+  }, [])
+
+  // Save preferences whenever a toggle changes
+  const savePrefs = useCallback(
+    async (updated: Partial<NotificationPreferences>) => {
+      if (!isTauri()) return
+      const prefs: NotificationPreferences = {
+        id: prefsId,
+        enabled: true,
+        on_all_tx: txCompleted,
+        on_large_tx: dailyLimit,
+        large_tx_threshold: '10.00',
+        on_errors: lowBalance,
+        on_limit_requests: approvalRequired,
+        on_agent_registration: agentRequests,
+        ...updated,
+      }
+      try {
+        await tauriApi.notifications.updatePreferences(prefs)
+      } catch {
+        // Silently fail — toggle state remains optimistic
+      }
+    },
+    [prefsId, txCompleted, dailyLimit, lowBalance, approvalRequired, agentRequests],
+  )
+
+  const handleToggle = (
+    setter: (v: boolean) => void,
+    field: keyof NotificationPreferences,
+  ) => (value: boolean) => {
+    setter(value)
+    savePrefs({ [field]: value })
+  }
+
+  const handleLogout = async () => {
     if (window.confirm('Are you sure you want to reset your Coinbase connection?')) {
+      if (isTauri()) {
+        try {
+          await tauriApi.auth.logout()
+        } catch {
+          // Continue with local logout even if backend fails
+        }
+      }
+      logout()
       navigate('/onboarding', { replace: true })
     }
   }
@@ -42,7 +110,7 @@ export default function Settings() {
           </div>
           <div>
             <p className="text-subtitle mb-0.5">{user.name}</p>
-            <p className="text-[14px] text-[var(--text-secondary)]">{user.email}</p>
+            <p className="text-[14px] text-[var(--text-secondary)]">{email || user.email}</p>
           </div>
         </div>
 
@@ -50,11 +118,11 @@ export default function Settings() {
         <div className="mb-8">
           <span className="text-caption block mb-3">Notifications</span>
 
-          <SettingsRow label="Agent Requests" description="New agent registration alerts" checked={agentRequests} onChange={setAgentRequests} />
-          <SettingsRow label="Transaction Completed" description="Confirmation when transactions settle" checked={txCompleted} onChange={setTxCompleted} />
-          <SettingsRow label="Approval Required" description="When agents need spending approval" checked={approvalRequired} onChange={setApprovalRequired} />
-          <SettingsRow label="Daily Limit Reached" description="Alert when daily budget is exhausted" checked={dailyLimit} onChange={setDailyLimit} />
-          <SettingsRow label="Low Balance" description="Warning when wallet balance is low" checked={lowBalance} onChange={setLowBalance} />
+          <SettingsRow label="Agent Requests" description="New agent registration alerts" checked={agentRequests} onChange={handleToggle(setAgentRequests, 'on_agent_registration')} />
+          <SettingsRow label="Transaction Completed" description="Confirmation when transactions settle" checked={txCompleted} onChange={handleToggle(setTxCompleted, 'on_all_tx')} />
+          <SettingsRow label="Approval Required" description="When agents need spending approval" checked={approvalRequired} onChange={handleToggle(setApprovalRequired, 'on_limit_requests')} />
+          <SettingsRow label="Daily Limit Reached" description="Alert when daily budget is exhausted" checked={dailyLimit} onChange={handleToggle(setDailyLimit, 'on_large_tx')} />
+          <SettingsRow label="Low Balance" description="Warning when wallet balance is low" checked={lowBalance} onChange={handleToggle(setLowBalance, 'on_errors')} />
         </div>
 
         {/* Account & Security */}

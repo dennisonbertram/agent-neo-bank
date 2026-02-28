@@ -28,12 +28,22 @@ function DefaultRedirect() {
   return <Navigate to={isAuthenticated ? '/home' : '/onboarding'} replace />
 }
 
+function SplashScreen() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="animate-pulse text-[var(--text-secondary)]">Loading...</div>
+    </div>
+  )
+}
+
 export function App() {
-  const { checkAuthStatus } = useAuthStore()
+  const { checkAuthStatus, isLoading } = useAuthStore()
 
   useEffect(() => {
     checkAuthStatus()
   }, [checkAuthStatus])
+
+  if (isLoading) return <SplashScreen />
 
   return (
     <Routes>

@@ -1,34 +1,158 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { StatusPill } from '../components/ui/StatusPill'
 import { Toggle } from '../components/ui/Toggle'
 import { Stepper } from '../components/ui/Stepper'
 import { Button } from '../components/ui/Button'
-import placeholderData from '../data/placeholder_data.json'
+import { safeTauriCall, tauriApi, placeholderData } from '../lib/tauri'
+import type { Agent, SpendingPolicy, Transaction, AgentBudgetSummary } from '../types'
 
 export default function AgentDetail() {
   const { agentId } = useParams()
   const navigate = useNavigate()
 
-  // Find agent from placeholder data
-  const agent = placeholderData.agents.samples.find((a) => a.id === agentId)
-  const budget = placeholderData.budgetSummaries.samples.find((b) => b.agent_id === agentId)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [agent, setAgent] = useState<Agent | null>(null)
+  const [budget, setBudget] = useState<AgentBudgetSummary | null>(null)
+  const [transactions, setTransactions] = useState<Transaction[]>([])
 
-  const [isPaused, setIsPaused] = useState(agent?.status === 'pending')
-  const [dailyLimit, setDailyLimit] = useState(parseFloat(budget?.daily_cap || '25'))
+  const [isPaused, setIsPaused] = useState(false)
+  const [dailyLimit, setDailyLimit] = useState(25)
   const [perTxLimit, setPerTxLimit] = useState(5)
   const [requireApproval, setRequireApproval] = useState(true)
+
+  // Accent color from placeholder data (not stored in backend Agent type)
+  const placeholderAgent = placeholderData.agents.samples.find((a) => a.id === agentId)
+  const accentColor = placeholderAgent?.accentColor || 'var(--accent-green)'
+
+  const loadData = useCallback(async () => {
+    if (!agentId) return
+    setLoading(true)
+
+    const fallbackAgent = placeholderData.agents.samples.find((a) => a.id === agentId)
+    const fallbackBudget = placeholderData.budgetSummaries.samples.find((b) => b.agent_id === agentId)
+
+    const [agentData, policyData, txData, budgetSummaries] = await Promise.all([
+      safeTauriCall(
+        () => tauriApi.agents.get(agentId),
+        fallbackAgent
+          ? ({
+              id: fallbackAgent.id,
+              name: fallbackAgent.name,
+              description: fallbackAgent.description,
+              purpose: fallbackAgent.purpose || '',
+              agent_type: fallbackAgent.agent_type,
+              capabilities: fallbackAgent.capabilities,
+              status: fallbackAgent.status as Agent['status'],
+              api_token_hash: null,
+              token_prefix: null,
+              balance_visible: true,
+              invitation_code: null,
+              created_at: 0,
+              updated_at: 0,
+              last_active_at: null,
+              metadata: '{}',
+            } satisfies Agent)
+          : null,
+      ),
+      safeTauriCall(
+        () => tauriApi.agents.getPolicy(agentId),
+        fallbackBudget
+          ? ({
+              agent_id: agentId,
+              per_tx_max: '5.00',
+              daily_cap: fallbackBudget.daily_cap,
+              weekly_cap: fallbackBudget.weekly_cap,
+              monthly_cap: fallbackBudget.monthly_cap,
+              auto_approve_max: '5.00',
+              allowlist: [],
+              updated_at: 0,
+            } satisfies SpendingPolicy)
+          : null,
+      ),
+      safeTauriCall(
+        () => tauriApi.agents.getTransactions(agentId, 5),
+        placeholderData.transactions.samples
+          .filter((t) => t.agent_id === agentId)
+          .slice(0, 5) as unknown as Transaction[],
+      ),
+      safeTauriCall(
+        () => tauriApi.budget.getAgentSummaries(),
+        placeholderData.budgetSummaries.samples as unknown as AgentBudgetSummary[],
+      ),
+    ])
+
+    setAgent(agentData as Agent | null)
+    setTransactions(txData)
+
+    const matchedBudget = budgetSummaries.find((b) => b.agent_id === agentId) ?? null
+    setBudget(matchedBudget)
+
+    if (agentData) {
+      setIsPaused(agentData.status === 'pending' || agentData.status === 'suspended')
+    }
+    if (policyData) {
+      setDailyLimit(parseFloat(policyData.daily_cap))
+      setPerTxLimit(parseFloat(policyData.per_tx_max))
+      setRequireApproval(parseFloat(policyData.auto_approve_max) < parseFloat(policyData.per_tx_max))
+    }
+
+    setLoading(false)
+  }, [agentId])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const handleSave = async () => {
+    if (!agentId) return
+    setSaving(true)
+    await safeTauriCall(
+      () =>
+        tauriApi.agents.updatePolicy({
+          agent_id: agentId,
+          per_tx_max: perTxLimit.toFixed(2),
+          daily_cap: dailyLimit.toFixed(2),
+          weekly_cap: (dailyLimit * 7).toFixed(2),
+          monthly_cap: (dailyLimit * 30).toFixed(2),
+          auto_approve_max: requireApproval ? perTxLimit.toFixed(2) : dailyLimit.toFixed(2),
+          allowlist: [],
+          updated_at: Math.floor(Date.now() / 1000),
+        }),
+      undefined,
+    )
+    setSaving(false)
+    navigate(-1)
+  }
 
   const dailySpent = parseFloat(budget?.daily_spent || '0')
   const percentage = dailyLimit > 0 ? (dailySpent / dailyLimit) * 100 : 0
 
-  // Sample transaction history
-  const history = [
-    { id: 1, name: 'Arxiv API Call', time: 'Today, 2:45 PM', amount: '-$1.20' },
-    { id: 2, name: 'Cross-Chain Query', time: 'Today, 11:20 AM', amount: '-$3.80' },
-    { id: 3, name: 'Metadata Storage', time: 'Yesterday, 9:15 PM', amount: '-$1.50' },
-  ]
+  if (loading) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[var(--text-secondary)] border-t-transparent rounded-full animate-spin" />
+        <p className="text-caption mt-3">Loading agent...</p>
+      </div>
+    )
+  }
+
+  const formatTxTime = (createdAt: number) => {
+    if (!createdAt) return ''
+    const date = new Date(createdAt * 1000)
+    const now = new Date()
+    const isToday = date.toDateString() === now.toDateString()
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const isYesterday = date.toDateString() === yesterday.toDateString()
+
+    const timeStr = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    if (isToday) return `Today, ${timeStr}`
+    if (isYesterday) return `Yesterday, ${timeStr}`
+    return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${timeStr}`
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -74,13 +198,13 @@ export default function AgentDetail() {
               className="h-full rounded-[3px] transition-all duration-300"
               style={{
                 width: `${Math.min(percentage, 100)}%`,
-                backgroundColor: agent?.accentColor || 'var(--accent-green)',
+                backgroundColor: accentColor,
                 opacity: isPaused ? 0.3 : 1,
               }}
             />
           </div>
           <div className="flex justify-between mt-2">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.5px]" style={{ color: agent?.accentColor || 'var(--accent-green)' }}>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.5px]" style={{ color: accentColor }}>
               {Math.round(percentage)}% Used
             </span>
             <span className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[var(--text-secondary)]">
@@ -135,25 +259,31 @@ export default function AgentDetail() {
             </button>
           </div>
 
-          {history.map((tx, i) => (
+          {transactions.length === 0 && (
+            <p className="text-body text-center py-6">No transactions yet</p>
+          )}
+
+          {transactions.map((tx, i) => (
             <div
               key={tx.id}
-              className={`flex justify-between items-center py-3 ${i < history.length - 1 ? 'border-b border-[var(--surface-hover)]' : ''}`}
+              className={`flex justify-between items-center py-3 ${i < transactions.length - 1 ? 'border-b border-[var(--surface-hover)]' : ''}`}
             >
               <div>
-                <p className="text-[15px] font-medium text-[var(--text-primary)]">{tx.name}</p>
+                <p className="text-[15px] font-medium text-[var(--text-primary)]">{tx.description || tx.category}</p>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.5px] text-[var(--text-secondary)] mt-0.5">
-                  {tx.time} • Success
+                  {formatTxTime(tx.created_at)} {tx.status === 'confirmed' ? '• Success' : `• ${tx.status}`}
                 </p>
               </div>
-              <span className="text-[15px] font-bold text-[var(--text-primary)]">{tx.amount}</span>
+              <span className="text-[15px] font-bold text-[var(--text-primary)]">
+                {tx.tx_type === 'receive' ? '+' : '-'}${Math.abs(parseFloat(tx.amount)).toFixed(2)}
+              </span>
             </div>
           ))}
         </div>
 
         {/* Save button */}
-        <Button variant="primary" className="mt-8" onClick={() => navigate(-1)}>
-          Save Changes
+        <Button variant="primary" className="mt-8" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </main>
     </div>

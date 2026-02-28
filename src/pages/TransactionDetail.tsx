@@ -1,14 +1,70 @@
+import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft, ExternalLink, Search } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { MetaCard } from '../components/transaction/MetaCard'
-import placeholderData from '../data/placeholder_data.json'
+import { safeTauriCall, placeholderData } from '../lib/tauri'
+import { tauriApi } from '../lib/tauri'
+import type { Transaction } from '../types'
 
 export default function TransactionDetail() {
   const { txId } = useParams()
   const navigate = useNavigate()
+  const [tx, setTx] = useState<Transaction | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const tx = placeholderData.transactions.samples.find((t) => t.id === txId)
+  useEffect(() => {
+    const loadTransaction = async () => {
+      if (!txId) {
+        setIsLoading(false)
+        return
+      }
+      // Build fallback from placeholder data
+      const sample = placeholderData.transactions.samples.find((t) => t.id === txId)
+      const fallbackTx: Transaction | null = sample
+        ? {
+            id: sample.id,
+            agent_id: sample.agent_id ?? null,
+            tx_type: sample.tx_type as Transaction['tx_type'],
+            amount: sample.amount,
+            asset: sample.asset,
+            recipient: null,
+            sender: null,
+            chain_tx_hash: null,
+            status: sample.status as Transaction['status'],
+            category: sample.category,
+            memo: sample.memo,
+            description: sample.description,
+            service_name: sample.service_name,
+            service_url: '',
+            reason: '',
+            webhook_url: null,
+            error_message: null,
+            period_daily: '',
+            period_weekly: '',
+            period_monthly: '',
+            created_at: sample.created_at,
+            updated_at: sample.created_at,
+          }
+        : null
+
+      const result = await safeTauriCall(
+        () => tauriApi.transactions.get(txId),
+        fallbackTx as Transaction,
+      )
+      setTx(result)
+      setIsLoading(false)
+    }
+    loadTransaction()
+  }, [txId])
+
+  if (isLoading) {
+    return (
+      <div className="screen-scroll screen-pad-detail flex items-center justify-center h-full">
+        <p className="text-body text-[var(--text-secondary)]">Loading...</p>
+      </div>
+    )
+  }
 
   if (!tx) {
     return (
@@ -17,6 +73,11 @@ export default function TransactionDetail() {
       </div>
     )
   }
+
+  // Resolve agent name: try placeholder data for display name
+  const agentName = tx.agent_id
+    ? placeholderData.agents.samples.find((a) => a.id === tx.agent_id)?.name ?? tx.agent_id
+    : null
 
   const formattedDate = new Date(tx.created_at * 1000).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric',
@@ -51,13 +112,13 @@ export default function TransactionDetail() {
         </div>
 
         {/* Agent identity row */}
-        {tx.agent_name && (
+        {agentName && (
           <div className="flex items-center gap-3 mb-4">
             <div className="w-[48px] h-[48px] bg-[var(--accent-green)] rounded-[14px] flex items-center justify-center">
               <Search size={24} color="black" strokeWidth={2} />
             </div>
             <div>
-              <p className="text-subtitle">{tx.agent_name}</p>
+              <p className="text-subtitle">{agentName}</p>
               <span className="inline-block bg-[var(--accent-green-dim)] text-[#4A6E65] px-[10px] py-1 rounded-[6px] text-[11px] font-bold mt-1">
                 Verified Agent
               </span>

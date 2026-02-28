@@ -1,4 +1,26 @@
 import { invoke } from '@tauri-apps/api/core'
+import placeholderData from '../data/placeholder_data.json'
+
+/** Returns true when running inside Tauri (not plain browser) */
+export function isTauri(): boolean {
+  return typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
+}
+
+/**
+ * Safely call a Tauri invoke. In browser mode (no Tauri runtime),
+ * returns the provided fallback instead of throwing.
+ */
+export async function safeTauriCall<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+  if (!isTauri()) return fallback
+  try {
+    return await fn()
+  } catch {
+    return fallback
+  }
+}
+
+/** Placeholder data re-exported for browser fallback */
+export { placeholderData }
 import type {
   Agent,
   SpendingPolicy,

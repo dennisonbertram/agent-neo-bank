@@ -4,7 +4,7 @@ import { ChevronLeft } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { OtpInput } from '../components/ui/OtpInput'
 import { useAuthStore } from '../stores/authStore'
-import { tauriApi } from '../lib/tauri'
+import { tauriApi, isTauri } from '../lib/tauri'
 
 export default function VerifyOtp() {
   const [otp, setOtp] = useState('')
@@ -32,12 +32,18 @@ export default function VerifyOtp() {
     setError(null)
 
     try {
-      const result = await tauriApi.auth.verify(otp)
-      if (result.status === 'verified') {
+      if (isTauri()) {
+        const result = await tauriApi.auth.verify(otp)
+        if (result.status === 'verified') {
+          setAuthenticated(email)
+          navigate('/home', { replace: true })
+        } else {
+          setError('Verification failed. Please try again.')
+        }
+      } else {
+        // Browser mode: skip verification, proceed directly
         setAuthenticated(email)
         navigate('/home', { replace: true })
-      } else {
-        setError('Verification failed. Please try again.')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed. Please check your code.')
@@ -49,7 +55,9 @@ export default function VerifyOtp() {
   const handleResend = async () => {
     if (countdown > 0) return
     try {
-      await tauriApi.auth.login(email)
+      if (isTauri()) {
+        await tauriApi.auth.login(email)
+      }
       setCountdown(42)
       setOtp('')
       setError(null)
