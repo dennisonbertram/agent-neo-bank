@@ -1,4 +1,5 @@
 pub mod auth_middleware;
+pub mod mcp_http_server;
 pub mod mcp_router;
 pub mod mcp_server;
 pub mod mcp_tools;
