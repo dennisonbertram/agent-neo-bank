@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Copy, Check, Wallet } from "lucide-react";
 
 interface FundStepProps {
@@ -8,13 +8,23 @@ interface FundStepProps {
 
 export function FundStep({ address, onNext }: FundStepProps) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const addressReady = address !== "0x..." && address !== "";
+
+  useEffect(() => {
+    return () => { clearTimeout(timerRef.current); };
+  }, []);
 
   async function handleCopy() {
     if (!addressReady) return;
-    await navigator.clipboard.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard may fail in restricted contexts
+    }
   }
 
   return (

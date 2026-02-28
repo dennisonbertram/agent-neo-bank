@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { ChevronRight, Bot, Pause, RefreshCw, X } from "lucide-react";
@@ -20,9 +20,23 @@ export function AgentDetail() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const requestRef = useRef(0);
+
+  // Reset state immediately when id changes to prevent stale display
+  useEffect(() => {
+    setAgent(null);
+    setPolicy(null);
+    setEditPolicy(null);
+    setTransactions([]);
+    setBudget(null);
+    setIsEditing(false);
+    setSaveError(null);
+    setValidationErrors({});
+  }, [id]);
 
   const loadData = useCallback(async () => {
     if (!id) return;
+    const requestId = ++requestRef.current;
     setIsLoading(true);
     try {
       const [agentData, policyData, txData, budgetSummaries] = await Promise.all([
@@ -34,6 +48,8 @@ export function AgentDetail() {
         }),
         invoke<AgentBudgetSummary[]>("get_agent_budget_summaries").catch(() => [] as AgentBudgetSummary[]),
       ]);
+      // Only commit state if this is still the latest request
+      if (requestRef.current !== requestId) return;
       setAgent(agentData);
       setPolicy(policyData);
       setEditPolicy(policyData);
@@ -41,9 +57,11 @@ export function AgentDetail() {
       const agentBudget = budgetSummaries.find((b) => b.agent_id === id) ?? null;
       setBudget(agentBudget);
     } catch {
-      // Error loading data
+      if (requestRef.current !== requestId) return;
     } finally {
-      setIsLoading(false);
+      if (requestRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
   }, [id]);
 

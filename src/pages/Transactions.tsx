@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { formatCurrency, truncateAddress } from "@/lib/format";
 import { ArrowUpDown, Download, Search } from "lucide-react";
@@ -114,10 +114,12 @@ export function Transactions() {
   const [agentFilter, setAgentFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const txRequestRef = useRef(0);
 
   const agentMap = new Map(agents.map((a) => [a.id, a.name]));
 
   const fetchTransactions = useCallback(async () => {
+    const requestId = ++txRequestRef.current;
     setIsLoading(true);
     try {
       const params: Record<string, unknown> = {
@@ -135,13 +137,17 @@ export function Transactions() {
         "list_transactions",
         params
       );
+      if (txRequestRef.current !== requestId) return;
       setTransactions(result.transactions);
       setTotal(result.total);
     } catch {
+      if (txRequestRef.current !== requestId) return;
       setTransactions([]);
       setTotal(0);
     } finally {
-      setIsLoading(false);
+      if (txRequestRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
   }, [offset, statusFilter, agentFilter]);
 

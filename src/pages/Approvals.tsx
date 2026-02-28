@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { ApprovalRequest, Agent } from "../types";
 import { Bot, Check, X, CheckCircle } from "lucide-react";
@@ -52,19 +52,25 @@ export function Approvals() {
   const [filter, setFilter] = useState<string>("pending");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const approvalRequestRef = useRef(0);
 
   const loadApprovals = useCallback(async () => {
+    const requestId = ++approvalRequestRef.current;
     setIsLoading(true);
     setError(null);
     try {
       const args =
         filter === "pending" ? { status: "pending" } : {};
       const result = await invoke<ApprovalRequest[]>("list_approvals", args);
+      if (approvalRequestRef.current !== requestId) return;
       setApprovals(result);
     } catch {
+      if (approvalRequestRef.current !== requestId) return;
       setError("Couldn't load approvals");
     } finally {
-      setIsLoading(false);
+      if (approvalRequestRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
   }, [filter]);
 

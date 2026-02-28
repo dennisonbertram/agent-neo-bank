@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Wallet, CreditCard, QrCode, AlertCircle } from "lucide-react";
 
@@ -7,6 +7,11 @@ export function Fund() {
   const [copied, setCopied] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [addressError, setAddressError] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    return () => { clearTimeout(timerRef.current); };
+  }, []);
 
   useEffect(() => {
     invoke<string>("get_wallet_address")
@@ -28,7 +33,8 @@ export function Fund() {
     try {
       await navigator.clipboard.writeText(walletAddress);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard may fail
     }
