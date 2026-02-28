@@ -72,6 +72,68 @@ pub fn get_tool_definitions() -> Vec<McpTool> {
                 "required": ["name", "purpose", "invitation_code"]
             }),
         },
+        McpTool {
+            name: "get_address".to_string(),
+            description: "Get the wallet's public address. Use this to receive payments or verify identity.".to_string(),
+            input_schema: serde_json::json!({ "type": "object", "properties": {} }),
+        },
+        McpTool {
+            name: "trade_tokens".to_string(),
+            description: "Swap tokens on Base network. Subject to your spending policy based on the source amount.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "from_asset": { "type": "string", "enum": ["ETH", "USDC", "WETH"], "description": "Source token" },
+                    "to_asset": { "type": "string", "enum": ["ETH", "USDC", "WETH"], "description": "Destination token" },
+                    "amount": { "type": "string", "description": "Amount of source token to swap" }
+                },
+                "required": ["from_asset", "to_asset", "amount"]
+            }),
+        },
+        McpTool {
+            name: "pay_x402".to_string(),
+            description: "Pay for an X402 service. The URL will be called and payment made automatically. Subject to spending policy.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "url": { "type": "string", "description": "X402-enabled service URL" },
+                    "max_amount": { "type": "string", "description": "Maximum amount willing to pay (optional safety cap)" }
+                },
+                "required": ["url"]
+            }),
+        },
+        McpTool {
+            name: "list_x402_services".to_string(),
+            description: "Browse available X402 services in the bazaar.".to_string(),
+            input_schema: serde_json::json!({ "type": "object", "properties": {} }),
+        },
+        McpTool {
+            name: "search_x402_services".to_string(),
+            description: "Search the X402 bazaar for services matching a query.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "description": "Search terms" }
+                },
+                "required": ["query"]
+            }),
+        },
+        McpTool {
+            name: "get_x402_details".to_string(),
+            description: "Get payment details for an X402 service before paying.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "url": { "type": "string", "description": "X402 service URL" }
+                },
+                "required": ["url"]
+            }),
+        },
+        McpTool {
+            name: "get_agent_info".to_string(),
+            description: "Get your agent profile information — name, status, and when you were created.".to_string(),
+            input_schema: serde_json::json!({ "type": "object", "properties": {} }),
+        },
     ]
 }
 
@@ -82,7 +144,7 @@ mod tests {
     #[test]
     fn test_get_tool_definitions_returns_all_tools() {
         let tools = get_tool_definitions();
-        assert_eq!(tools.len(), 6);
+        assert_eq!(tools.len(), 13);
 
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
         assert!(names.contains(&"send_payment"));
@@ -98,7 +160,7 @@ mod tests {
         let tools = get_tool_definitions();
         let json = serde_json::to_value(&tools).unwrap();
         assert!(json.is_array());
-        assert_eq!(json.as_array().unwrap().len(), 6);
+        assert_eq!(json.as_array().unwrap().len(), 13);
     }
 
     #[test]

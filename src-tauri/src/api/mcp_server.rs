@@ -471,7 +471,7 @@ mod tests {
         assert!(response.error.is_none(), "tools/list should not error");
         let result = response.result.unwrap();
         let tools = result["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 6);
+        assert_eq!(tools.len(), 13);
     }
 
     #[test]

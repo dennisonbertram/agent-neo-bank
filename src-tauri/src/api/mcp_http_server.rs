@@ -628,7 +628,7 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let json = body_json(resp).await;
         let tools = json["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 6);
+        assert_eq!(tools.len(), 13);
     }
 
     // ------------------------------------------------------------------

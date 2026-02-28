@@ -82,8 +82,8 @@ fn test_mcp_end_to_end_tools_list() {
     let tools = result["tools"].as_array().unwrap();
     assert_eq!(
         tools.len(),
-        6,
-        "MCP server should expose 6 tools, got: {}",
+        13,
+        "MCP server should expose 13 tools, got: {}",
         tools.len()
     );
 

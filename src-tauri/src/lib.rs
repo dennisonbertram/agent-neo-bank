@@ -9,6 +9,8 @@ mod state;
 pub mod test_helpers;
 
 use tauri::Manager;
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::tray::TrayIconBuilder;
 
 use crate::config::AppConfig;
 use crate::core::approval_manager::ApprovalManager;
@@ -35,7 +37,7 @@ pub fn run() {
                     .to_string();
             }
 
-            let app_state = AppState::new(config)
+            let app_state = AppState::new(config.clone())
                 .expect("Failed to create AppState");
 
             // Spawn periodic cleanup of expired approvals (every 5 minutes)
@@ -66,7 +68,80 @@ pub fn run() {
                 }
             });
 
+            // Spawn MCP HTTP server
+            if config.mcp_enabled {
+                let mcp_db = app_state.db.clone();
+                let mcp_port = config.mcp_port;
+                tauri::async_runtime::spawn(async move {
+                    // Build MCP state directly from the shared database
+                    let mcp_state = crate::api::mcp_http_server::McpHttpState::new(mcp_db);
+                    let router = crate::api::mcp_http_server::build_router(mcp_state);
+                    let listener = match tokio::net::TcpListener::bind(
+                        format!("127.0.0.1:{}", mcp_port),
+                    )
+                    .await
+                    {
+                        Ok(l) => l,
+                        Err(e) => {
+                            tracing::error!(error = %e, "Failed to bind MCP HTTP server");
+                            return;
+                        }
+                    };
+                    tracing::info!("MCP HTTP server listening on 127.0.0.1:{}", mcp_port);
+                    if let Err(e) = axum::serve(listener, router).await {
+                        tracing::error!(error = %e, "MCP HTTP server failed");
+                    }
+                });
+            }
+
             app.manage(app_state);
+
+            // System tray
+            let open = MenuItemBuilder::with_id("open", "Open Wallet").build(app)?;
+            let pause = MenuItemBuilder::with_id("pause", "Pause All Agents").build(app)?;
+            let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+            let menu = MenuBuilder::new(app)
+                .items(&[&open, &pause, &quit])
+                .build()?;
+
+            let tray_icon = tauri::image::Image::from_bytes(
+                include_bytes!("../icons/32x32.png"),
+            )?;
+
+            TrayIconBuilder::new()
+                .icon(tray_icon)
+                .menu(&menu)
+                .tooltip("Tally Agentic Wallet")
+                .on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "open" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                window.show().ok();
+                                window.set_focus().ok();
+                            }
+                        }
+                        "pause" => {
+                            // TODO: Toggle kill switch via app state
+                            tracing::info!("Pause All Agents toggled from tray");
+                        }
+                        "quit" => {
+                            std::process::exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .build(app)?;
+
+            // Minimize to tray on window close instead of quitting
+            if let Some(window) = app.get_webview_window("main") {
+                let win = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        win.hide().ok();
+                    }
+                });
+            }
 
             // Open devtools in debug builds
             #[cfg(debug_assertions)]

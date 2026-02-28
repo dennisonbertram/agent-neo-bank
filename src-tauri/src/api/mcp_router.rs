@@ -69,6 +69,13 @@ impl McpRouter {
             "request_limit_increase" => self.handle_request_limit_increase(arguments),
             "get_transactions" => self.handle_get_transactions(arguments),
             "register_agent" => self.handle_register_agent(arguments),
+            "get_address" => self.handle_get_address(),
+            "trade_tokens" => self.handle_trade_tokens(arguments),
+            "pay_x402" => self.handle_pay_x402(arguments),
+            "list_x402_services" => self.handle_list_x402_services(),
+            "search_x402_services" => self.handle_search_x402_services(arguments),
+            "get_x402_details" => self.handle_get_x402_details(arguments),
+            "get_agent_info" => self.handle_get_agent_info(),
             _ => Err(AppError::NotFound(format!("Unknown tool: {}", tool_name))),
         }
     }
@@ -360,6 +367,393 @@ impl McpRouter {
         }))
     }
 
+    fn handle_get_address(&self) -> Result<Value, AppError> {
+        // Placeholder — will call `awal address` once CLI executor is wired
+        Ok(serde_json::json!({
+            "address": "0x0000000000000000000000000000000000000000",
+            "network": "base",
+            "message": "Address retrieval not yet wired to CLI"
+        }))
+    }
+
+    fn handle_trade_tokens(&self, arguments: Value) -> Result<Value, AppError> {
+        let from_asset = arguments
+            .get("from_asset")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::InvalidInput("Missing 'from_asset' field".to_string()))?
+            .to_string();
+        let to_asset = arguments
+            .get("to_asset")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::InvalidInput("Missing 'to_asset' field".to_string()))?
+            .to_string();
+        let amount = arguments
+            .get("amount")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::InvalidInput("Missing 'amount' field".to_string()))?
+            .to_string();
+
+        if from_asset == to_asset {
+            return Err(AppError::InvalidInput(
+                "Cannot trade a token for itself".to_string(),
+            ));
+        }
+
+        let now = chrono::Utc::now();
+        let now_ts = now.timestamp();
+        let tx_id = uuid::Uuid::new_v4().to_string();
+
+        let period_d = daily_period_key(&now);
+        let period_w = weekly_period_key(&now);
+        let period_m = monthly_period_key(&now);
+
+        let policy_result = queries::check_policy_and_reserve_atomic(
+            &self.db,
+            &self.agent_id,
+            &amount,
+            &format!("trade:{}>{}", from_asset, to_asset),
+            "0",
+            &period_d,
+            &period_w,
+            &period_m,
+            now_ts,
+        )?;
+
+        match policy_result {
+            AtomicPolicyResult::Denied { reason } => {
+                let tx = Transaction {
+                    id: tx_id.clone(),
+                    agent_id: Some(self.agent_id.clone()),
+                    tx_type: TxType::Send,
+                    amount: amount.clone(),
+                    asset: from_asset.clone(),
+                    recipient: None,
+                    sender: None,
+                    chain_tx_hash: None,
+                    status: TxStatus::Denied,
+                    category: "trade".to_string(),
+                    memo: String::new(),
+                    description: format!("Trade {} {} -> {}", amount, from_asset, to_asset),
+                    service_name: "mcp".to_string(),
+                    service_url: String::new(),
+                    reason: reason.clone(),
+                    webhook_url: None,
+                    error_message: Some(reason.clone()),
+                    period_daily: period_d,
+                    period_weekly: period_w,
+                    period_monthly: period_m,
+                    created_at: now_ts,
+                    updated_at: now_ts,
+                };
+                queries::insert_transaction(&self.db, &tx)?;
+                Err(AppError::PolicyViolation(reason))
+            }
+            AtomicPolicyResult::AutoApproved => {
+                let tx = Transaction {
+                    id: tx_id.clone(),
+                    agent_id: Some(self.agent_id.clone()),
+                    tx_type: TxType::Send,
+                    amount: amount.clone(),
+                    asset: from_asset.clone(),
+                    recipient: None,
+                    sender: None,
+                    chain_tx_hash: None,
+                    status: TxStatus::Pending,
+                    category: "trade".to_string(),
+                    memo: String::new(),
+                    description: format!("Trade {} {} -> {}", amount, from_asset, to_asset),
+                    service_name: "mcp".to_string(),
+                    service_url: String::new(),
+                    reason: String::new(),
+                    webhook_url: None,
+                    error_message: None,
+                    period_daily: period_d,
+                    period_weekly: period_w,
+                    period_monthly: period_m,
+                    created_at: now_ts,
+                    updated_at: now_ts,
+                };
+                queries::insert_transaction(&self.db, &tx)?;
+
+                Ok(serde_json::json!({
+                    "tx_id": tx_id,
+                    "status": "pending",
+                    "from_asset": from_asset,
+                    "to_asset": to_asset,
+                    "amount": amount
+                }))
+            }
+            AtomicPolicyResult::RequiresApproval { reason } => {
+                let tx = Transaction {
+                    id: tx_id.clone(),
+                    agent_id: Some(self.agent_id.clone()),
+                    tx_type: TxType::Send,
+                    amount: amount.clone(),
+                    asset: from_asset.clone(),
+                    recipient: None,
+                    sender: None,
+                    chain_tx_hash: None,
+                    status: TxStatus::AwaitingApproval,
+                    category: "trade".to_string(),
+                    memo: String::new(),
+                    description: format!("Trade {} {} -> {}", amount, from_asset, to_asset),
+                    service_name: "mcp".to_string(),
+                    service_url: String::new(),
+                    reason: reason.clone(),
+                    webhook_url: None,
+                    error_message: None,
+                    period_daily: period_d,
+                    period_weekly: period_w,
+                    period_monthly: period_m,
+                    created_at: now_ts,
+                    updated_at: now_ts,
+                };
+                queries::insert_transaction(&self.db, &tx)?;
+
+                let approval_id = uuid::Uuid::new_v4().to_string();
+                let payload = serde_json::json!({
+                    "from_asset": from_asset,
+                    "to_asset": to_asset,
+                    "amount": amount,
+                    "reason": reason,
+                });
+                let approval = ApprovalRequest {
+                    id: approval_id.clone(),
+                    agent_id: self.agent_id.clone(),
+                    request_type: ApprovalRequestType::Transaction,
+                    payload: payload.to_string(),
+                    status: ApprovalStatus::Pending,
+                    tx_id: Some(tx_id.clone()),
+                    expires_at: now_ts + 86400,
+                    created_at: now_ts,
+                    resolved_at: None,
+                    resolved_by: None,
+                };
+                queries::insert_approval_request(&self.db, &approval)?;
+
+                Ok(serde_json::json!({
+                    "tx_id": tx_id,
+                    "status": "awaiting_approval",
+                    "approval_id": approval_id,
+                    "reason": reason,
+                    "from_asset": from_asset,
+                    "to_asset": to_asset,
+                    "amount": amount
+                }))
+            }
+        }
+    }
+
+    fn handle_pay_x402(&self, arguments: Value) -> Result<Value, AppError> {
+        let url = arguments
+            .get("url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::InvalidInput("Missing 'url' field".to_string()))?
+            .to_string();
+        let max_amount = arguments
+            .get("max_amount")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // For x402, we use the max_amount as the policy-checked amount.
+        // If no max_amount is provided, we use "0" as a placeholder
+        // (real implementation will query the service for the price first).
+        let policy_amount = max_amount.as_deref().unwrap_or("0");
+
+        let now = chrono::Utc::now();
+        let now_ts = now.timestamp();
+        let tx_id = uuid::Uuid::new_v4().to_string();
+
+        let period_d = daily_period_key(&now);
+        let period_w = weekly_period_key(&now);
+        let period_m = monthly_period_key(&now);
+
+        let policy_result = queries::check_policy_and_reserve_atomic(
+            &self.db,
+            &self.agent_id,
+            policy_amount,
+            &url,
+            "0",
+            &period_d,
+            &period_w,
+            &period_m,
+            now_ts,
+        )?;
+
+        match policy_result {
+            AtomicPolicyResult::Denied { reason } => {
+                let tx = Transaction {
+                    id: tx_id.clone(),
+                    agent_id: Some(self.agent_id.clone()),
+                    tx_type: TxType::Send,
+                    amount: policy_amount.to_string(),
+                    asset: "USDC".to_string(),
+                    recipient: Some(url.clone()),
+                    sender: None,
+                    chain_tx_hash: None,
+                    status: TxStatus::Denied,
+                    category: "x402".to_string(),
+                    memo: String::new(),
+                    description: format!("X402 payment to {}", url),
+                    service_name: "x402".to_string(),
+                    service_url: url.clone(),
+                    reason: reason.clone(),
+                    webhook_url: None,
+                    error_message: Some(reason.clone()),
+                    period_daily: period_d,
+                    period_weekly: period_w,
+                    period_monthly: period_m,
+                    created_at: now_ts,
+                    updated_at: now_ts,
+                };
+                queries::insert_transaction(&self.db, &tx)?;
+                Err(AppError::PolicyViolation(reason))
+            }
+            AtomicPolicyResult::AutoApproved => {
+                let tx = Transaction {
+                    id: tx_id.clone(),
+                    agent_id: Some(self.agent_id.clone()),
+                    tx_type: TxType::Send,
+                    amount: policy_amount.to_string(),
+                    asset: "USDC".to_string(),
+                    recipient: Some(url.clone()),
+                    sender: None,
+                    chain_tx_hash: None,
+                    status: TxStatus::Pending,
+                    category: "x402".to_string(),
+                    memo: String::new(),
+                    description: format!("X402 payment to {}", url),
+                    service_name: "x402".to_string(),
+                    service_url: url.clone(),
+                    reason: String::new(),
+                    webhook_url: None,
+                    error_message: None,
+                    period_daily: period_d,
+                    period_weekly: period_w,
+                    period_monthly: period_m,
+                    created_at: now_ts,
+                    updated_at: now_ts,
+                };
+                queries::insert_transaction(&self.db, &tx)?;
+
+                Ok(serde_json::json!({
+                    "tx_id": tx_id,
+                    "status": "pending",
+                    "url": url,
+                    "amount": policy_amount
+                }))
+            }
+            AtomicPolicyResult::RequiresApproval { reason } => {
+                let tx = Transaction {
+                    id: tx_id.clone(),
+                    agent_id: Some(self.agent_id.clone()),
+                    tx_type: TxType::Send,
+                    amount: policy_amount.to_string(),
+                    asset: "USDC".to_string(),
+                    recipient: Some(url.clone()),
+                    sender: None,
+                    chain_tx_hash: None,
+                    status: TxStatus::AwaitingApproval,
+                    category: "x402".to_string(),
+                    memo: String::new(),
+                    description: format!("X402 payment to {}", url),
+                    service_name: "x402".to_string(),
+                    service_url: url.clone(),
+                    reason: reason.clone(),
+                    webhook_url: None,
+                    error_message: None,
+                    period_daily: period_d,
+                    period_weekly: period_w,
+                    period_monthly: period_m,
+                    created_at: now_ts,
+                    updated_at: now_ts,
+                };
+                queries::insert_transaction(&self.db, &tx)?;
+
+                let approval_id = uuid::Uuid::new_v4().to_string();
+                let payload = serde_json::json!({
+                    "url": url,
+                    "amount": policy_amount,
+                    "reason": reason,
+                });
+                let approval = ApprovalRequest {
+                    id: approval_id.clone(),
+                    agent_id: self.agent_id.clone(),
+                    request_type: ApprovalRequestType::Transaction,
+                    payload: payload.to_string(),
+                    status: ApprovalStatus::Pending,
+                    tx_id: Some(tx_id.clone()),
+                    expires_at: now_ts + 86400,
+                    created_at: now_ts,
+                    resolved_at: None,
+                    resolved_by: None,
+                };
+                queries::insert_approval_request(&self.db, &approval)?;
+
+                Ok(serde_json::json!({
+                    "tx_id": tx_id,
+                    "status": "awaiting_approval",
+                    "approval_id": approval_id,
+                    "reason": reason,
+                    "url": url,
+                    "amount": policy_amount
+                }))
+            }
+        }
+    }
+
+    fn handle_list_x402_services(&self) -> Result<Value, AppError> {
+        // Placeholder — will call `awal x402 bazaar list` once CLI executor is wired
+        Ok(serde_json::json!({
+            "services": [],
+            "message": "X402 bazaar listing not yet wired to CLI"
+        }))
+    }
+
+    fn handle_search_x402_services(&self, arguments: Value) -> Result<Value, AppError> {
+        let query = arguments
+            .get("query")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::InvalidInput("Missing 'query' field".to_string()))?
+            .to_string();
+
+        // Placeholder — will call `awal x402 bazaar search <query>` once CLI executor is wired
+        Ok(serde_json::json!({
+            "query": query,
+            "services": [],
+            "message": "X402 bazaar search not yet wired to CLI"
+        }))
+    }
+
+    fn handle_get_x402_details(&self, arguments: Value) -> Result<Value, AppError> {
+        let url = arguments
+            .get("url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::InvalidInput("Missing 'url' field".to_string()))?
+            .to_string();
+
+        // Placeholder — will call `awal x402 details <url>` once CLI executor is wired
+        Ok(serde_json::json!({
+            "url": url,
+            "amount": null,
+            "asset": null,
+            "description": null,
+            "message": "X402 details not yet wired to CLI"
+        }))
+    }
+
+    fn handle_get_agent_info(&self) -> Result<Value, AppError> {
+        let agent = queries::get_agent(&self.db, &self.agent_id)?;
+        Ok(serde_json::json!({
+            "agent_id": agent.id,
+            "name": agent.name,
+            "status": agent.status.to_string(),
+            "created_at": agent.created_at,
+            "purpose": agent.purpose,
+            "agent_type": agent.agent_type
+        }))
+    }
+
     fn handle_register_agent(&self, arguments: Value) -> Result<Value, AppError> {
         let name = arguments
             .get("name")
@@ -468,11 +862,18 @@ mod tests {
         let router = make_router(db, &agent_id);
 
         let tools = router.list_tools(true);
-        assert_eq!(tools.len(), 6);
+        assert_eq!(tools.len(), 13);
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
         assert!(names.contains(&"send_payment"));
         assert!(names.contains(&"check_balance"));
         assert!(names.contains(&"register_agent"));
+        assert!(names.contains(&"get_address"));
+        assert!(names.contains(&"trade_tokens"));
+        assert!(names.contains(&"pay_x402"));
+        assert!(names.contains(&"list_x402_services"));
+        assert!(names.contains(&"search_x402_services"));
+        assert!(names.contains(&"get_x402_details"));
+        assert!(names.contains(&"get_agent_info"));
     }
 
     #[test]
@@ -711,6 +1112,276 @@ mod tests {
     }
 
     // -- error_code mapping --
+
+    // -- get_address tests --
+
+    #[test]
+    fn test_get_address_returns_address_string() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router
+            .handle_tool_call("get_address", serde_json::json!({}))
+            .unwrap();
+
+        assert!(result.get("address").is_some());
+        let addr = result["address"].as_str().unwrap();
+        assert!(addr.starts_with("0x"));
+        assert!(result.get("network").is_some());
+    }
+
+    // -- trade_tokens tests --
+
+    #[test]
+    fn test_trade_tokens_validates_required_fields() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        // Missing from_asset
+        assert!(router
+            .handle_tool_call(
+                "trade_tokens",
+                serde_json::json!({ "to_asset": "USDC", "amount": "1.0" })
+            )
+            .is_err());
+
+        // Missing to_asset
+        assert!(router
+            .handle_tool_call(
+                "trade_tokens",
+                serde_json::json!({ "from_asset": "ETH", "amount": "1.0" })
+            )
+            .is_err());
+
+        // Missing amount
+        assert!(router
+            .handle_tool_call(
+                "trade_tokens",
+                serde_json::json!({ "from_asset": "ETH", "to_asset": "USDC" })
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn test_trade_tokens_same_asset_error() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router.handle_tool_call(
+            "trade_tokens",
+            serde_json::json!({ "from_asset": "ETH", "to_asset": "ETH", "amount": "1.0" }),
+        );
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::InvalidInput(msg) => assert!(msg.contains("itself")),
+            other => panic!("Expected InvalidInput, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_trade_tokens_applies_policy() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        // Amount within auto-approve (50)
+        let result = router
+            .handle_tool_call(
+                "trade_tokens",
+                serde_json::json!({
+                    "from_asset": "ETH",
+                    "to_asset": "USDC",
+                    "amount": "25"
+                }),
+            )
+            .unwrap();
+
+        assert!(result.get("tx_id").is_some());
+        assert_eq!(result["status"], "pending");
+        assert_eq!(result["from_asset"], "ETH");
+        assert_eq!(result["to_asset"], "USDC");
+        assert_eq!(result["amount"], "25");
+    }
+
+    #[test]
+    fn test_trade_tokens_over_per_tx_max_denied() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db); // per_tx_max = 100
+        let router = make_router(db, &agent_id);
+
+        let result = router.handle_tool_call(
+            "trade_tokens",
+            serde_json::json!({
+                "from_asset": "ETH",
+                "to_asset": "USDC",
+                "amount": "200"
+            }),
+        );
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::PolicyViolation(_) => {}
+            other => panic!("Expected PolicyViolation, got: {:?}", other),
+        }
+    }
+
+    // -- pay_x402 tests --
+
+    #[test]
+    fn test_pay_x402_validates_url() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        // Missing url
+        let result = router.handle_tool_call("pay_x402", serde_json::json!({}));
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::InvalidInput(msg) => assert!(msg.contains("url")),
+            other => panic!("Expected InvalidInput, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_pay_x402_applies_policy() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router
+            .handle_tool_call(
+                "pay_x402",
+                serde_json::json!({
+                    "url": "https://example.com/api/data",
+                    "max_amount": "10"
+                }),
+            )
+            .unwrap();
+
+        assert!(result.get("tx_id").is_some());
+        assert_eq!(result["status"], "pending");
+        assert_eq!(result["url"], "https://example.com/api/data");
+    }
+
+    #[test]
+    fn test_pay_x402_over_limit_denied() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db); // per_tx_max = 100
+        let router = make_router(db, &agent_id);
+
+        let result = router.handle_tool_call(
+            "pay_x402",
+            serde_json::json!({
+                "url": "https://expensive-service.com/api",
+                "max_amount": "200"
+            }),
+        );
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::PolicyViolation(_) => {}
+            other => panic!("Expected PolicyViolation, got: {:?}", other),
+        }
+    }
+
+    // -- list_x402_services tests --
+
+    #[test]
+    fn test_list_x402_services_returns_expected_shape() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router
+            .handle_tool_call("list_x402_services", serde_json::json!({}))
+            .unwrap();
+
+        assert!(result.get("services").is_some());
+        assert!(result["services"].is_array());
+    }
+
+    // -- search_x402_services tests --
+
+    #[test]
+    fn test_search_x402_services_validates_query() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        // Missing query
+        let result = router.handle_tool_call("search_x402_services", serde_json::json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_search_x402_services_returns_expected_shape() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router
+            .handle_tool_call(
+                "search_x402_services",
+                serde_json::json!({ "query": "weather" }),
+            )
+            .unwrap();
+
+        assert!(result.get("services").is_some());
+        assert!(result["services"].is_array());
+        assert_eq!(result["query"], "weather");
+    }
+
+    // -- get_x402_details tests --
+
+    #[test]
+    fn test_get_x402_details_validates_url() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router.handle_tool_call("get_x402_details", serde_json::json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_x402_details_returns_expected_shape() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router
+            .handle_tool_call(
+                "get_x402_details",
+                serde_json::json!({ "url": "https://example.com/api" }),
+            )
+            .unwrap();
+
+        assert_eq!(result["url"], "https://example.com/api");
+    }
+
+    // -- get_agent_info tests --
+
+    #[test]
+    fn test_get_agent_info_returns_agent_profile() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router
+            .handle_tool_call("get_agent_info", serde_json::json!({}))
+            .unwrap();
+
+        assert_eq!(result["agent_id"], agent_id);
+        assert_eq!(result["name"], "TestBot");
+        assert!(result.get("status").is_some());
+        assert!(result.get("created_at").is_some());
+        assert!(result.get("purpose").is_some());
+        assert!(result.get("agent_type").is_some());
+    }
 
     #[test]
     fn test_error_code_mapping() {

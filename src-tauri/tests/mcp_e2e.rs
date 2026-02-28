@@ -242,7 +242,7 @@ fn test_mcp_list_tools() {
 
     let result = response.result.unwrap();
     let tools = result["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 6, "Should return all 6 tools, got {}", tools.len());
+    assert_eq!(tools.len(), 13, "Should return all 13 tools, got {}", tools.len());
 
     let tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     assert!(tool_names.contains(&"send_payment"), "Missing send_payment");
@@ -433,7 +433,7 @@ fn test_mcp_full_lifecycle() {
     let list_resp = server.handle_request(&list_req);
     assert!(list_resp.error.is_none(), "tools/list should succeed");
     let tools = list_resp.result.unwrap()["tools"].as_array().unwrap().len();
-    assert_eq!(tools, 6);
+    assert_eq!(tools, 13);
 
     // Step 4: Check balance
     let balance_req = make_tools_call_request(3, "check_balance", serde_json::json!({}));
