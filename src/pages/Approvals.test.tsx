@@ -70,9 +70,8 @@ describe("Approvals", () => {
     expect(await screen.findByText("Payment Bot")).toBeInTheDocument();
     expect(screen.getByText("Treasury Agent")).toBeInTheDocument();
 
-    // Verify transaction details from payload
-    expect(screen.getByText(/100/)).toBeInTheDocument();
-    expect(screen.getByText(/USDC/)).toBeInTheDocument();
+    // Verify transaction details from payload (CurrencyDisplay renders USDC as $100.00)
+    expect(screen.getByText(/\$100\.00/)).toBeInTheDocument();
 
     // Verify approval type badges (shown as rounded pills)
     expect(screen.getByText("transaction")).toBeInTheDocument();

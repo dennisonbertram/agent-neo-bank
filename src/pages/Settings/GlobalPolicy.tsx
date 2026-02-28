@@ -8,6 +8,8 @@ export function GlobalPolicySettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [showKillConfirm, setShowKillConfirm] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [killSwitchError, setKillSwitchError] = useState<string | null>(null);
 
   const loadPolicy = () => {
     invoke<GlobalPolicy>("get_global_policy")
@@ -52,6 +54,7 @@ export function GlobalPolicySettings() {
     }
     setValidationErrors({});
 
+    setSaveError(null);
     setIsSaving(true);
     try {
       await invoke("update_global_policy", {
@@ -64,8 +67,8 @@ export function GlobalPolicySettings() {
           updated_at: Math.floor(Date.now() / 1000),
         },
       });
-    } catch {
-      // handle error
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSaving(false);
     }
@@ -79,15 +82,17 @@ export function GlobalPolicySettings() {
       return;
     }
     // Deactivating - no confirmation needed
+    setKillSwitchError(null);
     try {
       await invoke("toggle_kill_switch", { active: false });
       loadPolicy();
-    } catch {
-      // handle error
+    } catch (err) {
+      setKillSwitchError(err instanceof Error ? err.message : String(err));
     }
   };
 
   const handleConfirmKillSwitch = async () => {
+    setKillSwitchError(null);
     try {
       await invoke("toggle_kill_switch", {
         active: true,
@@ -95,8 +100,8 @@ export function GlobalPolicySettings() {
       });
       setShowKillConfirm(false);
       loadPolicy();
-    } catch {
-      // handle error
+    } catch (err) {
+      setKillSwitchError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -181,6 +186,11 @@ export function GlobalPolicySettings() {
       </div>
 
       <div className="mt-6">
+        {saveError && (
+          <div className="mb-3 rounded-lg bg-[#FEF2F2] px-4 py-2 text-sm text-[#EF4444]">
+            Failed to save: {saveError}
+          </div>
+        )}
         <button
           type="button"
           onClick={handleSaveCaps}
@@ -197,6 +207,11 @@ export function GlobalPolicySettings() {
         <p className="text-xs text-[#6B7280] mb-4">
           Emergency stop: blocks ALL agent transactions immediately
         </p>
+        {killSwitchError && (
+          <div className="mb-3 rounded-lg bg-[#FEF2F2] px-4 py-2 text-sm text-[#EF4444]">
+            Kill switch error: {killSwitchError}
+          </div>
+        )}
         <button
           type="button"
           onClick={handleToggleKillSwitch}

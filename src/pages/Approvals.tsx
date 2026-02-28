@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { ApprovalRequest, Agent } from "../types";
 import { Bot, Check, X, CheckCircle } from "lucide-react";
+import { CurrencyDisplay } from "../components/shared/CurrencyDisplay";
 
 interface TransactionPayload {
   tx_id?: string;
@@ -125,7 +126,7 @@ export function Approvals() {
         <div className="mt-4">
           {data.amount && data.asset && (
             <p className="text-xl font-semibold text-[#1A1A1A]">
-              {data.amount} {data.asset}
+              <CurrencyDisplay amount={data.amount} asset={data.asset} />
             </p>
           )}
           {data.to && (
@@ -142,12 +143,12 @@ export function Approvals() {
         <div className="mt-4 space-y-1">
           {data.proposed_daily && (
             <p className="text-sm text-[#6B7280]">
-              Proposed daily limit: <span className="font-semibold text-[#1A1A1A]">{data.proposed_daily}</span>
+              Proposed daily limit: <span className="font-semibold text-[#1A1A1A]"><CurrencyDisplay amount={data.proposed_daily} /></span>
             </p>
           )}
           {data.proposed_monthly && (
             <p className="text-sm text-[#6B7280]">
-              Proposed monthly limit: <span className="font-semibold text-[#1A1A1A]">{data.proposed_monthly}</span>
+              Proposed monthly limit: <span className="font-semibold text-[#1A1A1A]"><CurrencyDisplay amount={data.proposed_monthly} /></span>
             </p>
           )}
         </div>

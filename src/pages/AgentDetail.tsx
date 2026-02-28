@@ -23,6 +23,7 @@ export function AgentDetail() {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
   const [isSuspending, setIsSuspending] = useState(false);
+  const [suspendError, setSuspendError] = useState<string | null>(null);
   const requestRef = useRef(0);
 
   // Reset state immediately when id changes to prevent stale display
@@ -74,13 +75,14 @@ export function AgentDetail() {
 
   const handleSuspend = async () => {
     if (!id) return;
+    setSuspendError(null);
     setIsSuspending(true);
     try {
       await invoke("suspend_agent", { agentId: id });
       setShowSuspendConfirm(false);
       await loadData();
-    } catch {
-      // Error suspending agent
+    } catch (err) {
+      setSuspendError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSuspending(false);
     }
@@ -266,6 +268,11 @@ export function AgentDetail() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {suspendError && (
+              <div className="rounded-lg bg-[#FEF2F2] px-4 py-2 text-sm text-[#EF4444]">
+                Failed to suspend: {suspendError}
+              </div>
+            )}
             {agent.status === "active" && (
               showSuspendConfirm ? (
                 <div className="flex items-center gap-2">
@@ -447,7 +454,7 @@ export function AgentDetail() {
                     <div className={`mt-1 size-2 rounded-full ${getStatusDotColor(tx.status)}`} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-[#1A1A1A]"><CurrencyDisplay amount={tx.amount} /></span>
+                        <span className="text-sm font-medium text-[#1A1A1A]"><CurrencyDisplay amount={tx.amount} asset={tx.asset} /></span>
                         <span className="text-xs text-[#9CA3AF]">{formatTime(tx.created_at)}</span>
                       </div>
                       <p className="text-xs text-[#6B7280] truncate">

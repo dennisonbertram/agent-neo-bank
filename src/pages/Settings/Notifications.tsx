@@ -6,6 +6,8 @@ export function Notifications() {
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [thresholdError, setThresholdError] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<NotificationPreferences>("get_notification_preferences")
@@ -21,11 +23,26 @@ export function Notifications() {
 
   const handleSave = async () => {
     if (!prefs) return;
+    setSaveError(null);
+
+    // Validate threshold if large tx notifications are enabled
+    if (prefs.on_large_tx) {
+      const num = parseFloat(prefs.large_tx_threshold as string);
+      if (isNaN(num) || num <= 0) {
+        setThresholdError("Must be a positive number");
+        return;
+      }
+      setThresholdError(null);
+    }
+
     setIsSaving(true);
     try {
-      await invoke("update_notification_preferences", { prefs });
-    } catch {
-      // handle error
+      const normalized = prefs.on_large_tx
+        ? { ...prefs, large_tx_threshold: parseFloat(prefs.large_tx_threshold as string).toString() }
+        : prefs;
+      await invoke("update_notification_preferences", { prefs: normalized });
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSaving(false);
     }
@@ -108,16 +125,25 @@ export function Notifications() {
           <input
             id="threshold"
             type="number"
+            min="0"
+            step="any"
             value={prefs.large_tx_threshold}
-            onChange={(e) =>
-              setPrefs({ ...prefs, large_tx_threshold: e.target.value })
-            }
+            onChange={(e) => {
+              setPrefs({ ...prefs, large_tx_threshold: e.target.value });
+              if (thresholdError) setThresholdError(null);
+            }}
             className="mt-1 block w-32 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#1A1A1A] focus:border-[#4F46E5] focus:outline-none focus:ring-1 focus:ring-[#4F46E5]"
           />
+          {thresholdError && <p className="mt-1 text-xs text-[#EF4444]">{thresholdError}</p>}
         </div>
       )}
 
       <div className="mt-6">
+        {saveError && (
+          <div className="mb-3 rounded-lg bg-[#FEF2F2] px-4 py-2 text-sm text-[#EF4444]">
+            Failed to save: {saveError}
+          </div>
+        )}
         <button
           type="button"
           onClick={handleSave}
