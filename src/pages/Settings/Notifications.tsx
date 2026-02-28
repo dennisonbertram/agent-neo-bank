@@ -8,12 +8,21 @@ export function Notifications() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [thresholdError, setThresholdError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadPrefs = () => {
+    setLoadError(null);
+    setIsLoading(true);
     invoke<NotificationPreferences>("get_notification_preferences")
       .then(setPrefs)
-      .catch(() => {})
+      .catch((err) => {
+        setLoadError(err instanceof Error ? err.message : String(err));
+      })
       .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    loadPrefs();
   }, []);
 
   const handleToggle = (key: keyof NotificationPreferences) => {
@@ -49,6 +58,22 @@ export function Notifications() {
   };
 
   if (isLoading) return null;
+  if (loadError) {
+    return (
+      <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+        <div className="rounded-lg bg-[#FEF2F2] px-4 py-3 text-sm text-[#EF4444]">
+          Failed to load notification preferences: {loadError}
+        </div>
+        <button
+          type="button"
+          onClick={loadPrefs}
+          className="mt-3 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white hover:bg-[#4338CA]"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
   if (!prefs) return null;
 
   const toggleItems = [

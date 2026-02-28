@@ -10,11 +10,15 @@ export function GlobalPolicySettings() {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [killSwitchError, setKillSwitchError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadPolicy = () => {
+    setLoadError(null);
     invoke<GlobalPolicy>("get_global_policy")
       .then(setPolicy)
-      .catch(() => {})
+      .catch((err) => {
+        setLoadError(err instanceof Error ? err.message : String(err));
+      })
       .finally(() => setIsLoading(false));
   };
 
@@ -106,6 +110,22 @@ export function GlobalPolicySettings() {
   };
 
   if (isLoading) return null;
+  if (loadError) {
+    return (
+      <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+        <div className="rounded-lg bg-[#FEF2F2] px-4 py-3 text-sm text-[#EF4444]">
+          Failed to load global policy: {loadError}
+        </div>
+        <button
+          type="button"
+          onClick={loadPolicy}
+          className="mt-3 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white hover:bg-[#4338CA]"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
   if (!policy) return null;
 
   return (

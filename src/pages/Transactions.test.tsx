@@ -47,9 +47,9 @@ describe("Transactions", () => {
     expect(screen.getByText("Status")).toBeInTheDocument();
     expect(screen.getByText("Description")).toBeInTheDocument();
 
-    // Transaction data (amounts now have +/- prefix)
-    expect(screen.getByText(/5\.00 USDC/)).toBeInTheDocument();
-    expect(screen.getByText(/10\.00 USDC/)).toBeInTheDocument();
+    // Transaction data (CurrencyDisplay renders USDC as $X.XX)
+    expect(screen.getByText(/\$5\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/\$10\.00/)).toBeInTheDocument();
     expect(screen.getByText("API payment")).toBeInTheDocument();
     expect(screen.getByText("Service fee")).toBeInTheDocument();
 

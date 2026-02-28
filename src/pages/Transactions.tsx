@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { formatCurrency, truncateAddress } from "@/lib/format";
+import { truncateAddress } from "@/lib/format";
 import { ArrowUpDown, Download, Search } from "lucide-react";
 import type { Transaction, Agent, TxStatus, TxType } from "@/types";
+import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
 
 const PAGE_SIZE = 20;
 
@@ -371,7 +372,7 @@ export function Transactions() {
                       }
                     >
                       {tx.tx_type === "send" ? "−" : "+"}
-                      {formatCurrency(tx.amount, tx.asset)}
+                      <CurrencyDisplay amount={tx.amount} asset={tx.asset} />
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm font-mono text-[#6B7280]">
@@ -401,7 +402,9 @@ export function Transactions() {
           {total > 0 && (
             <div className="flex items-center justify-between border-t border-[#F0EDE8] px-4 py-3">
               <span className="text-sm text-[#6B7280]">
-                Showing {showStart}-{showEnd} of {total}
+                {searchQuery
+                  ? `${filteredTransactions.length} of ${transactions.length} on this page`
+                  : `Showing ${showStart}-${showEnd} of ${total}`}
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-[#6B7280]">
@@ -434,7 +437,9 @@ export function Transactions() {
         total > 0 && (
           <div className="flex items-center justify-between">
             <span className="text-sm text-[#6B7280]">
-              Showing {showStart}-{showEnd} of {total}
+              {searchQuery
+                ? `0 matches on this page (${transactions.length} transactions)`
+                : `Showing ${showStart}-${showEnd} of ${total}`}
             </span>
             <div className="flex items-center gap-2">
               <button
