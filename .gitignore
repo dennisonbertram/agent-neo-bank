@@ -5,3 +5,4 @@ target/
 app-icon.png
 test-results/
 playwright-report/
+.mcp.json
