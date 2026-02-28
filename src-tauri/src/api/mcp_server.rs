@@ -2,13 +2,12 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::spending_policy::{daily_period_key, weekly_period_key, monthly_period_key};
 use crate::db::models::*;
 use crate::db::queries;
-use crate::db::queries::AtomicPolicyResult;
 use crate::db::schema::Database;
 use crate::error::AppError;
 
+use super::mcp_router::{error_code, McpRouter};
 use super::mcp_tools::get_tool_definitions;
 
 // -------------------------------------------------------------------------
@@ -40,12 +39,12 @@ pub struct JsonRpcError {
 }
 
 // -------------------------------------------------------------------------
-// McpServer
+// McpServer (stdio transport)
 // -------------------------------------------------------------------------
 
 pub struct McpServer {
-    db: Arc<Database>,
     agent_id: String,
+    router: McpRouter,
 }
 
 impl std::fmt::Debug for McpServer {
@@ -73,7 +72,11 @@ impl McpServer {
                 agent_id, agent.status
             )));
         }
-        Ok(Self { db, agent_id })
+        let router = McpRouter::new(db, agent_id.clone());
+        Ok(Self {
+            agent_id,
+            router,
+        })
     }
 
     /// Validate a raw API token against agents in the DB.
@@ -91,10 +94,14 @@ impl McpServer {
 
         // O(1) indexed lookup by token hash
         match queries::get_agent_by_token_hash(&db, &token_hash) {
-            Some(agent) => Ok(Self {
-                db,
-                agent_id: agent.id,
-            }),
+            Some(agent) => {
+                let agent_id = agent.id.clone();
+                let router = McpRouter::new(db, agent_id.clone());
+                Ok(Self {
+                    agent_id,
+                    router,
+                })
+            }
             None => Err(AppError::InvalidToken),
         }
     }
@@ -132,7 +139,7 @@ impl McpServer {
                     .cloned()
                     .unwrap_or(serde_json::json!({}));
 
-                match self.handle_tool_call(tool_name, arguments) {
+                match self.router.handle_tool_call(tool_name, arguments) {
                     Ok(content) => Ok(serde_json::json!({
                         "content": [{ "type": "text", "text": content.to_string() }]
                     })),
@@ -164,388 +171,13 @@ impl McpServer {
         }
     }
 
-    /// Dispatch a tool call to the appropriate handler.
+    /// Dispatch a tool call to the appropriate handler (delegates to router).
     pub fn handle_tool_call(
         &self,
         tool_name: &str,
         arguments: serde_json::Value,
     ) -> Result<serde_json::Value, AppError> {
-        match tool_name {
-            "send_payment" => self.handle_send_payment(arguments),
-            "check_balance" => self.handle_check_balance(arguments),
-            "get_spending_limits" => self.handle_get_spending_limits(arguments),
-            "request_limit_increase" => self.handle_request_limit_increase(arguments),
-            "get_transactions" => self.handle_get_transactions(arguments),
-            "register_agent" => self.handle_register_agent(arguments),
-            _ => Err(AppError::NotFound(format!("Unknown tool: {}", tool_name))),
-        }
-    }
-
-    // ---------------------------------------------------------------------
-    // Tool handlers
-    // ---------------------------------------------------------------------
-
-    fn handle_send_payment(
-        &self,
-        arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, AppError> {
-        let to = arguments
-            .get("to")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::InvalidInput("Missing 'to' field".to_string()))?
-            .to_string();
-        let amount = arguments
-            .get("amount")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::InvalidInput("Missing 'amount' field".to_string()))?
-            .to_string();
-        let asset = arguments
-            .get("asset")
-            .and_then(|v| v.as_str())
-            .unwrap_or("USDC")
-            .to_string();
-        let memo = arguments
-            .get("memo")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let now = chrono::Utc::now();
-        let now_ts = now.timestamp();
-        let tx_id = uuid::Uuid::new_v4().to_string();
-
-        let period_d = daily_period_key(&now);
-        let period_w = weekly_period_key(&now);
-        let period_m = monthly_period_key(&now);
-
-        // Run atomic policy check + ledger reservation
-        let policy_result = queries::check_policy_and_reserve_atomic(
-            &self.db,
-            &self.agent_id,
-            &amount,
-            &to,
-            "0", // MCP doesn't track wallet balance; use 0 (min_reserve_balance check will be lenient)
-            &period_d,
-            &period_w,
-            &period_m,
-            now_ts,
-        )?;
-
-        match policy_result {
-            AtomicPolicyResult::Denied { reason } => {
-                // Insert a denied transaction for audit trail
-                let tx = Transaction {
-                    id: tx_id.clone(),
-                    agent_id: Some(self.agent_id.clone()),
-                    tx_type: TxType::Send,
-                    amount: amount.clone(),
-                    asset: asset.clone(),
-                    recipient: Some(to.clone()),
-                    sender: None,
-                    chain_tx_hash: None,
-                    status: TxStatus::Denied,
-                    category: "payment".to_string(),
-                    memo,
-                    description: format!("MCP send {} {} to {}", amount, asset, to),
-                    service_name: "mcp".to_string(),
-                    service_url: String::new(),
-                    reason: reason.clone(),
-                    webhook_url: None,
-                    error_message: Some(reason.clone()),
-                    period_daily: period_d,
-                    period_weekly: period_w,
-                    period_monthly: period_m,
-                    created_at: now_ts,
-                    updated_at: now_ts,
-                };
-                queries::insert_transaction(&self.db, &tx)?;
-                Err(AppError::PolicyViolation(reason))
-            }
-            AtomicPolicyResult::AutoApproved => {
-                // Ledger already reserved; insert transaction as Pending (ready for execution)
-                let tx = Transaction {
-                    id: tx_id.clone(),
-                    agent_id: Some(self.agent_id.clone()),
-                    tx_type: TxType::Send,
-                    amount: amount.clone(),
-                    asset: asset.clone(),
-                    recipient: Some(to.clone()),
-                    sender: None,
-                    chain_tx_hash: None,
-                    status: TxStatus::Pending,
-                    category: "payment".to_string(),
-                    memo,
-                    description: format!("MCP send {} {} to {}", amount, asset, to),
-                    service_name: "mcp".to_string(),
-                    service_url: String::new(),
-                    reason: String::new(),
-                    webhook_url: None,
-                    error_message: None,
-                    period_daily: period_d,
-                    period_weekly: period_w,
-                    period_monthly: period_m,
-                    created_at: now_ts,
-                    updated_at: now_ts,
-                };
-                queries::insert_transaction(&self.db, &tx)?;
-
-                Ok(serde_json::json!({
-                    "tx_id": tx_id,
-                    "status": "pending",
-                    "amount": amount,
-                    "asset": asset,
-                    "to": to
-                }))
-            }
-            AtomicPolicyResult::RequiresApproval { reason } => {
-                // Ledger already reserved; insert transaction as AwaitingApproval
-                let tx = Transaction {
-                    id: tx_id.clone(),
-                    agent_id: Some(self.agent_id.clone()),
-                    tx_type: TxType::Send,
-                    amount: amount.clone(),
-                    asset: asset.clone(),
-                    recipient: Some(to.clone()),
-                    sender: None,
-                    chain_tx_hash: None,
-                    status: TxStatus::AwaitingApproval,
-                    category: "payment".to_string(),
-                    memo: memo.clone(),
-                    description: format!("MCP send {} {} to {}", amount, asset, to),
-                    service_name: "mcp".to_string(),
-                    service_url: String::new(),
-                    reason: reason.clone(),
-                    webhook_url: None,
-                    error_message: None,
-                    period_daily: period_d,
-                    period_weekly: period_w,
-                    period_monthly: period_m,
-                    created_at: now_ts,
-                    updated_at: now_ts,
-                };
-                queries::insert_transaction(&self.db, &tx)?;
-
-                // Create an approval request
-                let approval_id = uuid::Uuid::new_v4().to_string();
-                let payload = serde_json::json!({
-                    "amount": amount,
-                    "asset": asset,
-                    "to": to,
-                    "memo": memo,
-                    "reason": reason,
-                });
-                let approval = ApprovalRequest {
-                    id: approval_id.clone(),
-                    agent_id: self.agent_id.clone(),
-                    request_type: ApprovalRequestType::Transaction,
-                    payload: payload.to_string(),
-                    status: ApprovalStatus::Pending,
-                    tx_id: Some(tx_id.clone()),
-                    expires_at: now_ts + 86400,
-                    created_at: now_ts,
-                    resolved_at: None,
-                    resolved_by: None,
-                };
-                queries::insert_approval_request(&self.db, &approval)?;
-
-                Ok(serde_json::json!({
-                    "tx_id": tx_id,
-                    "status": "awaiting_approval",
-                    "approval_id": approval_id,
-                    "reason": reason,
-                    "amount": amount,
-                    "asset": asset,
-                    "to": to
-                }))
-            }
-        }
-    }
-
-    fn handle_check_balance(
-        &self,
-        _arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, AppError> {
-        // Query the agent to check balance_visible flag
-        let agent = queries::get_agent(&self.db, &self.agent_id)?;
-        if !agent.balance_visible {
-            return Ok(serde_json::json!({
-                "balance": "hidden",
-                "asset": "USDC",
-                "message": "Balance visibility is disabled for this agent"
-            }));
-        }
-
-        // Return a balance from the DB or a default.
-        // In a full implementation this would query the wallet service.
-        Ok(serde_json::json!({
-            "balance": "0.00",
-            "asset": "USDC"
-        }))
-    }
-
-    fn handle_get_spending_limits(
-        &self,
-        _arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, AppError> {
-        let policy = queries::get_spending_policy(&self.db, &self.agent_id)?;
-        Ok(serde_json::json!({
-            "per_tx_max": policy.per_tx_max,
-            "daily_cap": policy.daily_cap,
-            "weekly_cap": policy.weekly_cap,
-            "monthly_cap": policy.monthly_cap,
-            "auto_approve_max": policy.auto_approve_max,
-            "allowlist": policy.allowlist
-        }))
-    }
-
-    fn handle_request_limit_increase(
-        &self,
-        arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, AppError> {
-        let reason = arguments
-            .get("reason")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::InvalidInput("Missing 'reason' field".to_string()))?
-            .to_string();
-
-        let new_per_tx_max = arguments
-            .get("new_per_tx_max")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let new_daily_cap = arguments
-            .get("new_daily_cap")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        let now = chrono::Utc::now().timestamp();
-        let request_id = uuid::Uuid::new_v4().to_string();
-
-        let payload = serde_json::json!({
-            "new_per_tx_max": new_per_tx_max,
-            "new_daily_cap": new_daily_cap,
-            "reason": reason,
-        });
-
-        let approval = ApprovalRequest {
-            id: request_id.clone(),
-            agent_id: self.agent_id.clone(),
-            request_type: ApprovalRequestType::LimitIncrease,
-            payload: payload.to_string(),
-            status: ApprovalStatus::Pending,
-            tx_id: None,
-            expires_at: now + 86400, // 24 hours
-            created_at: now,
-            resolved_at: None,
-            resolved_by: None,
-        };
-
-        queries::insert_approval_request(&self.db, &approval)?;
-
-        Ok(serde_json::json!({
-            "request_id": request_id,
-            "status": "pending",
-            "message": "Limit increase request submitted for approval"
-        }))
-    }
-
-    fn handle_get_transactions(
-        &self,
-        arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, AppError> {
-        let limit = arguments
-            .get("limit")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(10);
-        let status_filter = arguments
-            .get("status")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        let (txs, total) = queries::list_transactions_paginated(
-            &self.db,
-            Some(&self.agent_id),
-            status_filter.as_deref(),
-            limit,
-            0,
-        )?;
-
-        let tx_summaries: Vec<serde_json::Value> = txs
-            .iter()
-            .map(|tx| {
-                serde_json::json!({
-                    "id": tx.id,
-                    "type": tx.tx_type.to_string(),
-                    "amount": tx.amount,
-                    "asset": tx.asset,
-                    "status": tx.status.to_string(),
-                    "recipient": tx.recipient,
-                    "memo": tx.memo,
-                    "created_at": tx.created_at,
-                })
-            })
-            .collect();
-
-        Ok(serde_json::json!({
-            "transactions": tx_summaries,
-            "total": total
-        }))
-    }
-
-    fn handle_register_agent(
-        &self,
-        arguments: serde_json::Value,
-    ) -> Result<serde_json::Value, AppError> {
-        let name = arguments
-            .get("name")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::InvalidInput("Missing 'name' field".to_string()))?
-            .to_string();
-        let purpose = arguments
-            .get("purpose")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::InvalidInput("Missing 'purpose' field".to_string()))?
-            .to_string();
-        let invitation_code = arguments
-            .get("invitation_code")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::InvalidInput("Missing 'invitation_code' field".to_string()))?
-            .to_string();
-
-        // Validate the invitation code exists and has uses remaining
-        let code = queries::get_invitation_code(&self.db, &invitation_code)?;
-        if code.use_count >= code.max_uses {
-            return Err(AppError::InvalidInvitationCode);
-        }
-
-        let now = chrono::Utc::now().timestamp();
-        let agent_id = uuid::Uuid::new_v4().to_string();
-
-        let agent = Agent {
-            id: agent_id.clone(),
-            name: name.clone(),
-            description: String::new(),
-            purpose,
-            agent_type: "mcp".to_string(),
-            capabilities: vec!["send".to_string()],
-            status: AgentStatus::Pending,
-            api_token_hash: None,
-            token_prefix: None,
-            balance_visible: true,
-            invitation_code: Some(invitation_code),
-            created_at: now,
-            updated_at: now,
-            last_active_at: None,
-            metadata: "{}".to_string(),
-        };
-
-        queries::insert_agent(&self.db, &agent)?;
-
-        Ok(serde_json::json!({
-            "agent_id": agent_id,
-            "name": name,
-            "status": "pending",
-            "message": "Agent registration submitted, pending approval"
-        }))
+        self.router.handle_tool_call(tool_name, arguments)
     }
 
     /// Main stdio loop. Reads JSON-RPC requests from stdin line-by-line,
@@ -601,22 +233,6 @@ impl McpServer {
     }
 }
 
-/// Map AppError variants to JSON-RPC error codes.
-fn error_code(err: &AppError) -> i32 {
-    match err {
-        AppError::NotFound(_) => -32601, // Method not found
-        AppError::InvalidInput(_) => -32602, // Invalid params
-        AppError::InvalidToken => -32000, // Server error: auth
-        AppError::AuthError(_) => -32000,
-        AppError::PolicyViolation(_) => -32001,
-        AppError::KillSwitchActive(_) => -32002,
-        AppError::AgentSuspended(_) => -32003,
-        AppError::InvalidInvitationCode => -32004,
-        AppError::RateLimited => -32005,
-        _ => -32603, // Internal error
-    }
-}
-
 // -------------------------------------------------------------------------
 // Tests
 // -------------------------------------------------------------------------
@@ -630,9 +246,10 @@ mod tests {
     };
 
     fn make_test_server(db: Arc<Database>, agent_id: &str) -> McpServer {
+        let router = McpRouter::new(db, agent_id.to_string());
         McpServer {
-            db,
             agent_id: agent_id.to_string(),
+            router,
         }
     }
 

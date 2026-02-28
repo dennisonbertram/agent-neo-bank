@@ -30,6 +30,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "2"
 reqwest = { version = "0.12", features = ["json"] }
 async-trait = "0.1"
+dashmap = "6"
+tower-http = { version = "0.6", features = ["cors"] }
 rust_decimal_macros = "1.40.0"
 
 [dev-dependencies]

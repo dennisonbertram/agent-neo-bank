@@ -8,6 +8,7 @@ pub struct AppConfig {
     pub rest_host: String,
     pub unix_socket_path: String,
     pub mcp_enabled: bool,
+    pub mcp_port: u16,
     pub token_hash_algorithm: String,
     pub token_cache_ttl_seconds: u64,
     pub rate_limit_requests_per_minute: u32,
@@ -39,6 +40,7 @@ impl Default for AppConfig {
             rest_host: "127.0.0.1".to_string(),
             unix_socket_path: "/tmp/tally-agentic-wallet.sock".to_string(),
             mcp_enabled: true,
+            mcp_port: 7403,
             token_hash_algorithm: "argon2id".to_string(),
             token_cache_ttl_seconds: 300,
             rate_limit_requests_per_minute: 60,
@@ -74,9 +76,15 @@ impl AppConfig {
         // Resolve local awal binary from node_modules
         let awal_binary_path = Self::resolve_awal_path();
 
+        let mcp_port = std::env::var("ANB_MCP_PORT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(7403);
+
         Self {
             mock_mode,
             awal_binary_path,
+            mcp_port,
             ..Self::default()
         }
     }
@@ -109,6 +117,7 @@ impl AppConfig {
             rest_host: "127.0.0.1".to_string(),
             unix_socket_path: "/tmp/tally-agentic-wallet-test.sock".to_string(),
             mcp_enabled: false,
+            mcp_port: 0,
             token_hash_algorithm: "argon2id".to_string(),
             token_cache_ttl_seconds: 300,
             rate_limit_requests_per_minute: 1000,
@@ -198,5 +207,26 @@ mod tests {
     fn test_default_test_config_has_memory_db_path() {
         let config = AppConfig::default_test();
         assert_eq!(config.db_path, ":memory:");
+    }
+
+    #[test]
+    fn test_default_config_mcp_port() {
+        let config = AppConfig::default();
+        assert_eq!(config.mcp_port, 7403);
+    }
+
+    #[test]
+    fn test_test_config_mcp_port() {
+        let config = AppConfig::default_test();
+        assert_eq!(config.mcp_port, 0);
+    }
+
+    #[test]
+    fn test_mcp_port_from_env() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("ANB_MCP_PORT", "8080"); }
+        let config = AppConfig::from_env();
+        assert_eq!(config.mcp_port, 8080);
+        unsafe { std::env::remove_var("ANB_MCP_PORT"); }
     }
 }
