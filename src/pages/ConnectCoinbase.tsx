@@ -35,7 +35,7 @@ export default function ConnectCoinbase() {
 
   return (
     <div className="flex flex-col h-full relative">
-      <div className="flex-1 px-6 pt-[60px]">
+      <div className="flex-1 px-6 pt-[16px]">
         {/* Back button */}
         <button
           type="button"

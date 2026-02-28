@@ -17,7 +17,7 @@ export function ScreenHeader({ title, onBack, rightElement, className }: ScreenH
   return (
     <header
       className={cn(
-        'sticky top-0 z-10 pt-[60px] pb-4 px-6 flex items-center justify-between bg-white/90 backdrop-blur-[10px]',
+        'sticky top-0 z-10 pt-[16px] pb-4 px-6 flex items-center justify-between bg-white/90 backdrop-blur-[10px]',
         className
       )}
     >

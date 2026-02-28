@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "gmail": {
+      "command": "node",
+      "args": [
+        "/Users/dennisonbertram/Develop/apps/ceo-app/mcp-servers/gmail-mcp/gmail-mcp.bundle.cjs"
+      ]
+    }
+  }
+}

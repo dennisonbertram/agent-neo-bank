@@ -93,7 +93,7 @@ export default function Settings() {
 
   return (
     <div className="flex flex-col h-full relative">
-      <div className="flex-1 overflow-y-auto px-6 pt-[60px] pb-[100px] scrollbar-hide">
+      <div className="flex-1 overflow-y-auto px-6 pt-[16px] pb-[100px] scrollbar-hide">
         {/* Back button */}
         <Button
           variant="sm-outline"

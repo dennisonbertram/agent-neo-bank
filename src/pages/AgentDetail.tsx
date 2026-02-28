@@ -157,7 +157,7 @@ export default function AgentDetail() {
   return (
     <div className="flex flex-col h-full">
       {/* Sticky header */}
-      <header className="sticky top-0 z-10 pt-[60px] pb-4 px-6 flex items-center justify-between bg-white/90 backdrop-blur-[10px]">
+      <header className="sticky top-0 z-10 pt-[16px] pb-4 px-6 flex items-center justify-between bg-white/90 backdrop-blur-[10px]">
         <button
           type="button"
           onClick={() => navigate(-1)}

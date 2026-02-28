@@ -148,7 +148,7 @@ export default function Home() {
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto scrollbar-hide pb-[100px]">
         {/* Top bar with gradient fade */}
-        <div className="sticky top-0 z-10 pt-[60px] pb-4 bg-gradient-to-b from-white from-80% to-transparent">
+        <div className="sticky top-0 z-10 pt-[16px] pb-4 bg-gradient-to-b from-white from-80% to-transparent">
           <TopBar walletName={placeholderData.app.walletName} initials={user.initials} />
         </div>
 

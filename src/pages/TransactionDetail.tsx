@@ -88,7 +88,7 @@ export default function TransactionDetail() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto px-6 pt-[60px] pb-[40px] animate-in">
+      <div className="flex-1 overflow-y-auto px-6 pt-[16px] pb-[40px] animate-in">
         {/* Back nav */}
         <button
           type="button"

@@ -83,7 +83,7 @@ export default function AgentsList() {
   return (
     <div className="flex flex-col h-full relative">
       {/* Header */}
-      <div className="pt-[60px] px-6 pb-4 flex justify-between items-center">
+      <div className="pt-[16px] px-6 pb-4 flex justify-between items-center">
         <h1 className="text-[24px] font-bold tracking-[-0.5px] text-[var(--text-primary)]">
           My Agents
         </h1>
