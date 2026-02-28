@@ -47,6 +47,7 @@ struct McpSession {
 #[derive(Clone)]
 pub struct McpHttpState {
     pub db: Arc<Database>,
+    pub cli: Option<Arc<dyn crate::cli::executor::CliExecutable>>,
     sessions: Arc<DashMap<String, McpSession>>,
 }
 
@@ -54,6 +55,15 @@ impl McpHttpState {
     pub fn new(db: Arc<Database>) -> Self {
         Self {
             db,
+            cli: None,
+            sessions: Arc::new(DashMap::new()),
+        }
+    }
+
+    pub fn new_with_cli(db: Arc<Database>, cli: Arc<dyn crate::cli::executor::CliExecutable>) -> Self {
+        Self {
+            db,
+            cli: Some(cli),
             sessions: Arc::new(DashMap::new()),
         }
     }
@@ -77,7 +87,7 @@ pub fn build_router(state: McpHttpState) -> Router {
 
 /// Start the MCP HTTP server, listening on `127.0.0.1:{port}`.
 pub async fn start(app_state: Arc<AppState>, port: u16) -> Result<(), Box<dyn std::error::Error>> {
-    let state = McpHttpState::new(app_state.db.clone());
+    let state = McpHttpState::new_with_cli(app_state.db.clone(), app_state.cli.clone());
 
     let app = build_router(state);
     let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
@@ -313,7 +323,11 @@ fn handle_tools_call(
     };
 
     // Dispatch via McpRouter
-    let router = McpRouter::new(state.db.clone(), agent_id);
+    let router = if let Some(ref cli) = state.cli {
+        McpRouter::new_with_cli(state.db.clone(), agent_id, cli.clone())
+    } else {
+        McpRouter::new(state.db.clone(), agent_id)
+    };
     match router.handle_tool_call(tool_name, arguments) {
         Ok(content) => {
             let resp = JsonRpcResponse {
@@ -349,7 +363,11 @@ fn handle_register_agent_call(
 ) -> Response {
     // Use a temporary router (agent_id doesn't matter for register_agent since
     // it creates a new agent)
-    let router = McpRouter::new(state.db.clone(), "registering".to_string());
+    let router = if let Some(ref cli) = state.cli {
+        McpRouter::new_with_cli(state.db.clone(), "registering".to_string(), cli.clone())
+    } else {
+        McpRouter::new(state.db.clone(), "registering".to_string())
+    };
     match router.handle_tool_call("register_agent", arguments.clone()) {
         Ok(content) => {
             // Update session with the new agent_id if returned

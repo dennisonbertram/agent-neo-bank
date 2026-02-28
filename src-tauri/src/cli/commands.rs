@@ -11,6 +11,11 @@ pub enum AwalCommand {
     GetBalance { chain: Option<String> },
     GetAddress,
     Send { to: String, amount: Decimal, chain: Option<String> },
+    Trade { from: String, to: String, amount: String },
+    X402Pay { url: String },
+    X402BazaarList,
+    X402BazaarSearch { query: String },
+    X402Details { url: String },
 }
 
 impl AwalCommand {
@@ -50,6 +55,21 @@ impl AwalCommand {
                 args.push("--json".into());
                 args
             }
+            AwalCommand::Trade { from, to, amount } => {
+                vec!["trade".into(), amount.clone(), from.clone(), to.clone(), "--json".into()]
+            }
+            AwalCommand::X402Pay { url } => {
+                vec!["x402".into(), "pay".into(), url.clone(), "--json".into()]
+            }
+            AwalCommand::X402BazaarList => {
+                vec!["x402".into(), "bazaar".into(), "list".into(), "--json".into()]
+            }
+            AwalCommand::X402BazaarSearch { query } => {
+                vec!["x402".into(), "bazaar".into(), "search".into(), query.clone(), "--json".into()]
+            }
+            AwalCommand::X402Details { url } => {
+                vec!["x402".into(), "details".into(), url.clone(), "--json".into()]
+            }
         }
     }
 
@@ -63,6 +83,11 @@ impl AwalCommand {
             Self::GetBalance { .. } => "get_balance",
             Self::GetAddress => "get_address",
             Self::Send { .. } => "send",
+            Self::Trade { .. } => "trade",
+            Self::X402Pay { .. } => "x402_pay",
+            Self::X402BazaarList => "x402_bazaar_list",
+            Self::X402BazaarSearch { .. } => "x402_bazaar_search",
+            Self::X402Details { .. } => "x402_details",
         }
     }
 }
@@ -168,5 +193,56 @@ mod tests {
         };
         let args = cmd.to_args();
         assert_eq!(args, vec!["auth", "verify", "flow-abc-123", "123456", "--json"]);
+    }
+
+    // =====================================================================
+    // New command variant tests
+    // =====================================================================
+
+    #[test]
+    fn test_cli_command_to_args_trade() {
+        let cmd = AwalCommand::Trade {
+            from: "ETH".into(),
+            to: "USDC".into(),
+            amount: "1.0".into(),
+        };
+        let args = cmd.to_args();
+        assert_eq!(args, vec!["trade", "1.0", "ETH", "USDC", "--json"]);
+    }
+
+    #[test]
+    fn test_cli_command_to_args_x402_pay() {
+        let cmd = AwalCommand::X402Pay { url: "https://example.com/api".into() };
+        let args = cmd.to_args();
+        assert_eq!(args, vec!["x402", "pay", "https://example.com/api", "--json"]);
+    }
+
+    #[test]
+    fn test_cli_command_to_args_x402_bazaar_list() {
+        let args = AwalCommand::X402BazaarList.to_args();
+        assert_eq!(args, vec!["x402", "bazaar", "list", "--json"]);
+    }
+
+    #[test]
+    fn test_cli_command_to_args_x402_bazaar_search() {
+        let cmd = AwalCommand::X402BazaarSearch { query: "weather".into() };
+        let args = cmd.to_args();
+        assert_eq!(args, vec!["x402", "bazaar", "search", "weather", "--json"]);
+    }
+
+    #[test]
+    fn test_cli_command_to_args_x402_details() {
+        let cmd = AwalCommand::X402Details { url: "https://weather.x402.org".into() };
+        let args = cmd.to_args();
+        assert_eq!(args, vec!["x402", "details", "https://weather.x402.org", "--json"]);
+    }
+
+    #[test]
+    fn test_command_key_new_variants() {
+        assert_eq!(AwalCommand::Trade { from: "ETH".into(), to: "USDC".into(), amount: "1".into() }.command_key(), "trade");
+        assert_eq!(AwalCommand::X402Pay { url: "url".into() }.command_key(), "x402_pay");
+        assert_eq!(AwalCommand::X402BazaarList.command_key(), "x402_bazaar_list");
+        assert_eq!(AwalCommand::X402BazaarSearch { query: "q".into() }.command_key(), "x402_bazaar_search");
+        assert_eq!(AwalCommand::X402Details { url: "url".into() }.command_key(), "x402_details");
     }
 }

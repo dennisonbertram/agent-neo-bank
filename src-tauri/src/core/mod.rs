@@ -9,3 +9,4 @@ pub mod spending_policy;
 pub mod tx_processor;
 pub mod notification;
 pub mod wallet_service;
+pub mod auto_discovery;

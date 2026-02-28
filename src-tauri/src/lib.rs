@@ -68,6 +68,11 @@ pub fn run() {
                 }
             });
 
+            // Install MCP auto-discovery (non-fatal if it fails)
+            if let Err(e) = crate::core::auto_discovery::install(config.mcp_port) {
+                tracing::warn!(error = %e, "Failed to install MCP auto-discovery");
+            }
+
             // Spawn MCP HTTP server
             if config.mcp_enabled {
                 let mcp_db = app_state.db.clone();

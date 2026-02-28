@@ -9,6 +9,8 @@ use std::sync::Arc;
 
 use serde_json::Value;
 
+use crate::cli::commands::AwalCommand;
+use crate::cli::executor::CliExecutable;
 use crate::core::spending_policy::{daily_period_key, monthly_period_key, weekly_period_key};
 use crate::db::models::*;
 use crate::db::queries;
@@ -25,6 +27,7 @@ use super::mcp_tools::{get_tool_definitions, McpTool};
 pub struct McpRouter {
     db: Arc<Database>,
     agent_id: String,
+    cli: Option<Arc<dyn CliExecutable>>,
 }
 
 impl McpRouter {
@@ -32,7 +35,35 @@ impl McpRouter {
     ///
     /// The caller is responsible for authenticating the agent beforehand.
     pub fn new(db: Arc<Database>, agent_id: String) -> Self {
-        Self { db, agent_id }
+        Self { db, agent_id, cli: None }
+    }
+
+    /// Create a new router with a CLI executor for real awal calls.
+    pub fn new_with_cli(db: Arc<Database>, agent_id: String, cli: Arc<dyn CliExecutable>) -> Self {
+        Self { db, agent_id, cli: Some(cli) }
+    }
+
+    /// Execute an awal CLI command. Returns an error if no CLI executor is configured.
+    fn run_cli(&self, cmd: AwalCommand) -> Result<crate::cli::executor::CliOutput, AppError> {
+        let cli = self.cli.as_ref().ok_or_else(|| {
+            AppError::Internal("CLI executor not configured".to_string())
+        })?;
+        // The router methods are sync, but CLI execution is async.
+        // Spawn a blocking thread that creates its own runtime to avoid
+        // conflicts with both single-threaded and multi-threaded tokio runtimes.
+        let cli = cli.clone();
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| AppError::Internal(format!("Runtime error: {}", e)))?;
+                rt.block_on(cli.run(cmd))
+                    .map_err(|e| AppError::Internal(format!("CLI error: {}", e)))
+            })
+            .join()
+            .unwrap_or_else(|_| Err(AppError::Internal("CLI thread panicked".to_string())))
+        })
     }
 
     /// Get the agent ID this router is bound to.
@@ -156,6 +187,27 @@ impl McpRouter {
                 Err(AppError::PolicyViolation(reason))
             }
             AtomicPolicyResult::AutoApproved => {
+                // Execute send via CLI if available
+                let (chain_tx_hash, cli_status) = if self.cli.is_some() {
+                    let decimal_amount = amount.parse::<rust_decimal::Decimal>()
+                        .map_err(|_| AppError::InvalidInput(format!("Invalid amount: {}", amount)))?;
+                    match self.run_cli(AwalCommand::Send {
+                        to: to.clone(),
+                        amount: decimal_amount,
+                        chain: None,
+                    }) {
+                        Ok(output) => {
+                            let hash = output.data.get("tx_hash")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            (hash, TxStatus::Confirmed)
+                        }
+                        Err(_e) => (None, TxStatus::Failed)
+                    }
+                } else {
+                    (None, TxStatus::Pending)
+                };
+
                 let tx = Transaction {
                     id: tx_id.clone(),
                     agent_id: Some(self.agent_id.clone()),
@@ -164,8 +216,8 @@ impl McpRouter {
                     asset: asset.clone(),
                     recipient: Some(to.clone()),
                     sender: None,
-                    chain_tx_hash: None,
-                    status: TxStatus::Pending,
+                    chain_tx_hash: chain_tx_hash.clone(),
+                    status: cli_status.clone(),
                     category: "payment".to_string(),
                     memo,
                     description: format!("MCP send {} {} to {}", amount, asset, to),
@@ -184,7 +236,8 @@ impl McpRouter {
 
                 Ok(serde_json::json!({
                     "tx_id": tx_id,
-                    "status": "pending",
+                    "status": cli_status.to_string(),
+                    "chain_tx_hash": chain_tx_hash,
                     "amount": amount,
                     "asset": asset,
                     "to": to
@@ -260,6 +313,23 @@ impl McpRouter {
                 "asset": "USDC",
                 "message": "Balance visibility is disabled for this agent"
             }));
+        }
+
+        if self.cli.is_some() {
+            let output = self.run_cli(AwalCommand::GetBalance { chain: None })?;
+            // Parse the real balance from CLI output
+            if let Some(balances) = output.data.get("balances") {
+                let usdc_balance = balances
+                    .get("USDC")
+                    .and_then(|v| v.get("formatted"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("0.00");
+                return Ok(serde_json::json!({
+                    "balance": usdc_balance,
+                    "asset": "USDC",
+                    "all_balances": balances
+                }));
+            }
         }
 
         Ok(serde_json::json!({
@@ -368,7 +438,16 @@ impl McpRouter {
     }
 
     fn handle_get_address(&self) -> Result<Value, AppError> {
-        // Placeholder — will call `awal address` once CLI executor is wired
+        if self.cli.is_some() {
+            let output = self.run_cli(AwalCommand::GetAddress)?;
+            let address = output.data.as_str()
+                .unwrap_or_else(|| output.data.get("address").and_then(|v| v.as_str()).unwrap_or("unknown"));
+            return Ok(serde_json::json!({
+                "address": address,
+                "network": "base"
+            }));
+        }
+
         Ok(serde_json::json!({
             "address": "0x0000000000000000000000000000000000000000",
             "network": "base",
@@ -449,6 +528,25 @@ impl McpRouter {
                 Err(AppError::PolicyViolation(reason))
             }
             AtomicPolicyResult::AutoApproved => {
+                // Execute trade via CLI if available
+                let (chain_tx_hash, cli_status) = if self.cli.is_some() {
+                    match self.run_cli(AwalCommand::Trade {
+                        from: from_asset.clone(),
+                        to: to_asset.clone(),
+                        amount: amount.clone(),
+                    }) {
+                        Ok(output) => {
+                            let hash = output.data.get("tx_hash")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            (hash, TxStatus::Confirmed)
+                        }
+                        Err(_) => (None, TxStatus::Failed)
+                    }
+                } else {
+                    (None, TxStatus::Pending)
+                };
+
                 let tx = Transaction {
                     id: tx_id.clone(),
                     agent_id: Some(self.agent_id.clone()),
@@ -457,8 +555,8 @@ impl McpRouter {
                     asset: from_asset.clone(),
                     recipient: None,
                     sender: None,
-                    chain_tx_hash: None,
-                    status: TxStatus::Pending,
+                    chain_tx_hash: chain_tx_hash.clone(),
+                    status: cli_status.clone(),
                     category: "trade".to_string(),
                     memo: String::new(),
                     description: format!("Trade {} {} -> {}", amount, from_asset, to_asset),
@@ -477,7 +575,8 @@ impl McpRouter {
 
                 Ok(serde_json::json!({
                     "tx_id": tx_id,
-                    "status": "pending",
+                    "status": cli_status.to_string(),
+                    "chain_tx_hash": chain_tx_hash,
                     "from_asset": from_asset,
                     "to_asset": to_asset,
                     "amount": amount
@@ -610,6 +709,21 @@ impl McpRouter {
                 Err(AppError::PolicyViolation(reason))
             }
             AtomicPolicyResult::AutoApproved => {
+                // Execute x402 payment via CLI if available
+                let (chain_tx_hash, cli_status) = if self.cli.is_some() {
+                    match self.run_cli(AwalCommand::X402Pay { url: url.clone() }) {
+                        Ok(output) => {
+                            let hash = output.data.get("tx_hash")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string());
+                            (hash, TxStatus::Confirmed)
+                        }
+                        Err(_e) => (None, TxStatus::Failed)
+                    }
+                } else {
+                    (None, TxStatus::Pending)
+                };
+
                 let tx = Transaction {
                     id: tx_id.clone(),
                     agent_id: Some(self.agent_id.clone()),
@@ -618,8 +732,8 @@ impl McpRouter {
                     asset: "USDC".to_string(),
                     recipient: Some(url.clone()),
                     sender: None,
-                    chain_tx_hash: None,
-                    status: TxStatus::Pending,
+                    chain_tx_hash: chain_tx_hash.clone(),
+                    status: cli_status.clone(),
                     category: "x402".to_string(),
                     memo: String::new(),
                     description: format!("X402 payment to {}", url),
@@ -638,7 +752,8 @@ impl McpRouter {
 
                 Ok(serde_json::json!({
                     "tx_id": tx_id,
-                    "status": "pending",
+                    "status": cli_status.to_string(),
+                    "chain_tx_hash": chain_tx_hash,
                     "url": url,
                     "amount": policy_amount
                 }))
@@ -703,7 +818,11 @@ impl McpRouter {
     }
 
     fn handle_list_x402_services(&self) -> Result<Value, AppError> {
-        // Placeholder — will call `awal x402 bazaar list` once CLI executor is wired
+        if self.cli.is_some() {
+            let output = self.run_cli(AwalCommand::X402BazaarList)?;
+            return Ok(output.data);
+        }
+
         Ok(serde_json::json!({
             "services": [],
             "message": "X402 bazaar listing not yet wired to CLI"
@@ -717,7 +836,11 @@ impl McpRouter {
             .ok_or_else(|| AppError::InvalidInput("Missing 'query' field".to_string()))?
             .to_string();
 
-        // Placeholder — will call `awal x402 bazaar search <query>` once CLI executor is wired
+        if self.cli.is_some() {
+            let output = self.run_cli(AwalCommand::X402BazaarSearch { query: query.clone() })?;
+            return Ok(output.data);
+        }
+
         Ok(serde_json::json!({
             "query": query,
             "services": [],
@@ -732,7 +855,11 @@ impl McpRouter {
             .ok_or_else(|| AppError::InvalidInput("Missing 'url' field".to_string()))?
             .to_string();
 
-        // Placeholder — will call `awal x402 details <url>` once CLI executor is wired
+        if self.cli.is_some() {
+            let output = self.run_cli(AwalCommand::X402Details { url: url.clone() })?;
+            return Ok(output.data);
+        }
+
         Ok(serde_json::json!({
             "url": url,
             "amount": null,
@@ -1381,6 +1508,131 @@ mod tests {
         assert!(result.get("created_at").is_some());
         assert!(result.get("purpose").is_some());
         assert!(result.get("agent_type").is_some());
+    }
+
+    // =====================================================================
+    // CLI-wired handler tests
+    // =====================================================================
+
+    fn make_router_with_cli(db: Arc<Database>, agent_id: &str) -> McpRouter {
+        use crate::cli::executor::MockCliExecutor;
+        let mock = MockCliExecutor::with_defaults();
+        McpRouter::new_with_cli(db, agent_id.to_string(), Arc::new(mock))
+    }
+
+    #[tokio::test]
+    async fn test_check_balance_with_cli_returns_real_balance() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router_with_cli(db, &agent_id);
+
+        let result = router
+            .handle_tool_call("check_balance", serde_json::json!({}))
+            .unwrap();
+
+        assert_eq!(result["balance"], "1247.83");
+        assert_eq!(result["asset"], "USDC");
+        assert!(result.get("all_balances").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_get_address_with_cli_returns_real_address() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router_with_cli(db, &agent_id);
+
+        let result = router
+            .handle_tool_call("get_address", serde_json::json!({}))
+            .unwrap();
+
+        assert_eq!(result["address"], "0xMockWalletAddress123");
+        assert_eq!(result["network"], "base");
+        assert!(result.get("message").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_list_x402_services_with_cli() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router_with_cli(db, &agent_id);
+
+        let result = router
+            .handle_tool_call("list_x402_services", serde_json::json!({}))
+            .unwrap();
+
+        let services = result["services"].as_array().unwrap();
+        assert_eq!(services.len(), 2);
+        assert_eq!(services[0]["name"], "Weather API");
+    }
+
+    #[tokio::test]
+    async fn test_search_x402_services_with_cli() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router_with_cli(db, &agent_id);
+
+        let result = router
+            .handle_tool_call("search_x402_services", serde_json::json!({ "query": "weather" }))
+            .unwrap();
+
+        let results = result["results"].as_array().unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_x402_details_with_cli() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router_with_cli(db, &agent_id);
+
+        let result = router
+            .handle_tool_call("get_x402_details", serde_json::json!({ "url": "https://weather.x402.org" }))
+            .unwrap();
+
+        assert_eq!(result["price"], "0.01");
+        assert_eq!(result["asset"], "USDC");
+    }
+
+    #[tokio::test]
+    async fn test_send_payment_with_cli_executes_and_confirms() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router_with_cli(db.clone(), &agent_id);
+
+        let result = router
+            .handle_tool_call(
+                "send_payment",
+                serde_json::json!({
+                    "to": "0x1234567890abcdef",
+                    "amount": "25.50",
+                    "asset": "USDC"
+                }),
+            )
+            .unwrap();
+
+        assert_eq!(result["status"], "confirmed");
+        assert_eq!(result["chain_tx_hash"], "0xmock_tx_hash_abc123");
+    }
+
+    #[tokio::test]
+    async fn test_trade_tokens_with_cli_executes_and_confirms() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router_with_cli(db.clone(), &agent_id);
+
+        let result = router
+            .handle_tool_call(
+                "trade_tokens",
+                serde_json::json!({
+                    "from_asset": "ETH",
+                    "to_asset": "USDC",
+                    "amount": "1.0"
+                }),
+            )
+            .unwrap();
+
+        assert_eq!(result["status"], "confirmed");
+        assert_eq!(result["chain_tx_hash"], "0xmock_trade_hash_def456");
     }
 
     #[test]

@@ -64,6 +64,15 @@ impl McpServer {
     ///
     /// This constructor validates that the agent_id exists and is active.
     pub fn new_with_agent_id(db: Arc<Database>, agent_id: String) -> Result<Self, AppError> {
+        Self::new_with_agent_id_and_cli(db, agent_id, None)
+    }
+
+    /// Like `new_with_agent_id` but also wires a CLI executor for real awal calls.
+    pub fn new_with_agent_id_and_cli(
+        db: Arc<Database>,
+        agent_id: String,
+        cli: Option<Arc<dyn crate::cli::executor::CliExecutable>>,
+    ) -> Result<Self, AppError> {
         // Verify the agent exists and is active
         let agent = queries::get_agent(&db, &agent_id)?;
         if agent.status != AgentStatus::Active {
@@ -72,7 +81,11 @@ impl McpServer {
                 agent_id, agent.status
             )));
         }
-        let router = McpRouter::new(db, agent_id.clone());
+        let router = if let Some(cli) = cli {
+            McpRouter::new_with_cli(db, agent_id.clone(), cli)
+        } else {
+            McpRouter::new(db, agent_id.clone())
+        };
         Ok(Self {
             agent_id,
             router,
@@ -86,6 +99,15 @@ impl McpServer {
     /// Uses an indexed lookup on `agents.api_token_hash` for O(1) performance
     /// instead of loading all agents.
     pub fn validate_token(db: Arc<Database>, token: &str) -> Result<Self, AppError> {
+        Self::validate_token_with_cli(db, token, None)
+    }
+
+    /// Like `validate_token` but also wires a CLI executor for real awal calls.
+    pub fn validate_token_with_cli(
+        db: Arc<Database>,
+        token: &str,
+        cli: Option<Arc<dyn crate::cli::executor::CliExecutable>>,
+    ) -> Result<Self, AppError> {
         use sha2::{Digest, Sha256};
 
         let mut hasher = Sha256::new();
@@ -96,7 +118,11 @@ impl McpServer {
         match queries::get_agent_by_token_hash(&db, &token_hash) {
             Some(agent) => {
                 let agent_id = agent.id.clone();
-                let router = McpRouter::new(db, agent_id.clone());
+                let router = if let Some(cli) = cli {
+                    McpRouter::new_with_cli(db, agent_id.clone(), cli)
+                } else {
+                    McpRouter::new(db, agent_id.clone())
+                };
                 Ok(Self {
                     agent_id,
                     router,

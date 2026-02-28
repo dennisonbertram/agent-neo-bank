@@ -261,6 +261,77 @@ impl MockCliExecutor {
                 stderr: String::new(),
             },
         );
+        mock.set_response(
+            "trade",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({
+                    "status": "completed",
+                    "from": "ETH",
+                    "to": "USDC",
+                    "amount": "1.0",
+                    "received": "2500.00",
+                    "tx_hash": "0xmock_trade_hash_def456"
+                }),
+                raw: r#"{"status":"completed","from":"ETH","to":"USDC","amount":"1.0","received":"2500.00","tx_hash":"0xmock_trade_hash_def456"}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        mock.set_response(
+            "x402_pay",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({
+                    "status": "completed",
+                    "url": "https://example.com/api/resource",
+                    "amount_paid": "0.50",
+                    "tx_hash": "0xmock_x402_hash_ghi789"
+                }),
+                raw: r#"{"status":"completed","url":"https://example.com/api/resource","amount_paid":"0.50","tx_hash":"0xmock_x402_hash_ghi789"}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        mock.set_response(
+            "x402_bazaar_list",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({
+                    "services": [
+                        { "name": "Weather API", "url": "https://weather.x402.org", "price": "0.01", "asset": "USDC" },
+                        { "name": "News Feed", "url": "https://news.x402.org", "price": "0.05", "asset": "USDC" }
+                    ]
+                }),
+                raw: r#"{"services":[{"name":"Weather API","url":"https://weather.x402.org","price":"0.01","asset":"USDC"},{"name":"News Feed","url":"https://news.x402.org","price":"0.05","asset":"USDC"}]}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        mock.set_response(
+            "x402_bazaar_search",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({
+                    "results": [
+                        { "name": "Weather API", "url": "https://weather.x402.org", "price": "0.01", "asset": "USDC" }
+                    ]
+                }),
+                raw: r#"{"results":[{"name":"Weather API","url":"https://weather.x402.org","price":"0.01","asset":"USDC"}]}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        mock.set_response(
+            "x402_details",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({
+                    "url": "https://weather.x402.org",
+                    "price": "0.01",
+                    "asset": "USDC",
+                    "description": "Real-time weather data API"
+                }),
+                raw: r#"{"url":"https://weather.x402.org","price":"0.01","asset":"USDC","description":"Real-time weather data API"}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
         mock
     }
 
