@@ -30,8 +30,8 @@ function DefaultRedirect() {
 
 function SplashScreen() {
   return (
-    <div className="flex items-center justify-center h-full">
-      <div className="animate-pulse text-[var(--text-secondary)]">Loading...</div>
+    <div className="flex items-center justify-center min-h-screen bg-[var(--bg-primary)]">
+      <div className="animate-pulse text-[var(--text-secondary)] text-lg">Loading...</div>
     </div>
   )
 }

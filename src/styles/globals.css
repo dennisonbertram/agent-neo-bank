@@ -1,3 +1,11 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
@@ -8,8 +16,9 @@ h1, h2, h3, h4, h5, h6, p {
 }
 
 #root {
-  width: 390px;
-  height: 844px;
+  width: 100%;
+  max-width: 390px;
+  height: 100vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -17,6 +26,7 @@ h1, h2, h3, h4, h5, h6, p {
   font-family: var(--font-sans);
   color: var(--text-primary);
   position: relative;
+  margin: 0 auto;
 }
 
 .screen-scroll {

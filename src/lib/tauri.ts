@@ -9,11 +9,15 @@ export function isTauri(): boolean {
 /**
  * Safely call a Tauri invoke. In browser mode (no Tauri runtime),
  * returns the provided fallback instead of throwing.
+ * Includes a timeout to prevent hanging when CLI commands stall.
  */
-export async function safeTauriCall<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+export async function safeTauriCall<T>(fn: () => Promise<T>, fallback: T, timeoutMs = 10000): Promise<T> {
   if (!isTauri()) return fallback
   try {
-    return await fn()
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Tauri call timed out')), timeoutMs)
+    )
+    return await Promise.race([fn(), timeout])
   } catch {
     return fallback
   }

@@ -26,19 +26,25 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => set({ isAuthenticated: false, email: null, flowId: null }),
 
   checkAuthStatus: async () => {
+    console.log('[auth] checkAuthStatus called, isTauri:', isTauri())
     if (!isTauri()) {
-      // In browser (non-Tauri), skip auth check and mark as loaded
       set({ isLoading: false })
       return
     }
     try {
-      const result = await tauriApi.auth.status()
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Auth check timed out')), 5000)
+      )
+      console.log('[auth] calling tauriApi.auth.status()...')
+      const result = await Promise.race([tauriApi.auth.status(), timeout])
+      console.log('[auth] result:', JSON.stringify(result))
       if (result.authenticated && result.email) {
         set({ isAuthenticated: true, email: result.email, isLoading: false })
       } else {
         set({ isAuthenticated: false, email: null, flowId: null, isLoading: false })
       }
-    } catch {
+    } catch (err) {
+      console.error('[auth] checkAuthStatus error:', err)
       set({ isAuthenticated: false, email: null, flowId: null, isLoading: false })
     }
   },

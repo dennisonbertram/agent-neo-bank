@@ -11,10 +11,8 @@ interface OtpInputProps {
 
 export function OtpInput({ length = 6, value, onChange, onComplete, className }: OtpInputProps) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+  const isAdvancing = useRef(false)
   const digits = Array.from({ length }, (_, i) => value[i] || '')
-
-  const firstEmptyIndex = digits.findIndex((d) => !d)
-  const nextIndex = firstEmptyIndex === -1 ? length - 1 : firstEmptyIndex
 
   const handleInput = useCallback(
     (index: number, char: string) => {
@@ -25,11 +23,13 @@ export function OtpInput({ length = 6, value, onChange, onComplete, className }:
       onChange(newValue)
 
       if (char && index < length - 1) {
+        isAdvancing.current = true
         inputRefs.current[index + 1]?.focus()
+        isAdvancing.current = false
       }
-      const trimmed = newValue.replace(/\s/g, '')
-      if (trimmed.length === length && onComplete) {
-        onComplete(trimmed)
+
+      if (newValue.replace(/\s/g, '').length === length && onComplete) {
+        onComplete(newValue.replace(/\s/g, ''))
       }
     },
     [digits, length, onChange, onComplete]
@@ -38,7 +38,9 @@ export function OtpInput({ length = 6, value, onChange, onComplete, className }:
   const handleKeyDown = useCallback(
     (index: number, e: React.KeyboardEvent) => {
       if (e.key === 'Backspace' && !digits[index] && index > 0) {
+        isAdvancing.current = true
         inputRefs.current[index - 1]?.focus()
+        isAdvancing.current = false
         const newDigits = [...digits]
         newDigits[index - 1] = ''
         onChange(newDigits.join(''))
@@ -49,12 +51,16 @@ export function OtpInput({ length = 6, value, onChange, onComplete, className }:
 
   const handleFocus = useCallback(
     (index: number) => {
+      // Skip guard when programmatically advancing
+      if (isAdvancing.current) return
       // Enforce sequential entry — redirect to first empty slot
-      if (index > nextIndex) {
-        inputRefs.current[nextIndex]?.focus()
+      const firstEmpty = digits.findIndex((d) => !d)
+      const target = firstEmpty === -1 ? length - 1 : firstEmpty
+      if (index > target) {
+        inputRefs.current[target]?.focus()
       }
     },
-    [nextIndex]
+    [digits, length]
   )
 
   return (

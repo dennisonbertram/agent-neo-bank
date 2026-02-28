@@ -70,10 +70,10 @@ export default function Home() {
       if (cancelled) return
 
       setBalance(balRes)
-      setAddress(addrRes.address)
+      setAddress(addrRes?.address ?? placeholderData.wallet.address)
       setTransactions(txRes?.transactions ?? [])
-      setAgents(agentRes)
-      setBudgets(budgetRes)
+      setAgents(agentRes ?? [])
+      setBudgets(budgetRes ?? [])
       setLoading(false)
     }
 
@@ -171,7 +171,7 @@ export default function Home() {
 
             <div className="flex justify-between items-center relative z-[1]">
               <span className="font-mono text-[13px] text-white/50">
-                {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : '...'}
               </span>
               <div className="flex gap-3">
                 <span className="text-[12px] font-medium">{ethFormatted} ETH</span>
