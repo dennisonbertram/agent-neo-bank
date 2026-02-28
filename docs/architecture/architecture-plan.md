@@ -1,4 +1,4 @@
-# Agent Neo Bank -- Architecture Plan
+# Tally Agentic Wallet -- Architecture Plan
 
 > **Version:** 2.1
 > **Date:** 2026-02-27
@@ -301,7 +301,7 @@ agent-neo-bank/
 |   +-- implementation/
 |
 +-- skills/                           # Agent skills (NEW)
-|   +-- agent-neo-bank.md            # Registration & usage skill for AI agents
+|   +-- tally-agentic-wallet.md            # Registration & usage skill for AI agents
 |
 +-- package.json
 +-- tsconfig.json
@@ -1263,7 +1263,7 @@ impl McpServer {
 {
   "mcpServers": {
     "agent-neo-bank": {
-      "command": "/path/to/agent-neo-bank-mcp",
+      "command": "/path/to/tally-agentic-wallet-mcp",
       "args": ["--token", "anb_a3f8..."],
       "env": {}
     }
@@ -1287,7 +1287,7 @@ impl McpServer {
 
 pub async fn start_unix_socket(
     core: Arc<CoreServices>,
-    path: &str,  // e.g., /tmp/agent-neo-bank.sock
+    path: &str,  // e.g., /tmp/tally-agentic-wallet.sock
 ) -> Result<(), AppError> {
     // Remove stale socket file if exists
     let _ = std::fs::remove_file(path);
@@ -1310,7 +1310,7 @@ pub async fn start_unix_socket(
 
 The Unix socket speaks the same HTTP/JSON protocol as the REST API. Agents connect with:
 ```
-curl --unix-socket /tmp/agent-neo-bank.sock http://localhost/v1/send
+curl --unix-socket /tmp/tally-agentic-wallet.sock http://localhost/v1/send
 ```
 
 ### 3.11 Event Bus
@@ -1688,7 +1688,7 @@ Core shadcn/ui components used throughout:
 ```
 +--------------------------------------------------+
 |                                                  |
-|            Welcome to Agent Neo Bank             |
+|            Welcome to Tally Agentic Wallet             |
 |                                                  |
 |     A banking app for your AI agents.            |
 |     You control the money.                       |
@@ -1744,7 +1744,7 @@ Core shadcn/ui components used throughout:
 **Dashboard:**
 ```
 +------------------------------------------------------------------+
-| [=] Agent Neo Bank              Base Sepolia    [bell]   [gear]  |
+| [=] Tally Agentic Wallet              Base Sepolia    [bell]   [gear]  |
 +----------+-------------------------------------------------------+
 |          |                                                       |
 | Dashboard|   +------------------+  +-------------------------+   |
@@ -2253,18 +2253,18 @@ Agent                          API Server              User (Tauri UI)
 Agents discover the Neo Bank API through the **Agent Registration Skill** file (see Section 10) or documentation placed in well-known locations:
 
 **Agent skill file (preferred for Claude Code agents):**
-The file `skills/agent-neo-bank.md` (or `~/.claude/skills/agent-neo-bank.md`) provides comprehensive instructions for agents on how to register, authenticate, and use the API. See Section 10 for full contents.
+The file `skills/tally-agentic-wallet.md` (or `~/.claude/skills/tally-agentic-wallet.md`) provides comprehensive instructions for agents on how to register, authenticate, and use the API. See Section 10 for full contents.
 
 **claude.md (simpler alternative for Claude Code agents):**
 ```markdown
-## Agent Neo Bank
+## Tally Agentic Wallet
 
-This workspace has access to Agent Neo Bank for making payments.
+This workspace has access to Tally Agentic Wallet for making payments.
 
 - API: http://localhost:7402/v1
 - Auth: Bearer token in Authorization header
 - Your token: <token here>
-- Skill: See skills/agent-neo-bank.md for full registration and usage instructions.
+- Skill: See skills/tally-agentic-wallet.md for full registration and usage instructions.
 
 To make a payment:
 POST http://localhost:7402/v1/send
@@ -2276,7 +2276,7 @@ POST http://localhost:7402/v1/send
 {
   "mcpServers": {
     "agent-neo-bank": {
-      "command": "/path/to/agent-neo-bank-mcp",
+      "command": "/path/to/tally-agentic-wallet-mcp",
       "args": ["--token", "anb_..."]
     }
   }
@@ -2757,7 +2757,7 @@ A lightweight cloud backend service that monitors the blockchain for incoming tr
 
 ### 10.1 Overview
 
-Instead of agents hitting raw API endpoints, we provide a **Claude Code skill file** that serves as the agent's instruction manual for interacting with Agent Neo Bank. This skill file is placed at `skills/agent-neo-bank.md` in the project or at `~/.claude/skills/agent-neo-bank.md` globally.
+Instead of agents hitting raw API endpoints, we provide a **Claude Code skill file** that serves as the agent's instruction manual for interacting with Tally Agentic Wallet. This skill file is placed at `skills/tally-agentic-wallet.md` in the project or at `~/.claude/skills/tally-agentic-wallet.md` globally.
 
 ### 10.2 Skill File Contents
 
@@ -2786,11 +2786,11 @@ The skill file instructs agents to:
 ### 10.3 Example Skill File
 
 ```markdown
-# Agent Neo Bank Skill
+# Tally Agentic Wallet Skill
 
 ## Registration
 
-To use Agent Neo Bank, you must first register:
+To use Tally Agentic Wallet, you must first register:
 
 1. You need an invitation code from the user. Ask for it if not provided.
 2. Register by sending a POST request:
@@ -2994,7 +2994,7 @@ Release:
 | Amount parsing (Decimal) | `api/types.rs` | `SendRequest` uses `amount: Decimal`, parsed at API boundary |
 | Transaction history UI | `pages/Transactions` | Table with basic filtering + pagination (limit/offset) |
 | Stale approval cleanup | `core/approval_manager` | Background task every 5 min, `expires_at` column |
-| Agent skill file | `skills/agent-neo-bank.md` | Registration and usage instructions for AI agents |
+| Agent skill file | `skills/tally-agentic-wallet.md` | Registration and usage instructions for AI agents |
 | Spending ledger (UTC) | `db/queries.rs` | Period determined at creation time, explicit UTC, first-tx upsert |
 | Pagination everywhere | All list endpoints | `limit` and `offset` on agents, approvals, transactions |
 
@@ -3059,12 +3059,12 @@ Release:
 | Token rotation | UI + core | Regenerate agent tokens |
 | Backup/restore | DB utilities | Export/import SQLite database |
 | Onboarding tour | Frontend | Interactive guide for new users |
-| Agent platform auto-discovery | `core/platform_discovery`, `commands/platform_discovery`, `src/components/onboarding/` | Scan for installed AI agent platforms (Claude Code `~/.claude/`, Codex CLI, others). Auto-install Agent Neo Bank skill into each discovered platform. First-launch wizard step + periodic re-scan on app focus |
+| Agent platform auto-discovery | `core/platform_discovery`, `commands/platform_discovery`, `src/components/onboarding/` | Scan for installed AI agent platforms (Claude Code `~/.claude/`, Codex CLI, others). Auto-install Tally Agentic Wallet skill into each discovered platform. First-launch wizard step + periodic re-scan on app focus |
 | Production network support | Config | Mainnet toggle with safety warnings |
 | Performance optimization | All | Query optimization, lazy loading |
 | Production Transaction Monitor | Cloud service | Deploy cloud service, switch from local Alchemy to cloud proxy |
 
-**Deliverable:** Polished, production-ready desktop app with full feature set. Agent platform auto-discovery detects installed AI agent platforms (Claude Code, Codex, etc.) and auto-installs the Agent Neo Bank skill so agents can discover and use the local API.
+**Deliverable:** Polished, production-ready desktop app with full feature set. Agent platform auto-discovery detects installed AI agent platforms (Claude Code, Codex, etc.) and auto-installs the Tally Agentic Wallet skill so agents can discover and use the local API.
 
 ---
 
@@ -3120,7 +3120,7 @@ current = "base-sepolia"       # base-sepolia | base-mainnet
 [api]
 rest_port = 7402
 rest_host = "127.0.0.1"
-unix_socket_path = "/tmp/agent-neo-bank.sock"
+unix_socket_path = "/tmp/tally-agentic-wallet.sock"
 mcp_enabled = true
 
 [security]

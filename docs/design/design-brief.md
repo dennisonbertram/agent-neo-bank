@@ -1,4 +1,4 @@
-# Agent Neo Bank -- Design Brief
+# Tally Agentic Wallet -- Design Brief
 
 > **Version:** 1.0
 > **Date:** 2026-02-27
@@ -30,9 +30,9 @@
 
 ## 1. Product Context
 
-### What Is Agent Neo Bank?
+### What Is Tally Agentic Wallet?
 
-Agent Neo Bank is a Tauri v2 desktop application that lets users give their AI agents autonomous spending power through Coinbase Agent Wallets. Users set up a wallet, define budgets, and let AI agents pay for services -- with human-controlled guardrails.
+Tally Agentic Wallet is a Tauri v2 desktop application that lets users give their AI agents autonomous spending power through Coinbase Agent Wallets. Users set up a wallet, define budgets, and let AI agents pay for services -- with human-controlled guardrails.
 
 ### Target User
 
@@ -1053,7 +1053,7 @@ Tab order follows visual layout: sidebar nav (top to bottom), then main content 
 
 ## 14. Responsive Behavior
 
-While Agent Neo Bank is a Tauri desktop app, the window can be resized. The design should gracefully handle different window sizes.
+While Tally Agentic Wallet is a Tauri desktop app, the window can be resized. The design should gracefully handle different window sizes.
 
 | Breakpoint | Width | Layout Adjustments |
 |---|---|---|

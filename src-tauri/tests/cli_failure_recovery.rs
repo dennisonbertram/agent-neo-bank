@@ -18,11 +18,11 @@ use common::{
     ServiceExt,
 };
 
-use agent_neo_bank_lib::api::rest_server::ApiServer;
-use agent_neo_bank_lib::cli::commands::AwalCommand;
-use agent_neo_bank_lib::cli::executor::{CliError, CliExecutable, CliOutput, MockCliExecutor};
-use agent_neo_bank_lib::config::AppConfig;
-use agent_neo_bank_lib::test_helpers::setup_test_db;
+use tally_agentic_wallet_lib::api::rest_server::ApiServer;
+use tally_agentic_wallet_lib::cli::commands::AwalCommand;
+use tally_agentic_wallet_lib::cli::executor::{CliError, CliExecutable, CliOutput, MockCliExecutor};
+use tally_agentic_wallet_lib::config::AppConfig;
+use tally_agentic_wallet_lib::test_helpers::setup_test_db;
 
 // ---------------------------------------------------------------------------
 // Switchable CLI executor: can toggle send failures at runtime
@@ -71,7 +71,7 @@ fn create_failing_send_app(
     cli: Arc<SwitchableCliExecutor>,
 ) -> (
     axum::Router,
-    Arc<agent_neo_bank_lib::api::rest_server::AppStateAxum>,
+    Arc<tally_agentic_wallet_lib::api::rest_server::AppStateAxum>,
 ) {
     let db = setup_test_db();
     let config = AppConfig::default_test();
@@ -80,7 +80,7 @@ fn create_failing_send_app(
 
 /// Poll a transaction until it reaches one of the expected terminal statuses.
 async fn wait_for_tx_status(
-    state: &Arc<agent_neo_bank_lib::api::rest_server::AppStateAxum>,
+    state: &Arc<tally_agentic_wallet_lib::api::rest_server::AppStateAxum>,
     tx_id: &str,
     token: &str,
     expected_statuses: &[&str],

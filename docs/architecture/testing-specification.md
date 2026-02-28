@@ -1,4 +1,4 @@
-# Agent Neo Bank -- TDD Testing Specification
+# Tally Agentic Wallet -- TDD Testing Specification
 
 > **Version:** 1.0
 > **Date:** 2026-02-27
@@ -1156,7 +1156,7 @@ mod tests {
 **Integration tests (file-backed SQLite):**
 ```rust
 // tests/agent_lifecycle.rs
-use agent_neo_bank::test_helpers::helpers::setup_test_db_file;
+use tally_agentic_wallet::test_helpers::helpers::setup_test_db_file;
 
 #[tokio::test]
 async fn test_full_agent_lifecycle() {

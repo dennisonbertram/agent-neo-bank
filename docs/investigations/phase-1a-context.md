@@ -856,7 +856,7 @@ current = "base-sepolia"
 [api]
 rest_port = 7402
 rest_host = "127.0.0.1"
-unix_socket_path = "/tmp/agent-neo-bank.sock"
+unix_socket_path = "/tmp/tally-agentic-wallet.sock"
 mcp_enabled = true
 
 [security]

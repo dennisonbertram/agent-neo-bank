@@ -1,4 +1,4 @@
-# Agent Neo Bank
+# Tally Agentic Wallet
 
 <!-- TODO: Add project description -->
 

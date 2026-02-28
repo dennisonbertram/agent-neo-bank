@@ -1,6 +1,6 @@
-# Agent Neo Bank — Agent Skill File
+# Tally Agentic Wallet — Agent Skill File
 
-API reference for AI agents to discover, register with, and use Agent Neo Bank for USDC payments.
+API reference for AI agents to discover, register with, and use Tally Agentic Wallet for USDC payments.
 
 ## Connection
 
@@ -37,7 +37,7 @@ New agents must register and be approved by a human user before they can transac
 
 ### Step 1 — Submit registration
 
-The human user must first generate an invitation code in the Agent Neo Bank UI. You need this code to register.
+The human user must first generate an invitation code in the Tally Agentic Wallet UI. You need this code to register.
 
 ```
 POST /v1/agents/register

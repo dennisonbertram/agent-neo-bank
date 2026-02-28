@@ -1,16 +1,16 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_neo_bank_lib::api::rest_server::{ApiServer, AppStateAxum};
-use agent_neo_bank_lib::api::rate_limiter::RateLimiter;
-use agent_neo_bank_lib::cli::executor::MockCliExecutor;
-use agent_neo_bank_lib::config::AppConfig;
-use agent_neo_bank_lib::core::agent_registry::AgentRegistry;
-use agent_neo_bank_lib::core::auth_service::AuthService;
-use agent_neo_bank_lib::core::tx_processor::TransactionProcessor;
-use agent_neo_bank_lib::core::wallet_service::WalletService;
-use agent_neo_bank_lib::db::schema::Database;
-use agent_neo_bank_lib::test_helpers::setup_test_db;
+use tally_agentic_wallet_lib::api::rest_server::{ApiServer, AppStateAxum};
+use tally_agentic_wallet_lib::api::rate_limiter::RateLimiter;
+use tally_agentic_wallet_lib::cli::executor::MockCliExecutor;
+use tally_agentic_wallet_lib::config::AppConfig;
+use tally_agentic_wallet_lib::core::agent_registry::AgentRegistry;
+use tally_agentic_wallet_lib::core::auth_service::AuthService;
+use tally_agentic_wallet_lib::core::tx_processor::TransactionProcessor;
+use tally_agentic_wallet_lib::core::wallet_service::WalletService;
+use tally_agentic_wallet_lib::db::schema::Database;
+use tally_agentic_wallet_lib::test_helpers::setup_test_db;
 
 use axum::body::Body;
 use axum::Router;
@@ -35,7 +35,7 @@ pub fn create_test_app_with_db_and_config(
     db: Arc<Database>,
     config: AppConfig,
 ) -> (Router, Arc<AppStateAxum>) {
-    let cli: Arc<dyn agent_neo_bank_lib::cli::executor::CliExecutable> =
+    let cli: Arc<dyn tally_agentic_wallet_lib::cli::executor::CliExecutable> =
         Arc::new(MockCliExecutor::with_defaults());
     create_test_app_with_db_config_and_cli(db, config, cli)
 }
@@ -44,7 +44,7 @@ pub fn create_test_app_with_db_and_config(
 pub fn create_test_app_with_db_config_and_cli(
     db: Arc<Database>,
     config: AppConfig,
-    cli: Arc<dyn agent_neo_bank_lib::cli::executor::CliExecutable>,
+    cli: Arc<dyn tally_agentic_wallet_lib::cli::executor::CliExecutable>,
 ) -> (Router, Arc<AppStateAxum>) {
     let auth_service = Arc::new(AuthService::new(
         cli.clone(),
@@ -102,8 +102,8 @@ pub async fn register_approve_and_get_token(
     invitation_code: &str,
     agent_name: &str,
 ) -> (String, String) {
-    use agent_neo_bank_lib::test_helpers::create_test_invitation;
-    use agent_neo_bank_lib::db::queries::insert_invitation_code;
+    use tally_agentic_wallet_lib::test_helpers::create_test_invitation;
+    use tally_agentic_wallet_lib::db::queries::insert_invitation_code;
 
     // 1. Insert invitation code
     let invitation = create_test_invitation(invitation_code, "Integration test");

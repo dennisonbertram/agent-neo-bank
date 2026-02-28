@@ -110,7 +110,7 @@ impl McpServer {
             "initialize" => Ok(serde_json::json!({
                 "protocolVersion": "2024-11-05",
                 "serverInfo": {
-                    "name": "agent-neo-bank-mcp",
+                    "name": "tally-agentic-wallet-mcp",
                     "version": "0.1.0"
                 },
                 "capabilities": {
@@ -833,7 +833,7 @@ mod tests {
         let response = server.handle_request(&request);
         assert!(response.error.is_none(), "initialize should not error");
         let result = response.result.unwrap();
-        assert_eq!(result["serverInfo"]["name"], "agent-neo-bank-mcp");
+        assert_eq!(result["serverInfo"]["name"], "tally-agentic-wallet-mcp");
         assert!(result["capabilities"]["tools"].is_object());
     }
 

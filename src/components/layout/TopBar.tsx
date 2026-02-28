@@ -7,7 +7,7 @@ interface TopBarProps {
   className?: string
 }
 
-export function TopBar({ walletName = 'Agent Wallet', initials = 'DB', className }: TopBarProps) {
+export function TopBar({ walletName = 'Tally Wallet', initials = 'DB', className }: TopBarProps) {
   return (
     <div
       className={cn(

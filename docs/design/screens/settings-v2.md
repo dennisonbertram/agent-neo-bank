@@ -1,7 +1,7 @@
 # Settings Screen — v2 Design Spec
 
 **Source**: `docs/design/redesign-v2.md` lines 2383–2666
-**Screen title**: `Agent Wallet - Settings`
+**Screen title**: `Tally Wallet - Settings`
 **Screen ID / label in source**: `app settings`
 
 ---

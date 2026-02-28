@@ -1,7 +1,7 @@
 # Onboarding Step 2: Install Skill Screen Spec (v2)
 
 Source lines: 876–1120 of `docs/design/redesign-v2.md`
-HTML title: `Agent Wallet - Install Skill`
+HTML title: `Tally Wallet - Install Skill`
 
 ---
 

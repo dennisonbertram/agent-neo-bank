@@ -220,6 +220,6 @@
 
   "app": {
     "version": "0.1.0",
-    "walletName": "Agent Wallet"
+    "walletName": "Tally Wallet"
   }
 }

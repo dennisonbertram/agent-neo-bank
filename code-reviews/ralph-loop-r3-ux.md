@@ -2,7 +2,7 @@
 
 **Reviewer**: GPT-5.2-class UX Reviewer
 **Date**: 2026-02-27
-**Scope**: Tauri v2 React frontend for Agent Neo Bank (crypto neo-bank managing agent wallets)
+**Scope**: Tauri v2 React frontend for Tally Agentic Wallet (crypto neo-bank managing agent wallets)
 **Perspective**: User Experience -- error feedback, loading states, confirmations, disabled features, financial formatting, empty states, accessibility
 
 ---

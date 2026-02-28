@@ -5,10 +5,10 @@
 
 mod common;
 
-use agent_neo_bank_lib::api::mcp_server::{JsonRpcRequest, McpServer};
-use agent_neo_bank_lib::db::models::AgentStatus;
-use agent_neo_bank_lib::db::queries;
-use agent_neo_bank_lib::test_helpers::{
+use tally_agentic_wallet_lib::api::mcp_server::{JsonRpcRequest, McpServer};
+use tally_agentic_wallet_lib::db::models::AgentStatus;
+use tally_agentic_wallet_lib::db::queries;
+use tally_agentic_wallet_lib::test_helpers::{
     create_test_agent, create_test_spending_policy, setup_test_db,
 };
 

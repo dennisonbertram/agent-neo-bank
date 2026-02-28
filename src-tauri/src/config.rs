@@ -37,7 +37,7 @@ impl Default for AppConfig {
             network: "base-sepolia".to_string(),
             rest_port: 7402,
             rest_host: "127.0.0.1".to_string(),
-            unix_socket_path: "/tmp/agent-neo-bank.sock".to_string(),
+            unix_socket_path: "/tmp/tally-agentic-wallet.sock".to_string(),
             mcp_enabled: true,
             token_hash_algorithm: "argon2id".to_string(),
             token_cache_ttl_seconds: 300,
@@ -58,7 +58,7 @@ impl Default for AppConfig {
             approval_expiry_check_interval: 300,
             approval_default_expiry_hours: 24,
             awal_binary_path: "npx".to_string(),
-            db_path: "agent-neo-bank.db".to_string(),
+            db_path: "tally-agentic-wallet.db".to_string(),
         }
     }
 }
@@ -107,7 +107,7 @@ impl AppConfig {
             network: "base-sepolia".to_string(),
             rest_port: 0,
             rest_host: "127.0.0.1".to_string(),
-            unix_socket_path: "/tmp/agent-neo-bank-test.sock".to_string(),
+            unix_socket_path: "/tmp/tally-agentic-wallet-test.sock".to_string(),
             mcp_enabled: false,
             token_hash_algorithm: "argon2id".to_string(),
             token_cache_ttl_seconds: 300,
@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn test_default_config_has_db_path() {
         let config = AppConfig::default();
-        assert_eq!(config.db_path, "agent-neo-bank.db");
+        assert_eq!(config.db_path, "tally-agentic-wallet.db");
     }
 
     #[test]

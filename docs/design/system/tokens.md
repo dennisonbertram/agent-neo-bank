@@ -1,4 +1,4 @@
-# Design Tokens — Agent Neo Bank
+# Design Tokens — Tally Agentic Wallet
 
 Extracted from `docs/design/redesign-v2.md` (onboarding prototype CSS).
 These are the canonical CSS custom properties that define the entire visual language.

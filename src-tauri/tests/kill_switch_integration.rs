@@ -8,14 +8,14 @@ mod common;
 use axum::body::Body;
 use common::{bearer_request, body_json, create_test_app, register_agent_with_policy, ServiceExt};
 
-use agent_neo_bank_lib::api::rest_server::ApiServer;
-use agent_neo_bank_lib::core::approval_manager::ApprovalManager;
-use agent_neo_bank_lib::core::global_policy::GlobalPolicyEngine;
-use agent_neo_bank_lib::db::models::{ApprovalStatus};
+use tally_agentic_wallet_lib::api::rest_server::ApiServer;
+use tally_agentic_wallet_lib::core::approval_manager::ApprovalManager;
+use tally_agentic_wallet_lib::core::global_policy::GlobalPolicyEngine;
+use tally_agentic_wallet_lib::db::models::{ApprovalStatus};
 
 /// Helper: send a transaction and return (status_code, response_body).
 async fn send_amount(
-    state: &std::sync::Arc<agent_neo_bank_lib::api::rest_server::AppStateAxum>,
+    state: &std::sync::Arc<tally_agentic_wallet_lib::api::rest_server::AppStateAxum>,
     token: &str,
     amount: &str,
 ) -> (u16, serde_json::Value) {
@@ -152,7 +152,7 @@ async fn test_kill_switch_pending_approvals_not_auto_resolved() {
     let pending_before = manager.list_pending(Some(&agent_id)).unwrap();
     let tx_approvals_before: Vec<_> = pending_before
         .iter()
-        .filter(|a| a.request_type == agent_neo_bank_lib::db::models::ApprovalRequestType::Transaction)
+        .filter(|a| a.request_type == tally_agentic_wallet_lib::db::models::ApprovalRequestType::Transaction)
         .collect();
     assert_eq!(tx_approvals_before.len(), 1, "Should have one pending Transaction approval");
 
@@ -166,7 +166,7 @@ async fn test_kill_switch_pending_approvals_not_auto_resolved() {
     let pending_after = manager.list_pending(Some(&agent_id)).unwrap();
     let tx_approvals_after: Vec<_> = pending_after
         .iter()
-        .filter(|a| a.request_type == agent_neo_bank_lib::db::models::ApprovalRequestType::Transaction)
+        .filter(|a| a.request_type == tally_agentic_wallet_lib::db::models::ApprovalRequestType::Transaction)
         .collect();
     assert_eq!(
         tx_approvals_after.len(),
@@ -215,7 +215,7 @@ async fn test_kill_switch_blocks_execution_of_approved_tx() {
     let tx_approval: Vec<_> = pending
         .iter()
         .filter(|a| {
-            a.request_type == agent_neo_bank_lib::db::models::ApprovalRequestType::Transaction
+            a.request_type == tally_agentic_wallet_lib::db::models::ApprovalRequestType::Transaction
                 && a.tx_id.as_deref() == Some(&tx_id)
         })
         .collect();
@@ -231,10 +231,10 @@ async fn test_kill_switch_blocks_execution_of_approved_tx() {
     // The resolve_approval command would set status to Executing, but since kill switch
     // is active, any new sends are blocked. The tx stays in awaiting_approval status
     // (since we only resolved the approval record, not the tx status via the command).
-    let tx = agent_neo_bank_lib::db::queries::get_transaction(&state.db, &tx_id).unwrap();
+    let tx = tally_agentic_wallet_lib::db::queries::get_transaction(&state.db, &tx_id).unwrap();
     assert_ne!(
         tx.status,
-        agent_neo_bank_lib::db::models::TxStatus::Confirmed,
+        tally_agentic_wallet_lib::db::models::TxStatus::Confirmed,
         "Transaction should NOT be confirmed when kill switch is active"
     );
 
@@ -242,7 +242,7 @@ async fn test_kill_switch_blocks_execution_of_approved_tx() {
     // execution is blocked by the kill switch at the system level)
     assert_eq!(
         tx.status,
-        agent_neo_bank_lib::db::models::TxStatus::AwaitingApproval,
+        tally_agentic_wallet_lib::db::models::TxStatus::AwaitingApproval,
         "Transaction should remain in awaiting_approval since kill switch prevents execution"
     );
 

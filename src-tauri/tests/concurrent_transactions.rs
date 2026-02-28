@@ -19,19 +19,19 @@ use axum::body::Body;
 use http::Request;
 use tower::ServiceExt;
 
-use agent_neo_bank_lib::api::rate_limiter::RateLimiter;
-use agent_neo_bank_lib::api::rest_server::{ApiServer, AppStateAxum};
-use agent_neo_bank_lib::cli::executor::MockCliExecutor;
-use agent_neo_bank_lib::config::AppConfig;
-use agent_neo_bank_lib::core::agent_registry::AgentRegistry;
-use agent_neo_bank_lib::core::auth_service::AuthService;
-use agent_neo_bank_lib::core::tx_processor::TransactionProcessor;
-use agent_neo_bank_lib::core::wallet_service::WalletService;
-use agent_neo_bank_lib::db::models::GlobalPolicy;
-use agent_neo_bank_lib::db::queries::{
+use tally_agentic_wallet_lib::api::rate_limiter::RateLimiter;
+use tally_agentic_wallet_lib::api::rest_server::{ApiServer, AppStateAxum};
+use tally_agentic_wallet_lib::cli::executor::MockCliExecutor;
+use tally_agentic_wallet_lib::config::AppConfig;
+use tally_agentic_wallet_lib::core::agent_registry::AgentRegistry;
+use tally_agentic_wallet_lib::core::auth_service::AuthService;
+use tally_agentic_wallet_lib::core::tx_processor::TransactionProcessor;
+use tally_agentic_wallet_lib::core::wallet_service::WalletService;
+use tally_agentic_wallet_lib::db::models::GlobalPolicy;
+use tally_agentic_wallet_lib::db::queries::{
     get_global_spending_for_period, upsert_global_policy,
 };
-use agent_neo_bank_lib::db::schema::Database;
+use tally_agentic_wallet_lib::db::schema::Database;
 
 use rust_decimal::Decimal;
 use std::str::FromStr;
@@ -57,7 +57,7 @@ fn create_test_app_with_file_db(
     db: Arc<Database>,
     config: AppConfig,
 ) -> (axum::Router, Arc<AppStateAxum>) {
-    let cli: Arc<dyn agent_neo_bank_lib::cli::executor::CliExecutable> =
+    let cli: Arc<dyn tally_agentic_wallet_lib::cli::executor::CliExecutable> =
         Arc::new(MockCliExecutor::with_defaults());
     let auth_service = Arc::new(AuthService::new(
         cli.clone(),
@@ -196,7 +196,7 @@ async fn wait_for_agent_ledger_tx_count(
     let start = Instant::now();
     loop {
         if let Ok(Some(ledger)) =
-            agent_neo_bank_lib::db::queries::get_spending_for_period(db, agent_id, period)
+            tally_agentic_wallet_lib::db::queries::get_spending_for_period(db, agent_id, period)
         {
             if ledger.tx_count >= expected_count {
                 return;
@@ -499,7 +499,7 @@ async fn test_concurrent_sends_serialization_correctness() {
     );
 
     // Wait for background execution to complete (poll ledger instead of sleeping)
-    let period = agent_neo_bank_lib::core::spending_policy::daily_period_key(&chrono::Utc::now());
+    let period = tally_agentic_wallet_lib::core::spending_policy::daily_period_key(&chrono::Utc::now());
     wait_for_agent_ledger_tx_count(
         &state.db,
         &_agent_id,
@@ -511,7 +511,7 @@ async fn test_concurrent_sends_serialization_correctness() {
 
     // Verify the ledger total does not exceed the daily cap
     let ledger =
-        agent_neo_bank_lib::db::queries::get_spending_for_period(&state.db, &_agent_id, &period)
+        tally_agentic_wallet_lib::db::queries::get_spending_for_period(&state.db, &_agent_id, &period)
             .unwrap();
 
     if let Some(ledger) = ledger {
@@ -617,13 +617,13 @@ async fn test_concurrent_sends_strict_cap_enforcement() {
     );
 
     // Wait for background execution to complete (poll ledger instead of sleeping)
-    let period = agent_neo_bank_lib::core::spending_policy::daily_period_key(&chrono::Utc::now());
+    let period = tally_agentic_wallet_lib::core::spending_policy::daily_period_key(&chrono::Utc::now());
     wait_for_agent_ledger_tx_count(&state.db, &_agent_id, &period, 4, Duration::from_secs(10))
         .await;
 
     // Verify ledger total is exactly 20.00
     let ledger =
-        agent_neo_bank_lib::db::queries::get_spending_for_period(&state.db, &_agent_id, &period)
+        tally_agentic_wallet_lib::db::queries::get_spending_for_period(&state.db, &_agent_id, &period)
             .unwrap()
             .expect("Spending ledger should exist after successful sends");
 

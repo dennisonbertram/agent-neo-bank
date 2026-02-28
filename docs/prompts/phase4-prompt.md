@@ -1,7 +1,7 @@
 # Phase 4: Polish & Production
 
 ```
-Implement Phase 4 (Polish & Production) of Agent Neo Bank using the swarm skill.
+Implement Phase 4 (Polish & Production) of Tally Agentic Wallet using the swarm skill.
 
 ## Context
 - Architecture plan: docs/architecture/architecture-plan.md (Section 12, Phase 4)
@@ -97,13 +97,13 @@ The FIRST task is writing test cases for Phase 4 components (new sections in tes
       - Claude Code: check for `~/.claude/` directory and `~/.claude/skills/` directory
       - Codex: check for codex CLI installation (`which codex`), config directories
       - Other agents: extensible registry of known agent platforms with skill/plugin systems
-    - **Skill auto-installer:** for each discovered platform, install the Agent Neo Bank skill:
-      - Claude Code: copy `agent-neo-bank.md` skill file into `~/.claude/skills/` (global) or project-level `.claude/skills/`
+    - **Skill auto-installer:** for each discovered platform, install the Tally Agentic Wallet skill:
+      - Claude Code: copy `tally-agentic-wallet.md` skill file into `~/.claude/skills/` (global) or project-level `.claude/skills/`
       - Codex: install equivalent configuration into codex config directory
       - Skill file tells agents how to discover and use the local API (REST endpoint, auth flow, available commands)
     - **First-launch UI step** (integrated into onboarding tour or shown post-onboarding):
       - "We found Claude Code installed on your machine"
-      - "We've installed the Agent Neo Bank skill so your agents know how to use your wallet"
+      - "We've installed the Tally Agentic Wallet skill so your agents know how to use your wallet"
       - List of discovered platforms with install status (installed / skipped / failed)
       - "Skip" button and "Configure manually later" option in Settings
     - **Periodic re-scan:**

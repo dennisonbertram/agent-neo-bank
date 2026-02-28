@@ -1,7 +1,7 @@
 # Coinbase OAuth / "Sign in with Coinbase" Research
 
 **Date:** 2026-02-27
-**Context:** Evaluating Coinbase OAuth for Agent Neo Bank (Tauri desktop app wrapping CDP Agentic Wallet CLI)
+**Context:** Evaluating Coinbase OAuth for Tally Agentic Wallet (Tauri desktop app wrapping CDP Agentic Wallet CLI)
 
 ---
 
@@ -318,7 +318,7 @@ Scopes must be declared at registration time. Adding scopes after launch require
 
 ---
 
-## 7. Recommendations for Agent Neo Bank
+## 7. Recommendations for Tally Agentic Wallet
 
 ### Immediate Actions
 

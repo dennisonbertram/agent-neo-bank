@@ -4,7 +4,7 @@ test.describe("Onboarding flow", () => {
   test("renders Welcome step on /onboarding", async ({ page, mockTauri }) => {
     await mockTauri({});
     await page.goto("/onboarding");
-    await expect(page.getByRole("heading", { name: "Welcome to Agent Neo Bank" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome to Tally Agentic Wallet" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Get Started" })).toBeVisible();
   });
 

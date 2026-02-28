@@ -1,7 +1,7 @@
 # Phase 3: Receive, Earn, Onramp, Chain Monitoring
 
 ```
-Implement Phase 3 (Receive, Earn, Onramp, Chain Monitoring) of Agent Neo Bank using the swarm skill.
+Implement Phase 3 (Receive, Earn, Onramp, Chain Monitoring) of Tally Agentic Wallet using the swarm skill.
 
 ## Context
 - Architecture plan: docs/architecture/architecture-plan.md (Section 12, Phase 3)
@@ -35,7 +35,7 @@ The testing spec does NOT yet have detailed test cases for Phase 3 components. T
    - Tests: polling logic, WebSocket push, address registration, reconnection
 
 3. **Unix domain socket server** (`src-tauri/src/api/unix_socket.rs`)
-   - Same protocol as REST API, over Unix socket at /tmp/agent-neo-bank.sock
+   - Same protocol as REST API, over Unix socket at /tmp/tally-agentic-wallet.sock
    - Socket permissions 0600 (owner only)
    - Same auth middleware (bearer token)
    - Tests: Section 3.16 — mirror all REST API contract tests over socket transport

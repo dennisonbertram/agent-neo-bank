@@ -8,14 +8,14 @@ mod common;
 use axum::body::Body;
 use common::{bearer_request, body_json, create_test_app, register_agent_with_policy, ServiceExt};
 
-use agent_neo_bank_lib::api::rest_server::ApiServer;
-use agent_neo_bank_lib::core::approval_manager::ApprovalManager;
-use agent_neo_bank_lib::db::models::{ApprovalRequestType, ApprovalStatus};
-use agent_neo_bank_lib::db::queries;
+use tally_agentic_wallet_lib::api::rest_server::ApiServer;
+use tally_agentic_wallet_lib::core::approval_manager::ApprovalManager;
+use tally_agentic_wallet_lib::db::models::{ApprovalRequestType, ApprovalStatus};
+use tally_agentic_wallet_lib::db::queries;
 
 /// Helper: send a transaction and return (status_code, response_body).
 async fn send_amount(
-    state: &std::sync::Arc<agent_neo_bank_lib::api::rest_server::AppStateAxum>,
+    state: &std::sync::Arc<tally_agentic_wallet_lib::api::rest_server::AppStateAxum>,
     token: &str,
     amount: &str,
 ) -> (u16, serde_json::Value) {

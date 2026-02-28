@@ -1,7 +1,7 @@
 # Agent Detail Screen — v2 Design Spec
 
 **Source**: `docs/design/redesign-v2.md` lines 1793–2090
-**Screen title**: `Agent Wallet - Research Runner`
+**Screen title**: `Tally Wallet - Research Runner`
 **Screen ID / label in source**: `individual agent screen`
 
 ---

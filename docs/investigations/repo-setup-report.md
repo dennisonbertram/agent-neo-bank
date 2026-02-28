@@ -1,7 +1,7 @@
 # Repository Setup Report
 
 **Date**: 2026-02-26
-**Project**: Agent Neo Bank
+**Project**: Tally Agentic Wallet
 
 ## Detection Results
 

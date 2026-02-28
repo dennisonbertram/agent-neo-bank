@@ -158,7 +158,7 @@ app_config:
 |                                                                    |
 |                         [App Logo/Icon]                            |
 |                                                                    |
-|                    Agent Neo Bank                                   |
+|                    Tally Agentic Wallet                                   |
 |                                                                    |
 |              Give your AI agents spending power.                   |
 |                                                                    |
@@ -1208,7 +1208,7 @@ If the awal CLI is not detected at startup AND the user is in onboarding, show a
 |                                                                    |
 |                    One more thing...                               |
 |                                                                    |
-|         Agent Neo Bank uses the Coinbase Agent Wallet CLI.         |
+|         Tally Agentic Wallet uses the Coinbase Agent Wallet CLI.         |
 |         You'll need to install it before continuing.               |
 |                                                                    |
 |         Run this in your terminal:                                 |

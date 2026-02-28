@@ -30,7 +30,7 @@ pub fn run() {
                     .expect("Failed to get app data dir");
                 std::fs::create_dir_all(&app_data_dir).expect("Failed to create app data dir");
                 config.db_path = app_data_dir
-                    .join("agent-neo-bank.db")
+                    .join("tally-agentic-wallet.db")
                     .to_string_lossy()
                     .to_string();
             }

@@ -1,7 +1,7 @@
 {
-  "productName": "Agent Neo Bank",
+  "productName": "Tally Agentic Wallet",
   "version": "0.1.0",
-  "identifier": "com.agent-neo-bank.app",
+  "identifier": "com.tally.agentic-wallet",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Agent Neo Bank",
+        "title": "Tally Agentic Wallet",
         "width": 390,
         "height": 844,
         "resizable": false,

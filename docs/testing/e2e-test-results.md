@@ -1,4 +1,4 @@
-# E2E Test Results — Agent Neo Bank Frontend
+# E2E Test Results — Tally Agentic Wallet Frontend
 
 **Date**: 2026-02-28
 **Environment**: Browser (localhost:1420), 390x844px viewport
@@ -56,7 +56,7 @@
 
 ## Suite 5: Home Dashboard (5/5 PASS)
 
-- [x] Top bar: "DB" avatar, "Agent Wallet" title, bell icon
+- [x] Top bar: "DB" avatar, "Tally Wallet" title, bell icon
 - [x] Balance card: "$20.32", "BASE" network badge, wallet address `0x72AE...04B4`, "0.10 ETH 20.00 USDC"
 - [x] Quick action buttons: "+ Add Funds", "Agents"
 - [x] Segment control: "Overview" / "Agents" tabs

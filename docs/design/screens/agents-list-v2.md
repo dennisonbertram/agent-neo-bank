@@ -1,7 +1,7 @@
 # Agents List Screen Spec (v2)
 
 Source lines: 1465–1792 of `docs/design/redesign-v2.md`
-HTML title: `Agent Wallet - Agents List`
+HTML title: `Tally Wallet - Agents List`
 
 ---
 

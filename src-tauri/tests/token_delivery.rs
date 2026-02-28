@@ -9,7 +9,7 @@ use axum::body::Body;
 use common::{bearer_request, body_json, create_test_app, register_approve_and_get_token, ServiceExt};
 use http::Request;
 
-use agent_neo_bank_lib::api::rest_server::ApiServer;
+use tally_agentic_wallet_lib::api::rest_server::ApiServer;
 
 // =========================================================================
 // Test 1: Token delivery expires after TTL

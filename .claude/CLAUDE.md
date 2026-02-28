@@ -1,8 +1,8 @@
-# Agent Neo Bank
+# Tally Agentic Wallet
 
 ## Project Overview
 
-Agent Neo Bank is a Tauri v2 desktop app (Rust backend + React frontend) for managing agent wallets with spending policies, approvals, and on-chain transactions.
+Tally Agentic Wallet is a Tauri v2 desktop app (Rust backend + React frontend) for managing agent wallets with spending policies, approvals, and on-chain transactions.
 
 **Important: The end user never interacts with the CLI or terminal.** This is a GUI-only desktop application. All user-facing flows (onboarding, OTP verification, funding, etc.) happen entirely within the app window. Never reference the CLI, terminal, or command line in any user-facing UI text or copy.
 

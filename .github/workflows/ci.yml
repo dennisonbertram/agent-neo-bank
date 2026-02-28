@@ -1,4 +1,4 @@
-# Agent Neo Bank CI Pipeline
+# Tally Agentic Wallet CI Pipeline
 #
 # Required jobs for merge to main:
 #   - lint-rust

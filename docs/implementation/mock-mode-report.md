@@ -20,7 +20,7 @@ Implemented mock mode activation via `ANB_MOCK` environment variable. When set t
 ### `src-tauri/src/config.rs`
 - Added `db_path: String` field to `AppConfig`
 - Added `AppConfig::from_env()` -- reads `ANB_MOCK` env var to set `mock_mode`
-- Updated `Default` impl to include `db_path: "agent-neo-bank.db"`
+- Updated `Default` impl to include `db_path: "tally-agentic-wallet.db"`
 - Updated `default_test()` to include `db_path: ":memory:"`
 - Added 8 new tests (env var parsing, defaults, db_path)
 - Used `Mutex` to serialize env var tests to avoid race conditions

@@ -1,4 +1,4 @@
-# Phase 2.5 Code Review — Agent Neo Bank
+# Phase 2.5 Code Review — Tally Agentic Wallet
 
 **Reviewer**: Claude Opus 4.6 (external review)
 **Date**: 2026-02-27

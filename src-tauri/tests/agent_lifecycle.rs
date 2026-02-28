@@ -9,9 +9,9 @@ use axum::body::Body;
 use common::{bearer_request, body_json, create_test_app, ServiceExt};
 use http::Request;
 
-use agent_neo_bank_lib::api::rest_server::ApiServer;
-use agent_neo_bank_lib::db::queries::insert_invitation_code;
-use agent_neo_bank_lib::test_helpers::create_test_invitation;
+use tally_agentic_wallet_lib::api::rest_server::ApiServer;
+use tally_agentic_wallet_lib::db::queries::insert_invitation_code;
+use tally_agentic_wallet_lib::test_helpers::create_test_invitation;
 
 // =========================================================================
 // Step 1-4: Generate invitation, register agent, check pending status

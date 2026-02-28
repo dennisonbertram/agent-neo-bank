@@ -1,5 +1,5 @@
 [package]
-name = "agent-neo-bank"
+name = "tally-agentic-wallet"
 version = "0.1.0"
 edition = "2021"
 
@@ -39,5 +39,5 @@ tower = { version = "0.5", features = ["util"] }
 http = "1"
 
 [lib]
-name = "agent_neo_bank_lib"
+name = "tally_agentic_wallet_lib"
 crate-type = ["lib", "cdylib", "staticlib"]

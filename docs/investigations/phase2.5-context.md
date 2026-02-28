@@ -9,7 +9,7 @@
 
 ### High-Level Architecture
 
-Agent Neo Bank is a **Tauri v2 desktop app** with a Rust backend and React frontend (Vite + TypeScript + Tailwind v4 + shadcn/ui). It provides a banking interface for AI agents to send USDC payments under user-controlled spending policies.
+Tally Agentic Wallet is a **Tauri v2 desktop app** with a Rust backend and React frontend (Vite + TypeScript + Tailwind v4 + shadcn/ui). It provides a banking interface for AI agents to send USDC payments under user-controlled spending policies.
 
 **Core design principles:**
 - Single source of truth: the Core Service Layer handles all business logic. Three transports (Tauri IPC, REST API, MCP) delegate to it.

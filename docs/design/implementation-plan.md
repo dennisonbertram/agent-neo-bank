@@ -1,4 +1,4 @@
-# Agent Neo Bank — Frontend Implementation Plan
+# Tally Agentic Wallet — Frontend Implementation Plan
 
 **Date**: 2026-02-27
 **Tech Stack**: Tauri v2, React 19, TypeScript, Tailwind CSS v4, React Router v7, Zustand v5
@@ -43,7 +43,7 @@ Update `src-tauri/tauri.conf.json` — the `app.windows` block currently sets 12
 
 ```json
 {
-  "title": "Agent Neo Bank",
+  "title": "Tally Agentic Wallet",
   "width": 390,
   "height": 844,
   "resizable": false,

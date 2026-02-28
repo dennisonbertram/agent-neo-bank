@@ -42,7 +42,7 @@ pub struct AgentRegistrationResult {
 
 /// Static key for token encryption in delivery cache.
 /// In production, this would come from secure storage / key management.
-const ENCRYPTION_KEY: &[u8; 32] = b"agent-neo-bank-token-encrypt-key";
+const ENCRYPTION_KEY: &[u8; 32] = b"tally-wallet-token-encrypt-key!!";
 
 fn encrypt_token(token: &str) -> Result<String, AppError> {
     let cipher = Aes256Gcm::new(ENCRYPTION_KEY.into());

@@ -1,4 +1,4 @@
-# Agent Neo Bank — Product & Design Brief
+# Tally Agentic Wallet — Product & Design Brief
 
 ## Product Concept
 

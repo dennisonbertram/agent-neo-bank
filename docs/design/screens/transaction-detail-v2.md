@@ -1,7 +1,7 @@
 # Transaction Detail Screen — v2 Design Spec
 
 **Source**: `docs/design/redesign-v2.md` lines 2091–2382
-**Screen title**: `Agent Wallet - Transaction Transparency`
+**Screen title**: `Tally Wallet - Transaction Transparency`
 **Screen ID / label in source**: `individual transaction`
 
 ---

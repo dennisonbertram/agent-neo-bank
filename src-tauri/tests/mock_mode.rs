@@ -13,8 +13,8 @@ use common::{
 };
 use http::Request;
 
-use agent_neo_bank_lib::api::rest_server::ApiServer;
-use agent_neo_bank_lib::config::AppConfig;
+use tally_agentic_wallet_lib::api::rest_server::ApiServer;
+use tally_agentic_wallet_lib::config::AppConfig;
 
 // =========================================================================
 // Step 2: Health endpoint reports mock_mode: true

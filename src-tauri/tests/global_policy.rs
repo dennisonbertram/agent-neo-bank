@@ -8,14 +8,14 @@ mod common;
 use axum::body::Body;
 use common::{bearer_request, body_json, create_test_app_with_config, register_agent_with_policy, ServiceExt};
 
-use agent_neo_bank_lib::api::rest_server::ApiServer;
-use agent_neo_bank_lib::config::AppConfig;
-use agent_neo_bank_lib::db::models::GlobalPolicy;
-use agent_neo_bank_lib::db::queries::upsert_global_policy;
+use tally_agentic_wallet_lib::api::rest_server::ApiServer;
+use tally_agentic_wallet_lib::config::AppConfig;
+use tally_agentic_wallet_lib::db::models::GlobalPolicy;
+use tally_agentic_wallet_lib::db::queries::upsert_global_policy;
 
 /// Helper: send a transaction and return (status_code, response_body).
 async fn send_amount(
-    state: &std::sync::Arc<agent_neo_bank_lib::api::rest_server::AppStateAxum>,
+    state: &std::sync::Arc<tally_agentic_wallet_lib::api::rest_server::AppStateAxum>,
     token: &str,
     amount: &str,
 ) -> (u16, serde_json::Value) {

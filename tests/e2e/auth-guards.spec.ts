@@ -62,7 +62,7 @@ test.describe("Auth and routing guards", () => {
     await page.goto("/onboarding");
 
     await expect(
-      page.getByRole("heading", { name: "Welcome to Agent Neo Bank" })
+      page.getByRole("heading", { name: "Welcome to Tally Agentic Wallet" })
     ).toBeVisible();
   });
 

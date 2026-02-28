@@ -1,12 +1,12 @@
-# Agent Neo Bank -- Standalone Design Prompt
+# Tally Agentic Wallet -- Standalone Design Prompt
 
-> Copy-paste this entire prompt into any AI design tool (Figma AI, v0, Bolt, another Claude session, etc.) to generate the Agent Neo Bank UI.
+> Copy-paste this entire prompt into any AI design tool (Figma AI, v0, Bolt, another Claude session, etc.) to generate the Tally Agentic Wallet UI.
 
 ---
 
 ## Product Overview
 
-Agent Neo Bank is a desktop fintech app that gives AI agents autonomous spending power. Users set up a crypto wallet (Coinbase Agent Wallet), define budgets, and let AI agents (like Claude Code) pay for services with human-controlled guardrails. Think of it as a banking app where your "employees" are AI agents. Target users are non-technical to semi-technical people who expect a consumer-grade financial app -- NOT a developer tool or admin panel.
+Tally Agentic Wallet is a desktop fintech app that gives AI agents autonomous spending power. Users set up a crypto wallet (Coinbase Agent Wallet), define budgets, and let AI agents (like Claude Code) pay for services with human-controlled guardrails. Think of it as a banking app where your "employees" are AI agents. Target users are non-technical to semi-technical people who expect a consumer-grade financial app -- NOT a developer tool or admin panel.
 
 ---
 

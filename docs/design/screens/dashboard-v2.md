@@ -1,7 +1,7 @@
 # Main Wallet / Dashboard Screen Spec (v2)
 
 Source lines: 1121–1464 of `docs/design/redesign-v2.md`
-HTML title: `Agent Wallet`
+HTML title: `Tally Wallet`
 
 ---
 

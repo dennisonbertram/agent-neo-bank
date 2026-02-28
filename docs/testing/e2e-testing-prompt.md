@@ -1,6 +1,6 @@
-# Agent Neo Bank -- Exhaustive E2E Testing Prompt
+# Tally Agentic Wallet -- Exhaustive E2E Testing Prompt
 
-> **Purpose**: This document is a self-contained prompt for a Claude Code agent (or subagent) to step through every screen and flow of the Agent Neo Bank app using Chrome browser automation and Gmail MCP tools. The agent executing this prompt should be able to run through all tests completely autonomously.
+> **Purpose**: This document is a self-contained prompt for a Claude Code agent (or subagent) to step through every screen and flow of the Tally Agentic Wallet app using Chrome browser automation and Gmail MCP tools. The agent executing this prompt should be able to run through all tests completely autonomously.
 
 ---
 
@@ -32,11 +32,11 @@
 
 ### Who You Are
 
-You are a Claude Code agent tasked with performing exhaustive end-to-end testing of the Agent Neo Bank application. You will interact with the app through a Chrome browser using MCP-based browser automation tools, and you will use Gmail MCP tools to retrieve OTP codes for authentication.
+You are a Claude Code agent tasked with performing exhaustive end-to-end testing of the Tally Agentic Wallet application. You will interact with the app through a Chrome browser using MCP-based browser automation tools, and you will use Gmail MCP tools to retrieve OTP codes for authentication.
 
-### What Agent Neo Bank Is
+### What Tally Agentic Wallet Is
 
-Agent Neo Bank is a Tauri v2 desktop app (Rust backend + React frontend) for managing AI agent wallets. During development, the frontend is served by Vite at `http://localhost:1420`. The app is designed for a **390x844px** mobile-style window.
+Tally Agentic Wallet is a Tauri v2 desktop app (Rust backend + React frontend) for managing AI agent wallets. During development, the frontend is served by Vite at `http://localhost:1420`. The app is designed for a **390x844px** mobile-style window.
 
 Key facts:
 - **Auth email**: `dennison@dennisonbertram.com`
@@ -791,7 +791,7 @@ Steps:
   3. Call mcp__claude-in-chrome__get_screenshot
   4. Call mcp__claude-in-chrome__get_page_text
 Expected Result:
-  - Top bar: "Agent Wallet" text and user initials avatar "DB"
+  - Top bar: "Tally Wallet" text and user initials avatar "DB"
   - Balance card (black background, rounded-32px):
     - "Base Network Balance" label
     - "$20.32" total balance

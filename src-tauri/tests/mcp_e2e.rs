@@ -7,12 +7,12 @@ mod common;
 
 use std::sync::Arc;
 
-use agent_neo_bank_lib::api::mcp_server::{JsonRpcRequest, McpServer};
-use agent_neo_bank_lib::core::spending_policy::{daily_period_key, weekly_period_key, monthly_period_key};
-use agent_neo_bank_lib::db::models::{AgentStatus, GlobalPolicy};
-use agent_neo_bank_lib::db::queries;
-use agent_neo_bank_lib::db::schema::Database;
-use agent_neo_bank_lib::test_helpers::{
+use tally_agentic_wallet_lib::api::mcp_server::{JsonRpcRequest, McpServer};
+use tally_agentic_wallet_lib::core::spending_policy::{daily_period_key, weekly_period_key, monthly_period_key};
+use tally_agentic_wallet_lib::db::models::{AgentStatus, GlobalPolicy};
+use tally_agentic_wallet_lib::db::queries;
+use tally_agentic_wallet_lib::db::schema::Database;
+use tally_agentic_wallet_lib::test_helpers::{
     create_test_agent, create_test_spending_policy, setup_test_db,
 };
 
@@ -84,7 +84,7 @@ fn make_tools_call_request(id: u64, tool_name: &str, arguments: serde_json::Valu
 
 /// Extract the text content from a successful JSON-RPC tools/call response,
 /// parsed as a JSON value.
-fn extract_tool_result(response: &agent_neo_bank_lib::api::mcp_server::JsonRpcResponse) -> serde_json::Value {
+fn extract_tool_result(response: &tally_agentic_wallet_lib::api::mcp_server::JsonRpcResponse) -> serde_json::Value {
     assert!(
         response.error.is_none(),
         "Expected success but got error: {:?}",
@@ -190,7 +190,7 @@ fn test_mcp_invalid_token_rejected() {
     assert!(result.is_err(), "Invalid token should be rejected");
 
     match result.unwrap_err() {
-        agent_neo_bank_lib::error::AppError::InvalidToken => {}
+        tally_agentic_wallet_lib::error::AppError::InvalidToken => {}
         other => panic!("Expected InvalidToken, got: {:?}", other),
     }
 }
@@ -204,7 +204,7 @@ fn test_mcp_invalid_token_with_agents_present() {
     assert!(result.is_err(), "Wrong token should be rejected even with agents present");
 
     match result.unwrap_err() {
-        agent_neo_bank_lib::error::AppError::InvalidToken => {}
+        tally_agentic_wallet_lib::error::AppError::InvalidToken => {}
         other => panic!("Expected InvalidToken, got: {:?}", other),
     }
 }
@@ -283,7 +283,7 @@ fn test_mcp_initialize_e2e() {
 
     let result = response.result.unwrap();
     assert_eq!(result["protocolVersion"], "2024-11-05");
-    assert_eq!(result["serverInfo"]["name"], "agent-neo-bank-mcp");
+    assert_eq!(result["serverInfo"]["name"], "tally-agentic-wallet-mcp");
     assert_eq!(result["serverInfo"]["version"], "0.1.0");
     assert!(result["capabilities"]["tools"].is_object());
 }

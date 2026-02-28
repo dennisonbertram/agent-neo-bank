@@ -1,4 +1,4 @@
-# Agent Neo Bank — Next Steps Investigation
+# Tally Agentic Wallet — Next Steps Investigation
 
 **Date**: 2026-02-28
 **Investigator**: Claude Code research agent

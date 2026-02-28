@@ -24,7 +24,7 @@ Tests for this phase's components must be written FIRST before implementation. W
 | Amount parsing (Decimal) | `api/types.rs` | `SendRequest` uses `amount: Decimal`, parsed at API boundary |
 | Transaction history UI | `pages/Transactions` | Table with basic filtering + pagination (limit/offset) |
 | Stale approval cleanup | `core/approval_manager` | Background task every 5 min, `expires_at` column |
-| Agent skill file | `skills/agent-neo-bank.md` | Registration and usage instructions for AI agents |
+| Agent skill file | `skills/tally-agentic-wallet.md` | Registration and usage instructions for AI agents |
 | Spending ledger (UTC) | `db/queries.rs` | Period determined at creation time, explicit UTC, first-tx upsert |
 | Pagination everywhere | All list endpoints | `limit` and `offset` on agents, approvals, transactions |
 

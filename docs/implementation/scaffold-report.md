@@ -5,7 +5,7 @@
 
 ## Summary
 
-The Agent Neo Bank project scaffold has been created with all required Tauri v2 backend and React frontend files. Both `npm run build` (Vite frontend) and `cargo check` (Rust backend) pass successfully.
+The Tally Agentic Wallet project scaffold has been created with all required Tauri v2 backend and React frontend files. Both `npm run build` (Vite frontend) and `cargo check` (Rust backend) pass successfully.
 
 ## What Was Created
 

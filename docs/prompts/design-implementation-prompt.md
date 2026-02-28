@@ -1,7 +1,7 @@
 # Design Implementation: UI Polish
 
 ```
-Implement the Agent Neo Bank design system and polish all existing screens using the swarm skill.
+Implement the Tally Agentic Wallet design system and polish all existing screens using the swarm skill.
 
 ## Context
 - Design spec: docs/design/standalone-design-prompt.md (THE source of truth for all visual decisions)
@@ -84,7 +84,7 @@ Replace the dark zinc shadcn defaults with the warm light theme:
 2. **Sidebar Redesign** (`src/components/layout/Sidebar.tsx`)
    - White background (#FFFFFF), right border (#E8E5E0)
    - 240px width (currently 60/w-60 — update to w-60 = 240px)
-   - App logo at top: "Agent Neo Bank" with small icon (or just styled text for now)
+   - App logo at top: "Tally Agentic Wallet" with small icon (or just styled text for now)
    - 6 nav items: Dashboard, Agents, Transactions, Approvals, Fund, Settings
    - Active item: indigo background (#EEF2FF), indigo text (#4F46E5), semibold
    - Inactive: #6B7280 text, hover → #F9FAFB background

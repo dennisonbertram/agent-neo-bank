@@ -1,6 +1,6 @@
 # Documentation
 
-Organized documentation for Agent Neo Bank.
+Organized documentation for Tally Agentic Wallet.
 
 ## Structure
 
