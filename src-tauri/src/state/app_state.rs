@@ -32,10 +32,16 @@ impl AppState {
         let cli: Arc<dyn CliExecutable> = if config.mock_mode {
             Arc::new(MockCliExecutor::with_defaults())
         } else {
+            // If using npx fallback, pass "awal" as args prefix; otherwise invoke directly
+            let (binary, args_prefix) = if config.awal_binary_path == "npx" {
+                ("npx".to_string(), vec!["awal".to_string()])
+            } else {
+                (config.awal_binary_path.clone(), vec![])
+            };
             Arc::new(
                 RealCliExecutor::new(
-                    &config.awal_binary_path,
-                    vec!["awal@latest".to_string()],
+                    &binary,
+                    args_prefix,
                     &config.network,
                 )
                 .map_err(|e| AppError::CliNotFound(e.to_string()))?,

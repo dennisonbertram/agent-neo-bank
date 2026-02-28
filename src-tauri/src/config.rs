@@ -71,10 +71,34 @@ impl AppConfig {
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
 
+        // Resolve local awal binary from node_modules
+        let awal_binary_path = Self::resolve_awal_path();
+
         Self {
             mock_mode,
+            awal_binary_path,
             ..Self::default()
         }
+    }
+
+    /// Find the local awal binary installed via npm.
+    /// Falls back to "npx" if the local binary isn't found.
+    fn resolve_awal_path() -> String {
+        // In dev mode, cwd is src-tauri/, so node_modules is one level up
+        let candidates = [
+            "../node_modules/.bin/awal",
+            "node_modules/.bin/awal",
+        ];
+        for candidate in &candidates {
+            let path = std::path::Path::new(candidate);
+            if path.exists() {
+                return path.canonicalize()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|_| candidate.to_string());
+            }
+        }
+        // Fallback: check if awal is globally available
+        "awal".to_string()
     }
 
     pub fn default_test() -> Self {

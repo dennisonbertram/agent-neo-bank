@@ -35,6 +35,12 @@ docs/          # Documentation and reports
   commands/    # Custom slash commands
 ```
 
+## AWAL CLI Dependency
+
+The app depends on `awal` (Coinbase Agent Wallet CLI) for all wallet operations. Currently installed as a pinned npm dependency (`awal@2.0.3`) and invoked via `node_modules/.bin/awal`.
+
+**PRODUCTION TODO**: For distribution, awal must be compiled into a standalone binary using `bun build --compile` and bundled as a Tauri sidecar via `externalBin` in `tauri.conf.json`. This eliminates the Node.js requirement for end users. See `docs/investigations/awal-bundling-investigation.md` for the full plan.
+
 ## Code Conventions
 
 - Use TypeScript with strict mode
