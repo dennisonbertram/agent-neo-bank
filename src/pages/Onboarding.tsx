@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { EmailStep } from "@/components/onboarding/EmailStep";
@@ -74,9 +75,10 @@ export function Onboarding() {
     }
   }
 
+  const navigate = useNavigate();
+
   function handleComplete() {
-    // Navigate to dashboard
-    window.location.href = "/";
+    navigate("/");
   }
 
   function handleBackToEmail() {

@@ -61,10 +61,10 @@ export function Sidebar() {
       <div className="border-t border-[#E8E5E0] px-4 py-4">
         <div className="flex items-center gap-3">
           <div className="flex size-8 items-center justify-center rounded-full bg-[#EEF2FF] text-sm font-medium text-[#4F46E5]">
-            D
+            W
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-[#1A1A1A]">dennison</p>
+            <p className="truncate text-sm font-medium text-[#1A1A1A]">Wallet</p>
             <p className="truncate text-xs text-[#9CA3AF]">Connected</p>
           </div>
         </div>

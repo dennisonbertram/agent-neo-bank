@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Onboarding } from "./Onboarding";
+import { renderWithRouter } from "@/test/render";
 
 const mockInvoke = vi.fn();
 
@@ -15,14 +16,14 @@ describe("Onboarding", () => {
   });
 
   it("renders WelcomeStep initially", () => {
-    render(<Onboarding />);
+    renderWithRouter(<Onboarding />);
     expect(
       screen.getByText(/give your ai agents spending power/i)
     ).toBeInTheDocument();
   });
 
   it("advances through steps", async () => {
-    render(<Onboarding />);
+    renderWithRouter(<Onboarding />);
     // Step 0: Welcome
     expect(
       screen.getByText(/give your ai agents spending power/i)
@@ -39,7 +40,7 @@ describe("Onboarding", () => {
   it("calls invoke('auth_login') when email is submitted", async () => {
     mockInvoke.mockResolvedValueOnce({ status: "otp_sent", flow_id: "abc" });
 
-    render(<Onboarding />);
+    renderWithRouter(<Onboarding />);
     // Go to email step
     await userEvent.click(
       screen.getByRole("button", { name: /get started/i })
@@ -72,7 +73,7 @@ describe("Onboarding", () => {
     // Third call: auth_status (optional, may fail)
     mockInvoke.mockRejectedValueOnce(new Error("not implemented"));
 
-    render(<Onboarding />);
+    renderWithRouter(<Onboarding />);
 
     // Go to email step
     await userEvent.click(
@@ -115,7 +116,7 @@ describe("Onboarding", () => {
   it("shows error when auth_login fails", async () => {
     mockInvoke.mockRejectedValueOnce("Invalid email domain");
 
-    render(<Onboarding />);
+    renderWithRouter(<Onboarding />);
 
     // Go to email step
     await userEvent.click(
@@ -141,7 +142,7 @@ describe("Onboarding", () => {
     // auth_verify fails
     mockInvoke.mockRejectedValueOnce("Invalid OTP");
 
-    render(<Onboarding />);
+    renderWithRouter(<Onboarding />);
 
     // Navigate to OTP step
     await userEvent.click(

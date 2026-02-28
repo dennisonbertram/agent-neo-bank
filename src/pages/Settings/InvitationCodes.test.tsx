@@ -186,8 +186,11 @@ describe("InvitationCodes", () => {
     await screen.findByText("INV-revokeme");
 
     const user = userEvent.setup();
+    // First click shows confirmation
     const revokeButton = screen.getByRole("button", { name: /revoke/i });
     await user.click(revokeButton);
+    // Second click confirms
+    await user.click(screen.getByRole("button", { name: /confirm/i }));
 
     await waitFor(() => {
       expect(invoker).toHaveBeenCalledWith("revoke_invitation_code", {

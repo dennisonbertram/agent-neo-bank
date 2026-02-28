@@ -52,6 +52,9 @@ export function Approvals() {
   const [filter, setFilter] = useState<string>("pending");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ id: string; decision: string } | null>(null);
   const approvalRequestRef = useRef(0);
 
   const loadApprovals = useCallback(async () => {
@@ -94,14 +97,21 @@ export function Approvals() {
   };
 
   const handleResolve = async (approvalId: string, decision: string) => {
+    setProcessingId(approvalId);
+    setResolveError(null);
     try {
       await invoke("resolve_approval", {
         approval_id: approvalId,
         decision,
       });
+      setConfirmAction(null);
       await loadApprovals();
-    } catch {
-      // silently handle
+    } catch (err) {
+      setResolveError(
+        `Failed to ${decision === "approved" ? "approve" : "deny"}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -244,23 +254,58 @@ export function Approvals() {
               {renderPayloadDetails(approval)}
 
               {approval.status === "pending" && (
-                <div className="mt-4 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleResolve(approval.id, "approved")}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#10B981] px-4 py-2 text-sm font-medium text-white hover:bg-[#059669]"
-                  >
-                    <Check className="size-4" />
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleResolve(approval.id, "denied")}
-                    className="inline-flex items-center gap-2 rounded-lg border border-[#EF4444] px-4 py-2 text-sm font-medium text-[#EF4444] hover:bg-[#FEF2F2]"
-                  >
-                    <X className="size-4" />
-                    Deny
-                  </button>
+                <div className="mt-4">
+                  {resolveError && processingId === null && confirmAction?.id === approval.id && (
+                    <div className="mb-3 rounded-lg bg-[#FEF2F2] px-4 py-2 text-sm text-[#EF4444]">
+                      {resolveError}
+                    </div>
+                  )}
+                  {confirmAction?.id === approval.id ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-[#6B7280]">
+                        {confirmAction.decision === "approved" ? "Approve" : "Deny"} this request?
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleResolve(approval.id, confirmAction.decision)}
+                        disabled={processingId === approval.id}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${
+                          confirmAction.decision === "approved" ? "bg-[#10B981] hover:bg-[#059669]" : "bg-[#EF4444] hover:bg-[#DC2626]"
+                        }`}
+                      >
+                        {processingId === approval.id ? "Processing..." : "Confirm"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setConfirmAction(null); setResolveError(null); }}
+                        disabled={processingId === approval.id}
+                        className="rounded-lg border border-[#E8E5E0] px-3 py-1.5 text-sm font-medium text-[#6B7280] hover:bg-[#F9FAFB]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmAction({ id: approval.id, decision: "approved" })}
+                        disabled={processingId !== null}
+                        className="inline-flex items-center gap-2 rounded-lg bg-[#10B981] px-4 py-2 text-sm font-medium text-white hover:bg-[#059669] disabled:opacity-50"
+                      >
+                        <Check className="size-4" />
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmAction({ id: approval.id, decision: "denied" })}
+                        disabled={processingId !== null}
+                        className="inline-flex items-center gap-2 rounded-lg border border-[#EF4444] px-4 py-2 text-sm font-medium text-[#EF4444] hover:bg-[#FEF2F2] disabled:opacity-50"
+                      >
+                        <X className="size-4" />
+                        Deny
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

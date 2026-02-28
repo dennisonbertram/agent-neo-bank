@@ -217,7 +217,7 @@ export function Transactions() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-[#1A1A1A]">Transactions</h1>
-        <button className="inline-flex items-center gap-2 rounded-lg border border-[#E8E5E0] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] hover:bg-[#F9FAFB]">
+        <button disabled className="inline-flex items-center gap-2 rounded-lg border border-[#E8E5E0] bg-white px-4 py-2 text-sm font-medium text-[#9CA3AF] opacity-50 cursor-not-allowed" title="Coming soon">
           <Download className="size-4" />
           Export CSV
         </button>
@@ -302,10 +302,10 @@ export function Transactions() {
           <div className="flex flex-col items-center py-16">
             <Search className="size-12 text-[#9CA3AF]" />
             <h3 className="mt-4 text-lg font-medium text-[#1A1A1A]">
-              No matching transactions
+              No matching transactions on this page
             </h3>
             <p className="mt-1 text-sm text-[#6B7280]">
-              Try adjusting your search or filters.
+              Try adjusting your search, changing filters, or checking other pages.
             </p>
           </div>
         </div>

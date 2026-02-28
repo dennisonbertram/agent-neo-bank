@@ -57,7 +57,7 @@ describe("Dashboard", () => {
 
   it("shows empty state for transactions", () => {
     renderWithRouter(<Dashboard />);
-    expect(screen.getByText("No transactions yet")).toBeInTheDocument();
+    expect(screen.getByText("Recent transactions coming soon")).toBeInTheDocument();
   });
 
   it("renders global budget utilization section", async () => {

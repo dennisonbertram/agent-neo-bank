@@ -7,6 +7,7 @@ export function GlobalPolicySettings() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showKillConfirm, setShowKillConfirm] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const loadPolicy = () => {
     invoke<GlobalPolicy>("get_global_policy")
@@ -22,15 +23,44 @@ export function GlobalPolicySettings() {
   const handleCapChange = (field: keyof GlobalPolicy, value: string) => {
     if (!policy) return;
     setPolicy({ ...policy, [field]: value });
+    if (validationErrors[field]) {
+      setValidationErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
   };
 
   const handleSaveCaps = async () => {
     if (!policy) return;
+
+    // Validate numeric fields
+    const errors: Record<string, string> = {};
+    for (const field of ["daily_cap", "weekly_cap", "monthly_cap", "min_reserve_balance"] as const) {
+      const val = policy[field];
+      const num = parseFloat(val as string);
+      if (val === "" || val === undefined || isNaN(num)) {
+        errors[field] = "Must be a valid number";
+      } else if (num < 0) {
+        errors[field] = "Must be >= 0";
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors({});
+
     setIsSaving(true);
     try {
       await invoke("update_global_policy", {
         policy: {
           ...policy,
+          daily_cap: parseFloat(policy.daily_cap as string).toString(),
+          weekly_cap: parseFloat(policy.weekly_cap as string).toString(),
+          monthly_cap: parseFloat(policy.monthly_cap as string).toString(),
+          min_reserve_balance: parseFloat(policy.min_reserve_balance as string).toString(),
           updated_at: Math.floor(Date.now() / 1000),
         },
       });
@@ -90,10 +120,13 @@ export function GlobalPolicySettings() {
           <input
             id="daily-cap"
             type="number"
+            min="0"
+            step="any"
             value={policy.daily_cap}
             onChange={(e) => handleCapChange("daily_cap", e.target.value)}
             className="mt-1 block w-40 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#1A1A1A] focus:border-[#4F46E5] focus:outline-none focus:ring-1 focus:ring-[#4F46E5]"
           />
+          {validationErrors.daily_cap && <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.daily_cap}</p>}
         </div>
 
         <div>
@@ -103,10 +136,13 @@ export function GlobalPolicySettings() {
           <input
             id="weekly-cap"
             type="number"
+            min="0"
+            step="any"
             value={policy.weekly_cap}
             onChange={(e) => handleCapChange("weekly_cap", e.target.value)}
             className="mt-1 block w-40 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#1A1A1A] focus:border-[#4F46E5] focus:outline-none focus:ring-1 focus:ring-[#4F46E5]"
           />
+          {validationErrors.weekly_cap && <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.weekly_cap}</p>}
         </div>
 
         <div>
@@ -116,10 +152,13 @@ export function GlobalPolicySettings() {
           <input
             id="monthly-cap"
             type="number"
+            min="0"
+            step="any"
             value={policy.monthly_cap}
             onChange={(e) => handleCapChange("monthly_cap", e.target.value)}
             className="mt-1 block w-40 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#1A1A1A] focus:border-[#4F46E5] focus:outline-none focus:ring-1 focus:ring-[#4F46E5]"
           />
+          {validationErrors.monthly_cap && <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.monthly_cap}</p>}
         </div>
 
         <div>
@@ -129,12 +168,15 @@ export function GlobalPolicySettings() {
           <input
             id="min-reserve"
             type="number"
+            min="0"
+            step="any"
             value={policy.min_reserve_balance}
             onChange={(e) =>
               handleCapChange("min_reserve_balance", e.target.value)
             }
             className="mt-1 block w-40 rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#1A1A1A] focus:border-[#4F46E5] focus:outline-none focus:ring-1 focus:ring-[#4F46E5]"
           />
+          {validationErrors.min_reserve_balance && <p className="mt-1 text-xs text-[#EF4444]">{validationErrors.min_reserve_balance}</p>}
         </div>
       </div>
 

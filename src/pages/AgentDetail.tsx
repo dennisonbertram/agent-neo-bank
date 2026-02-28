@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { ChevronRight, Bot, Pause, RefreshCw, X } from "lucide-react";
+import { ChevronRight, Bot, Pause, RefreshCw } from "lucide-react";
 import type { Agent, SpendingPolicy, Transaction, AgentBudgetSummary } from "../types";
 import { StatusBadge } from "../components/shared/StatusBadge";
 import { ProgressBar } from "../components/shared/ProgressBar";
 import { MonoAddress } from "../components/shared/MonoAddress";
+import { CurrencyDisplay } from "../components/shared/CurrencyDisplay";
 import { Input } from "../components/ui/input";
 
 export function AgentDetail() {
@@ -20,6 +21,8 @@ export function AgentDetail() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [showSuspendConfirm, setShowSuspendConfirm] = useState(false);
+  const [isSuspending, setIsSuspending] = useState(false);
   const requestRef = useRef(0);
 
   // Reset state immediately when id changes to prevent stale display
@@ -71,8 +74,16 @@ export function AgentDetail() {
 
   const handleSuspend = async () => {
     if (!id) return;
-    await invoke("suspend_agent", { agentId: id });
-    await loadData();
+    setIsSuspending(true);
+    try {
+      await invoke("suspend_agent", { agentId: id });
+      setShowSuspendConfirm(false);
+      await loadData();
+    } catch {
+      // Error suspending agent
+    } finally {
+      setIsSuspending(false);
+    }
   };
 
   const validateField = (field: string, value: string): string | null => {
@@ -103,8 +114,17 @@ export function AgentDetail() {
 
     setIsSaving(true);
     try {
-      await invoke("update_agent_spending_policy", { policy: editPolicy });
-      setPolicy(editPolicy);
+      // Normalize validated string values to canonical decimal format
+      const normalizedPolicy = {
+        ...editPolicy,
+        per_tx_max: parseFloat(editPolicy.per_tx_max).toString(),
+        daily_cap: parseFloat(editPolicy.daily_cap).toString(),
+        weekly_cap: parseFloat(editPolicy.weekly_cap).toString(),
+        monthly_cap: parseFloat(editPolicy.monthly_cap).toString(),
+      };
+      await invoke("update_agent_spending_policy", { policy: normalizedPolicy });
+      setPolicy(normalizedPolicy);
+      setEditPolicy(normalizedPolicy);
       setIsEditing(false);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
@@ -247,13 +267,33 @@ export function AgentDetail() {
           </div>
           <div className="flex items-center gap-3">
             {agent.status === "active" && (
-              <button
-                onClick={handleSuspend}
-                className="inline-flex items-center gap-2 rounded-lg border border-[#EF4444] px-4 py-2 text-sm font-medium text-[#EF4444] hover:bg-[#FEF2F2]"
-              >
-                <Pause className="size-4" />
-                Suspend Agent
-              </button>
+              showSuspendConfirm ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-[#6B7280]">Suspend <strong>{agent.name}</strong>?</span>
+                  <button
+                    onClick={handleSuspend}
+                    disabled={isSuspending}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#EF4444] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#DC2626] disabled:opacity-50"
+                  >
+                    {isSuspending ? "Suspending..." : "Confirm"}
+                  </button>
+                  <button
+                    onClick={() => setShowSuspendConfirm(false)}
+                    disabled={isSuspending}
+                    className="rounded-lg border border-[#E8E5E0] px-3 py-1.5 text-sm font-medium text-[#6B7280] hover:bg-[#F9FAFB]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowSuspendConfirm(true)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-[#EF4444] px-4 py-2 text-sm font-medium text-[#EF4444] hover:bg-[#FEF2F2]"
+                >
+                  <Pause className="size-4" />
+                  Suspend Agent
+                </button>
+              )
             )}
             <button
               disabled
@@ -364,7 +404,7 @@ export function AgentDetail() {
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-sm text-[#6B7280]">{row.label}</span>
                       <span className="text-sm font-medium font-mono text-[#1A1A1A]">
-                        ${row.spent} / ${row.limit}
+                        <CurrencyDisplay amount={String(row.spent)} /> / <CurrencyDisplay amount={String(row.limit)} />
                       </span>
                     </div>
                     <ProgressBar value={row.spent} max={row.limit} color={getColor(row)} />
@@ -385,9 +425,6 @@ export function AgentDetail() {
                     className="flex items-center justify-between rounded-lg bg-[#F9FAFB] px-3 py-2"
                   >
                     <MonoAddress address={addr} />
-                    <button className="text-[#9CA3AF] hover:text-[#EF4444]">
-                      <X className="size-4" />
-                    </button>
                   </div>
                 ))}
               </div>
@@ -410,7 +447,7 @@ export function AgentDetail() {
                     <div className={`mt-1 size-2 rounded-full ${getStatusDotColor(tx.status)}`} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-[#1A1A1A]">${tx.amount}</span>
+                        <span className="text-sm font-medium text-[#1A1A1A]"><CurrencyDisplay amount={tx.amount} /></span>
                         <span className="text-xs text-[#9CA3AF]">{formatTime(tx.created_at)}</span>
                       </div>
                       <p className="text-xs text-[#6B7280] truncate">

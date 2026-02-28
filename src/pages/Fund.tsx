@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Wallet, CreditCard, QrCode, AlertCircle } from "lucide-react";
+import { Wallet, CreditCard, AlertCircle } from "lucide-react";
 
 export function Fund() {
   const [activeTab, setActiveTab] = useState<"buy" | "deposit">("buy");
@@ -81,10 +81,10 @@ export function Fund() {
             <p className="mt-2 max-w-sm text-sm text-[#6B7280]">
               Purchase USDC, ETH, or WETH using your credit card, debit card, or bank transfer.
             </p>
-            <button className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-6 py-3 text-sm font-medium text-white hover:bg-[#4338CA]">
+            <button disabled className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-6 py-3 text-sm font-medium text-white opacity-50 cursor-not-allowed">
               Continue to Coinbase
             </button>
-            <p className="mt-3 text-xs text-[#9CA3AF]">Coming soon — will be available in Phase 3</p>
+            <p className="mt-3 text-xs text-[#9CA3AF]">Coming soon</p>
           </div>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4 border-t border-[#F0EDE8] pt-6">
@@ -126,15 +126,8 @@ export function Fund() {
               </div>
             )}
 
-            <div className="mt-6 flex size-[200px] items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
-              <div className="text-center">
-                <QrCode className="mx-auto size-12 text-[#9CA3AF]" />
-                <p className="mt-2 text-xs text-[#9CA3AF]">QR Code</p>
-              </div>
-            </div>
-
             <p className="mt-4 max-w-sm text-sm text-[#6B7280]">
-              Scan this QR code or copy the address above to send funds
+              Copy the address above to send funds to your wallet
             </p>
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">

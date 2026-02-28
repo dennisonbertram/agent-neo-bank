@@ -107,8 +107,11 @@ describe("Approvals", () => {
     await screen.findByText("Test Agent");
 
     const user = userEvent.setup();
+    // First click shows confirmation
     const approveButton = screen.getByRole("button", { name: /approve/i });
     await user.click(approveButton);
+    // Second click confirms
+    await user.click(screen.getByRole("button", { name: /confirm/i }));
 
     await waitFor(() => {
       expect(invoker).toHaveBeenCalledWith("resolve_approval", {
@@ -133,8 +136,11 @@ describe("Approvals", () => {
     await screen.findByText("Test Agent");
 
     const user = userEvent.setup();
+    // First click shows confirmation
     const denyButton = screen.getByRole("button", { name: /deny/i });
     await user.click(denyButton);
+    // Second click confirms
+    await user.click(screen.getByRole("button", { name: /confirm/i }));
 
     await waitFor(() => {
       expect(invoker).toHaveBeenCalledWith("resolve_approval", {

@@ -33,6 +33,8 @@ export function InvitationCodes() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [label, setLabel] = useState("");
+  const [revokeConfirm, setRevokeConfirm] = useState<string | null>(null);
+  const [isRevoking, setIsRevoking] = useState(false);
 
   const loadCodes = useCallback(async () => {
     setIsLoading(true);
@@ -64,11 +66,15 @@ export function InvitationCodes() {
   };
 
   const handleRevoke = async (code: string) => {
+    setIsRevoking(true);
     try {
       await invoke("revoke_invitation_code", { code });
+      setRevokeConfirm(null);
       await loadCodes();
     } catch {
-      // silently handle error
+      // handle error
+    } finally {
+      setIsRevoking(false);
     }
   };
 
@@ -127,13 +133,34 @@ export function InvitationCodes() {
                     <td className="py-3 pr-4 text-[#6B7280]">{formatDate(code.created_at)}</td>
                     <td className="py-3">
                       {status === "active" && (
-                        <button
-                          type="button"
-                          onClick={() => handleRevoke(code.code)}
-                          className="rounded-lg border border-[#EF4444] px-3 py-1.5 text-xs font-medium text-[#EF4444] hover:bg-[#FEF2F2]"
-                        >
-                          Revoke
-                        </button>
+                        revokeConfirm === code.code ? (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleRevoke(code.code)}
+                              disabled={isRevoking}
+                              className="rounded-lg bg-[#EF4444] px-2.5 py-1 text-xs font-medium text-white hover:bg-[#DC2626] disabled:opacity-50"
+                            >
+                              {isRevoking ? "..." : "Confirm"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRevokeConfirm(null)}
+                              disabled={isRevoking}
+                              className="rounded-lg border border-[#E8E5E0] px-2.5 py-1 text-xs font-medium text-[#6B7280] hover:bg-[#F9FAFB]"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setRevokeConfirm(code.code)}
+                            className="rounded-lg border border-[#EF4444] px-3 py-1.5 text-xs font-medium text-[#EF4444] hover:bg-[#FEF2F2]"
+                          >
+                            Revoke
+                          </button>
+                        )
                       )}
                     </td>
                   </tr>

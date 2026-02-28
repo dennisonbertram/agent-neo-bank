@@ -64,10 +64,10 @@ describe("AgentDetail", () => {
     await waitFor(() => {
       expect(screen.getByText("Spending Limits")).toBeInTheDocument();
     });
-    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $50")).toBeInTheDocument();
-    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $500")).toBeInTheDocument();
-    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $2000")).toBeInTheDocument();
-    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0 / $8000")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0.00 / $50.00")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0.00 / $500.00")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0.00 / $2,000.00")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === "SPAN" && el?.textContent === "$0.00 / $8,000.00")).toBeInTheDocument();
   });
 
   it("edit limits saves updated policy", async () => {
@@ -121,7 +121,10 @@ describe("AgentDetail", () => {
       expect(screen.getAllByText("Claude Agent").length).toBeGreaterThan(0);
     });
 
+    // First click shows confirmation
     await user.click(screen.getByRole("button", { name: /Suspend Agent/ }));
+    // Second click confirms
+    await user.click(screen.getByRole("button", { name: /Confirm/ }));
 
     await waitFor(() => {
       const suspendCalls = invokeMock.mock.calls.filter(

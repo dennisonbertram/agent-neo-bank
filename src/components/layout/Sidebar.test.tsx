@@ -21,7 +21,7 @@ describe("Sidebar", () => {
 
   it("renders user profile section", () => {
     renderWithRouter(<Sidebar />);
-    expect(screen.getByText("dennison")).toBeInTheDocument();
+    expect(screen.getByText("Wallet")).toBeInTheDocument();
     expect(screen.getByText("Connected")).toBeInTheDocument();
   });
 

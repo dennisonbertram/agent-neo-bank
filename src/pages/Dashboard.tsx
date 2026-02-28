@@ -283,10 +283,12 @@ export function Dashboard() {
         <div className="rounded-xl border border-[#F0EDE8] bg-white p-8 text-center">
           <ArrowUpDown className="mx-auto size-12 text-[#D1D5DB]" />
           <p className="mt-3 text-sm font-medium text-[#1A1A1A]">
-            No transactions yet
+            Recent transactions coming soon
           </p>
           <p className="mt-1 text-sm text-[#6B7280]">
-            Transactions will appear here once your agents start spending.
+            View all transactions on the{" "}
+            <Link to="/transactions" className="text-[#4F46E5] hover:text-[#4338CA]">Transactions</Link>{" "}
+            page.
           </p>
         </div>
       </div>
