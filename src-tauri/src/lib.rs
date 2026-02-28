@@ -8,8 +8,6 @@ pub mod error;
 mod state;
 pub mod test_helpers;
 
-use std::sync::Arc;
-
 use tauri::Manager;
 
 use crate::config::AppConfig;
@@ -42,7 +40,7 @@ pub fn run() {
 
             // Spawn periodic cleanup of expired approvals (every 5 minutes)
             let cleanup_db = app_state.db.clone();
-            tokio::spawn(async move {
+            tauri::async_runtime::spawn(async move {
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(300));
                 loop {
                     interval.tick().await;
