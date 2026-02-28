@@ -3,11 +3,24 @@ interface CurrencyDisplayProps {
   asset?: string;
 }
 
-export function CurrencyDisplay({ amount }: CurrencyDisplayProps) {
-  const num = parseFloat(amount);
-  const formatted = isNaN(num)
-    ? amount
-    : `$${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const assetDecimals: Record<string, number> = {
+  USDC: 2,
+  ETH: 6,
+  WETH: 6,
+};
 
-  return <span className="font-mono">{formatted}</span>;
+export function CurrencyDisplay({ amount, asset }: CurrencyDisplayProps) {
+  const num = parseFloat(amount);
+  if (isNaN(num)) {
+    return <span className="font-mono">{amount}</span>;
+  }
+  const decimals = asset ? (assetDecimals[asset] ?? 6) : 2;
+  const prefix = asset && asset !== "USDC" ? "" : "$";
+  const suffix = asset && asset !== "USDC" ? ` ${asset}` : "";
+  const formatted = num.toLocaleString("en-US", {
+    minimumFractionDigits: Math.min(decimals, 2),
+    maximumFractionDigits: decimals,
+  });
+
+  return <span className="font-mono">{prefix}{formatted}{suffix}</span>;
 }

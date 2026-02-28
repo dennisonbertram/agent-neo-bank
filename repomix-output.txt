@@ -266,43 +266,6 @@ describe("MonoAddress", () => {
 });
 
 ================
-File: src/components/shared/MonoAddress.tsx
-================
-import { useState, useCallback } from "react";
-import { Copy, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-interface MonoAddressProps {
-  address: string;
-  className?: string;
-  full?: boolean;
-}
-
-export function MonoAddress({ address, className, full = false }: MonoAddressProps) {
-  const [copied, setCopied] = useState(false);
-  const displayAddress = full ? address : `${address.slice(0, 6)}...${address.slice(-4)}`;
-
-  const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [address]);
-
-  return (
-    <span className={cn("inline-flex items-center gap-1.5", className)}>
-      <code className="font-mono text-sm" style={{ fontFeatureSettings: '"tnum"' }}>{displayAddress}</code>
-      <button
-        onClick={handleCopy}
-        className="inline-flex size-5 items-center justify-center rounded text-[#9CA3AF] transition-colors hover:text-[#4F46E5]"
-        title={copied ? "Copied!" : "Copy address"}
-      >
-        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-      </button>
-    </span>
-  );
-}
-
-================
 File: src/components/shared/ProgressBar.test.tsx
 ================
 import { describe, it, expect } from "vitest";
@@ -392,40 +355,6 @@ describe("StatusBadge", () => {
   it("renders revoked status with correct label", () => {
     render(<StatusBadge status="revoked" />);
     expect(screen.getByText("Revoked")).toBeInTheDocument();
-  });
-});
-
-================
-File: src/pages/Fund.test.tsx
-================
-import { render, screen, fireEvent } from "@testing-library/react";
-import { BrowserRouter } from "react-router-dom";
-import { describe, it, expect } from "vitest";
-import { Fund } from "./Fund";
-
-function renderFund() {
-  return render(
-    <BrowserRouter>
-      <Fund />
-    </BrowserRouter>
-  );
-}
-
-describe("Fund", () => {
-  it("renders page title", () => {
-    renderFund();
-    expect(screen.getByText("Fund Wallet")).toBeInTheDocument();
-  });
-
-  it("shows Buy Crypto tab by default", () => {
-    renderFund();
-    expect(screen.getByText("Buy crypto with Coinbase")).toBeInTheDocument();
-  });
-
-  it("switches to Deposit tab", () => {
-    renderFund();
-    fireEvent.click(screen.getByText("Deposit"));
-    expect(screen.getByText("Your Wallet Address")).toBeInTheDocument();
   });
 });
 
@@ -593,6 +522,47 @@ export function EmptyState({ title, description, icon: Icon }: EmptyStateProps) 
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       )}
     </div>
+  );
+}
+
+================
+File: src/components/shared/MonoAddress.tsx
+================
+import { useState, useCallback } from "react";
+import { Copy, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface MonoAddressProps {
+  address: string;
+  className?: string;
+  full?: boolean;
+}
+
+export function MonoAddress({ address, className, full = false }: MonoAddressProps) {
+  const [copied, setCopied] = useState(false);
+  const displayAddress = full ? address : `${address.slice(0, 6)}...${address.slice(-4)}`;
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may fail in some contexts
+    }
+  }, [address]);
+
+  return (
+    <span className={cn("inline-flex items-center gap-1.5", className)}>
+      <code className="font-mono text-sm" style={{ fontFeatureSettings: '"tnum"' }}>{displayAddress}</code>
+      <button
+        onClick={handleCopy}
+        className="inline-flex size-5 items-center justify-center rounded text-[#9CA3AF] transition-colors hover:text-[#4F46E5]"
+        title={copied ? "Copied!" : "Copy address"}
+      >
+        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      </button>
+    </span>
   );
 }
 
@@ -1123,125 +1093,42 @@ describe("Approvals", () => {
 });
 
 ================
-File: src/pages/Fund.tsx
+File: src/pages/Fund.test.tsx
 ================
-import { useState } from "react";
-import { Wallet, CreditCard, QrCode } from "lucide-react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { BrowserRouter } from "react-router-dom";
+import { describe, it, expect, vi } from "vitest";
+import { Fund } from "./Fund";
 
-const walletAddress = "0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4";
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockRejectedValue(new Error("not available")),
+}));
 
-export function Fund() {
-  const [activeTab, setActiveTab] = useState<"buy" | "deposit">("buy");
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(walletAddress);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Fund Wallet</h1>
-        <p className="mt-1 text-sm text-[#6B7280]">Add funds to your wallet</p>
-      </div>
-
-      {/* Tab bar */}
-      <div className="flex gap-1 border-b border-[#F0EDE8]">
-        <button
-          onClick={() => setActiveTab("buy")}
-          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === "buy"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
-              : "text-[#6B7280] hover:text-[#1A1A1A]"
-          }`}
-        >
-          Buy Crypto
-        </button>
-        <button
-          onClick={() => setActiveTab("deposit")}
-          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === "deposit"
-              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
-              : "text-[#6B7280] hover:text-[#1A1A1A]"
-          }`}
-        >
-          Deposit
-        </button>
-      </div>
-
-      {activeTab === "buy" ? (
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8">
-          <div className="flex flex-col items-center text-center">
-            <div className="flex size-16 items-center justify-center rounded-2xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
-              <CreditCard className="size-8 text-[#9CA3AF]" />
-            </div>
-            <h2 className="mt-4 text-lg font-semibold text-[#1A1A1A]">Buy crypto with Coinbase</h2>
-            <p className="mt-2 max-w-sm text-sm text-[#6B7280]">
-              Purchase USDC, ETH, or WETH using your credit card, debit card, or bank transfer.
-            </p>
-            <button className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-6 py-3 text-sm font-medium text-white hover:bg-[#4338CA]">
-              Continue to Coinbase
-            </button>
-            <p className="mt-3 text-xs text-[#9CA3AF]">Coming soon — will be available in Phase 3</p>
-          </div>
-
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4 border-t border-[#F0EDE8] pt-6">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-medium text-[#6B7280]">Supported tokens:</span>
-              {["USDC", "ETH", "WETH"].map(token => (
-                <span key={token} className="rounded-full bg-[#F9FAFB] px-2.5 py-1 text-xs font-medium text-[#1A1A1A]">{token}</span>
-              ))}
-            </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-medium text-[#10B981]">
-              <span className="size-1.5 rounded-full bg-[#10B981]" />
-              Base Sepolia
-            </span>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8">
-          <div className="flex flex-col items-center text-center">
-            <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Wallet Address</h2>
-
-            <div className="mt-4 flex w-full max-w-md items-center gap-2 rounded-lg border border-[#E8E5E0] bg-[#F9FAFB] px-4 py-3">
-              <code className="flex-1 truncate text-sm font-mono text-[#1A1A1A]">{walletAddress}</code>
-              <button
-                onClick={handleCopy}
-                className="rounded-md bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-[#4F46E5] hover:bg-[#4F46E5] hover:text-white"
-              >
-                {copied ? "Copied!" : "Copy"}
-              </button>
-            </div>
-
-            <div className="mt-6 flex size-[200px] items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
-              <div className="text-center">
-                <QrCode className="mx-auto size-12 text-[#9CA3AF]" />
-                <p className="mt-2 text-xs text-[#9CA3AF]">QR Code</p>
-              </div>
-            </div>
-
-            <p className="mt-4 max-w-sm text-sm text-[#6B7280]">
-              Scan this QR code or copy the address above to send funds
-            </p>
-
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-              {["USDC", "ETH", "WETH"].map(token => (
-                <span key={token} className="rounded-full bg-[#F9FAFB] px-2.5 py-1 text-xs font-medium text-[#1A1A1A]">{token}</span>
-              ))}
-            </div>
-
-            <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-medium text-[#10B981]">
-              <span className="size-1.5 rounded-full bg-[#10B981]" />
-              Base Sepolia
-            </span>
-          </div>
-        </div>
-      )}
-    </div>
+function renderFund() {
+  return render(
+    <BrowserRouter>
+      <Fund />
+    </BrowserRouter>
   );
 }
+
+describe("Fund", () => {
+  it("renders page title", () => {
+    renderFund();
+    expect(screen.getByText("Fund Wallet")).toBeInTheDocument();
+  });
+
+  it("shows Buy Crypto tab by default", () => {
+    renderFund();
+    expect(screen.getByText("Buy crypto with Coinbase")).toBeInTheDocument();
+  });
+
+  it("switches to Deposit tab", () => {
+    renderFund();
+    fireEvent.click(screen.getByText("Deposit"));
+    expect(screen.getByText("Your Wallet Address")).toBeInTheDocument();
+  });
+});
 
 ================
 File: src/pages/Transactions.test.tsx
@@ -2117,6 +2004,159 @@ describe("Dashboard", () => {
     });
   });
 });
+
+================
+File: src/pages/Fund.tsx
+================
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Wallet, CreditCard, QrCode, AlertCircle } from "lucide-react";
+
+export function Fund() {
+  const [activeTab, setActiveTab] = useState<"buy" | "deposit">("buy");
+  const [copied, setCopied] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [addressError, setAddressError] = useState(false);
+
+  useEffect(() => {
+    invoke<string>("get_wallet_address")
+      .then(setWalletAddress)
+      .catch(() => {
+        invoke<{ address?: string }>("auth_status")
+          .then((res) => {
+            if (res.address) setWalletAddress(res.address);
+            else setAddressError(true);
+          })
+          .catch(() => setAddressError(true));
+      });
+  }, []);
+
+  const addressReady = walletAddress && walletAddress.length > 4;
+
+  const handleCopy = async () => {
+    if (!addressReady) return;
+    try {
+      await navigator.clipboard.writeText(walletAddress);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard may fail
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Fund Wallet</h1>
+        <p className="mt-1 text-sm text-[#6B7280]">Add funds to your wallet</p>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-[#F0EDE8]">
+        <button
+          onClick={() => setActiveTab("buy")}
+          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
+            activeTab === "buy"
+              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              : "text-[#6B7280] hover:text-[#1A1A1A]"
+          }`}
+        >
+          Buy Crypto
+        </button>
+        <button
+          onClick={() => setActiveTab("deposit")}
+          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
+            activeTab === "deposit"
+              ? "border-b-2 border-[#4F46E5] text-[#4F46E5]"
+              : "text-[#6B7280] hover:text-[#1A1A1A]"
+          }`}
+        >
+          Deposit
+        </button>
+      </div>
+
+      {activeTab === "buy" ? (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8">
+          <div className="flex flex-col items-center text-center">
+            <div className="flex size-16 items-center justify-center rounded-2xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
+              <CreditCard className="size-8 text-[#9CA3AF]" />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold text-[#1A1A1A]">Buy crypto with Coinbase</h2>
+            <p className="mt-2 max-w-sm text-sm text-[#6B7280]">
+              Purchase USDC, ETH, or WETH using your credit card, debit card, or bank transfer.
+            </p>
+            <button className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-6 py-3 text-sm font-medium text-white hover:bg-[#4338CA]">
+              Continue to Coinbase
+            </button>
+            <p className="mt-3 text-xs text-[#9CA3AF]">Coming soon — will be available in Phase 3</p>
+          </div>
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4 border-t border-[#F0EDE8] pt-6">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-[#6B7280]">Supported tokens:</span>
+              {["USDC", "ETH", "WETH"].map(token => (
+                <span key={token} className="rounded-full bg-[#F9FAFB] px-2.5 py-1 text-xs font-medium text-[#1A1A1A]">{token}</span>
+              ))}
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-medium text-[#10B981]">
+              <span className="size-1.5 rounded-full bg-[#10B981]" />
+              Base Sepolia
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8">
+          <div className="flex flex-col items-center text-center">
+            <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Wallet Address</h2>
+
+            {addressError ? (
+              <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] px-4 py-3 text-sm text-[#EF4444]">
+                <AlertCircle className="size-4" />
+                Couldn't load wallet address. Please check your connection and try again.
+              </div>
+            ) : !addressReady ? (
+              <div className="mt-4 flex w-full max-w-md items-center justify-center rounded-lg border border-[#E8E5E0] bg-[#F9FAFB] px-4 py-3 text-sm text-[#9CA3AF]">
+                Loading wallet address...
+              </div>
+            ) : (
+              <div className="mt-4 flex w-full max-w-md items-center gap-2 rounded-lg border border-[#E8E5E0] bg-[#F9FAFB] px-4 py-3">
+                <code className="flex-1 truncate text-sm font-mono text-[#1A1A1A]">{walletAddress}</code>
+                <button
+                  onClick={handleCopy}
+                  className="rounded-md bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-[#4F46E5] hover:bg-[#4F46E5] hover:text-white"
+                >
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            )}
+
+            <div className="mt-6 flex size-[200px] items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-[#F9FAFB]">
+              <div className="text-center">
+                <QrCode className="mx-auto size-12 text-[#9CA3AF]" />
+                <p className="mt-2 text-xs text-[#9CA3AF]">QR Code</p>
+              </div>
+            </div>
+
+            <p className="mt-4 max-w-sm text-sm text-[#6B7280]">
+              Scan this QR code or copy the address above to send funds
+            </p>
+
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              {["USDC", "ETH", "WETH"].map(token => (
+                <span key={token} className="rounded-full bg-[#F9FAFB] px-2.5 py-1 text-xs font-medium text-[#1A1A1A]">{token}</span>
+              ))}
+            </div>
+
+            <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-medium text-[#10B981]">
+              <span className="size-1.5 rounded-full bg-[#10B981]" />
+              Base Sepolia
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 ================
 File: src/pages/Onboarding.test.tsx
@@ -3757,304 +3797,6 @@ File: src/index.css
 }
 
 ================
-File: src/pages/Dashboard.tsx
-================
-import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { Link } from "react-router-dom";
-import { useBalance } from "@/hooks/useBalance";
-import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
-import { GradientCard } from "@/components/shared/GradientCard";
-import { MonoAddress } from "@/components/shared/MonoAddress";
-import { ProgressBar } from "@/components/shared/ProgressBar";
-import { GlobalBudget } from "@/components/dashboard/GlobalBudget";
-import { AgentBudgets } from "@/components/dashboard/AgentBudgets";
-import {
-  ArrowUpRight,
-  Wallet,
-  UserPlus,
-  Settings,
-  Plus,
-  Bot,
-  ArrowUpDown,
-} from "lucide-react";
-import type { AgentBudgetSummary, GlobalBudgetSummary, AddressResponse } from "@/types";
-
-function formatBalance(amount: string): string {
-  const num = parseFloat(amount);
-  if (isNaN(num)) return amount;
-  return num.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function getProgressColor(spent: number, cap: number): "green" | "amber" | "red" {
-  if (cap <= 0) return "green";
-  const pct = (spent / cap) * 100;
-  if (pct > 95) return "red";
-  if (pct > 80) return "amber";
-  return "green";
-}
-
-function AgentCard({ agent }: { agent: AgentBudgetSummary }) {
-  const dailySpent = parseFloat(agent.daily_spent) || 0;
-  const dailyCap = parseFloat(agent.daily_cap) || 0;
-
-  return (
-    <div className="flex flex-col rounded-xl border border-[#F0EDE8] bg-white p-5 transition-shadow hover:shadow-md">
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-full bg-[#EEF2FF]">
-            <Bot className="size-5 text-[#4F46E5]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[#1A1A1A]">{agent.agent_name}</p>
-            <p className="text-xs text-[#6B7280]">Agent</p>
-          </div>
-        </div>
-      </div>
-      <div className="mt-4">
-        <ProgressBar
-          value={dailySpent}
-          max={dailyCap}
-          color={getProgressColor(dailySpent, dailyCap)}
-        />
-        <div className="mt-1.5 flex justify-between text-xs text-[#6B7280]">
-          <span>
-            <CurrencyDisplay amount={agent.daily_spent} /> spent
-          </span>
-          <span>
-            <CurrencyDisplay amount={agent.daily_cap} /> daily cap
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const quickActions = [
-  { label: "Send", icon: ArrowUpRight, to: "/transactions" },
-  { label: "Fund", icon: Wallet, to: "/fund" },
-  { label: "Invite Agent", icon: UserPlus, to: "/settings" },
-  { label: "Settings", icon: Settings, to: "/settings" },
-];
-
-export function Dashboard() {
-  const { balance, balances, isLoading } = useBalance();
-  const [agentBudgets, setAgentBudgets] = useState<AgentBudgetSummary[]>([]);
-  const [globalBudget, setGlobalBudget] = useState<GlobalBudgetSummary | null>(
-    null,
-  );
-  const [budgetLoading, setBudgetLoading] = useState(true);
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
-
-  useEffect(() => {
-    invoke<AddressResponse>("get_address")
-      .then((res) => setWalletAddress(res.address))
-      .catch(() => {
-        // Fallback if get_address not available
-        setWalletAddress("0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4");
-      });
-  }, []);
-
-  const fetchBudgets = useCallback(async () => {
-    setBudgetLoading(true);
-    try {
-      const [agents, global] = await Promise.all([
-        invoke<AgentBudgetSummary[]>("get_agent_budget_summaries"),
-        invoke<GlobalBudgetSummary>("get_global_budget_summary"),
-      ]);
-      setAgentBudgets(agents);
-      setGlobalBudget(global);
-    } catch {
-      // Budget data is non-critical, fail silently
-    } finally {
-      setBudgetLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchBudgets();
-  }, [fetchBudgets]);
-
-  // Build secondary balance text from balances map
-  const secondaryBalances = balances
-    ? Object.entries(balances)
-        .filter(([key]) => key !== "USDC")
-        .map(([key, val]) => `${val.formatted} ${key}`)
-        .join(" | ")
-    : null;
-
-  return (
-    <div className="space-y-8 p-6">
-      {/* Section 1: Page Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Dashboard</h1>
-      </div>
-
-      {/* Section 2: Balance Card (HERO) */}
-      {isLoading ? (
-        <div className="flex h-[220px] max-w-[480px] items-center justify-center rounded-2xl bg-[#F9FAFB]">
-          <span className="text-sm text-[#6B7280]">Loading...</span>
-        </div>
-      ) : (
-        <GradientCard className="max-w-[480px] min-h-[220px] rounded-2xl p-8">
-          {/* Top: wallet address */}
-          <div className="flex items-center gap-2 text-white/80">
-            <MonoAddress
-              address={walletAddress ?? "0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4"}
-              className="text-xs text-white/80"
-            />
-          </div>
-
-          {/* Center: Hero balance */}
-          <div className="mt-6">
-            <div
-              className="text-5xl font-bold tracking-tight"
-              style={{ fontFeatureSettings: '"tnum"' }}
-            >
-              {balance ? `$${formatBalance(balance)}` : "--"}
-            </div>
-            <div className="mt-1 text-sm text-white/80">USDC</div>
-          </div>
-
-          {/* Secondary balances */}
-          {secondaryBalances && (
-            <div className="mt-2 text-sm text-white/70">{secondaryBalances}</div>
-          )}
-
-          {/* Bottom: Fund button */}
-          <div className="mt-6">
-            <Link
-              to="/fund"
-              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-[#4F46E5] transition-colors hover:bg-white/90"
-            >
-              <Wallet className="size-4" />
-              Fund Wallet
-            </Link>
-          </div>
-        </GradientCard>
-      )}
-
-      {/* Section 3: Quick Actions */}
-      <div className="flex flex-wrap gap-3">
-        {quickActions.map((action) => (
-          <Link
-            key={action.label}
-            to={action.to}
-            className="inline-flex items-center gap-2 rounded-full border border-[#E8E5E0] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] transition-colors hover:bg-[#F9FAFB]"
-          >
-            <action.icon className="size-4 text-[#6B7280]" />
-            {action.label}
-          </Link>
-        ))}
-      </div>
-
-      {/* Global Budget Utilization (preserved from original) */}
-      {budgetLoading ? (
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
-          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
-            Global Budget Utilization
-          </h2>
-          <span className="text-sm text-[#6B7280]">Loading...</span>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
-          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
-            Global Budget Utilization
-          </h2>
-          <GlobalBudget summary={globalBudget} />
-        </div>
-      )}
-
-      {/* Section 4: Your Agents */}
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Agents</h2>
-          <Link
-            to="/agents"
-            className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
-          >
-            View all
-          </Link>
-        </div>
-
-        {budgetLoading ? (
-          <span className="text-sm text-[#6B7280]">Loading...</span>
-        ) : agentBudgets.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {agentBudgets.map((agent) => (
-              <AgentCard key={agent.agent_id} agent={agent} />
-            ))}
-            <Link
-              to="/settings"
-              className="flex min-h-[160px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-white p-5 text-center transition-colors hover:border-[#4F46E5] hover:bg-[#EEF2FF]"
-            >
-              <Plus className="size-8 text-[#9CA3AF]" />
-              <span className="mt-2 text-sm font-medium text-[#6B7280]">
-                Add Agent
-              </span>
-            </Link>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-[#F0EDE8] bg-white p-8 text-center">
-            <Bot className="mx-auto size-12 text-[#D1D5DB]" />
-            <p className="mt-3 text-sm font-medium text-[#1A1A1A]">
-              No agents yet
-            </p>
-            <p className="mt-1 text-sm text-[#6B7280]">
-              Generate an invitation code to let an AI agent connect.
-            </p>
-            <Link
-              to="/settings"
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4338CA]"
-            >
-              <UserPlus className="size-4" />
-              Invite Agent
-            </Link>
-          </div>
-        )}
-      </div>
-
-      {/* Agent Budgets (preserved from original) */}
-      {!budgetLoading && agentBudgets.length > 0 && (
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
-          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
-            Agent Budgets
-          </h2>
-          <AgentBudgets summaries={agentBudgets} />
-        </div>
-      )}
-
-      {/* Section 5: Recent Transactions */}
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-[#1A1A1A]">
-            Recent Transactions
-          </h2>
-          <Link
-            to="/transactions"
-            className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
-          >
-            View all
-          </Link>
-        </div>
-        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8 text-center">
-          <ArrowUpDown className="mx-auto size-12 text-[#D1D5DB]" />
-          <p className="mt-3 text-sm font-medium text-[#1A1A1A]">
-            No transactions yet
-          </p>
-          <p className="mt-1 text-sm text-[#6B7280]">
-            Transactions will appear here once your agents start spending.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-================
 File: src/pages/Onboarding.tsx
 ================
 import { useState } from "react";
@@ -4229,6 +3971,305 @@ export function App() {
         <Route path="/settings" element={<Settings />} />
       </Route>
     </Routes>
+  );
+}
+
+================
+File: src/pages/Dashboard.tsx
+================
+import { useState, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { Link } from "react-router-dom";
+import { useBalance } from "@/hooks/useBalance";
+import { CurrencyDisplay } from "@/components/shared/CurrencyDisplay";
+import { GradientCard } from "@/components/shared/GradientCard";
+import { MonoAddress } from "@/components/shared/MonoAddress";
+import { ProgressBar } from "@/components/shared/ProgressBar";
+import { GlobalBudget } from "@/components/dashboard/GlobalBudget";
+import { AgentBudgets } from "@/components/dashboard/AgentBudgets";
+import {
+  ArrowUpRight,
+  Wallet,
+  UserPlus,
+  Settings,
+  Plus,
+  Bot,
+  ArrowUpDown,
+} from "lucide-react";
+import type { AgentBudgetSummary, GlobalBudgetSummary, AddressResponse } from "@/types";
+
+function formatBalance(amount: string): string {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return amount;
+  return num.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function getProgressColor(spent: number, cap: number): "green" | "amber" | "red" {
+  if (cap <= 0) return "green";
+  const pct = (spent / cap) * 100;
+  if (pct > 95) return "red";
+  if (pct > 80) return "amber";
+  return "green";
+}
+
+function AgentCard({ agent }: { agent: AgentBudgetSummary }) {
+  const dailySpent = parseFloat(agent.daily_spent) || 0;
+  const dailyCap = parseFloat(agent.daily_cap) || 0;
+
+  return (
+    <div className="flex flex-col rounded-xl border border-[#F0EDE8] bg-white p-5 transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-full bg-[#EEF2FF]">
+            <Bot className="size-5 text-[#4F46E5]" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[#1A1A1A]">{agent.agent_name}</p>
+            <p className="text-xs text-[#6B7280]">Agent</p>
+          </div>
+        </div>
+      </div>
+      <div className="mt-4">
+        <ProgressBar
+          value={dailySpent}
+          max={dailyCap}
+          color={getProgressColor(dailySpent, dailyCap)}
+        />
+        <div className="mt-1.5 flex justify-between text-xs text-[#6B7280]">
+          <span>
+            <CurrencyDisplay amount={agent.daily_spent} /> spent
+          </span>
+          <span>
+            <CurrencyDisplay amount={agent.daily_cap} /> daily cap
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const quickActions = [
+  { label: "Send", icon: ArrowUpRight, to: "/transactions" },
+  { label: "Fund", icon: Wallet, to: "/fund" },
+  { label: "Invite Agent", icon: UserPlus, to: "/settings" },
+  { label: "Settings", icon: Settings, to: "/settings" },
+];
+
+export function Dashboard() {
+  const { balance, balances, isLoading } = useBalance();
+  const [agentBudgets, setAgentBudgets] = useState<AgentBudgetSummary[]>([]);
+  const [globalBudget, setGlobalBudget] = useState<GlobalBudgetSummary | null>(
+    null,
+  );
+  const [budgetLoading, setBudgetLoading] = useState(true);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+
+  useEffect(() => {
+    invoke<AddressResponse>("get_address")
+      .then((res) => setWalletAddress(res.address))
+      .catch(() => {
+        // Address unavailable — MonoAddress will be hidden
+      });
+  }, []);
+
+  const fetchBudgets = useCallback(async () => {
+    setBudgetLoading(true);
+    try {
+      const [agents, global] = await Promise.all([
+        invoke<AgentBudgetSummary[]>("get_agent_budget_summaries"),
+        invoke<GlobalBudgetSummary>("get_global_budget_summary"),
+      ]);
+      setAgentBudgets(agents);
+      setGlobalBudget(global);
+    } catch {
+      // Budget data is non-critical, fail silently
+    } finally {
+      setBudgetLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBudgets();
+  }, [fetchBudgets]);
+
+  // Build secondary balance text from balances map
+  const secondaryBalances = balances
+    ? Object.entries(balances)
+        .filter(([key]) => key !== "USDC")
+        .map(([key, val]) => `${val.formatted} ${key}`)
+        .join(" | ")
+    : null;
+
+  return (
+    <div className="space-y-8 p-6">
+      {/* Section 1: Page Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-[#1A1A1A]">Dashboard</h1>
+      </div>
+
+      {/* Section 2: Balance Card (HERO) */}
+      {isLoading ? (
+        <div className="flex h-[220px] max-w-[480px] items-center justify-center rounded-2xl bg-[#F9FAFB]">
+          <span className="text-sm text-[#6B7280]">Loading...</span>
+        </div>
+      ) : (
+        <GradientCard className="max-w-[480px] min-h-[220px] rounded-2xl p-8">
+          {/* Top: wallet address */}
+          {walletAddress && (
+            <div className="flex items-center gap-2 text-white/80">
+              <MonoAddress
+                address={walletAddress}
+                className="text-xs text-white/80"
+              />
+            </div>
+          )}
+
+          {/* Center: Hero balance */}
+          <div className="mt-6">
+            <div
+              className="text-5xl font-bold tracking-tight"
+              style={{ fontFeatureSettings: '"tnum"' }}
+            >
+              {balance ? `$${formatBalance(balance)}` : "--"}
+            </div>
+            <div className="mt-1 text-sm text-white/80">USDC</div>
+          </div>
+
+          {/* Secondary balances */}
+          {secondaryBalances && (
+            <div className="mt-2 text-sm text-white/70">{secondaryBalances}</div>
+          )}
+
+          {/* Bottom: Fund button */}
+          <div className="mt-6">
+            <Link
+              to="/fund"
+              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-[#4F46E5] transition-colors hover:bg-white/90"
+            >
+              <Wallet className="size-4" />
+              Fund Wallet
+            </Link>
+          </div>
+        </GradientCard>
+      )}
+
+      {/* Section 3: Quick Actions */}
+      <div className="flex flex-wrap gap-3">
+        {quickActions.map((action) => (
+          <Link
+            key={action.label}
+            to={action.to}
+            className="inline-flex items-center gap-2 rounded-full border border-[#E8E5E0] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] transition-colors hover:bg-[#F9FAFB]"
+          >
+            <action.icon className="size-4 text-[#6B7280]" />
+            {action.label}
+          </Link>
+        ))}
+      </div>
+
+      {/* Global Budget Utilization (preserved from original) */}
+      {budgetLoading ? (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
+            Global Budget Utilization
+          </h2>
+          <span className="text-sm text-[#6B7280]">Loading...</span>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
+            Global Budget Utilization
+          </h2>
+          <GlobalBudget summary={globalBudget} />
+        </div>
+      )}
+
+      {/* Section 4: Your Agents */}
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[#1A1A1A]">Your Agents</h2>
+          <Link
+            to="/agents"
+            className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
+          >
+            View all
+          </Link>
+        </div>
+
+        {budgetLoading ? (
+          <span className="text-sm text-[#6B7280]">Loading...</span>
+        ) : agentBudgets.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {agentBudgets.map((agent) => (
+              <AgentCard key={agent.agent_id} agent={agent} />
+            ))}
+            <Link
+              to="/settings"
+              className="flex min-h-[160px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#E8E5E0] bg-white p-5 text-center transition-colors hover:border-[#4F46E5] hover:bg-[#EEF2FF]"
+            >
+              <Plus className="size-8 text-[#9CA3AF]" />
+              <span className="mt-2 text-sm font-medium text-[#6B7280]">
+                Add Agent
+              </span>
+            </Link>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-[#F0EDE8] bg-white p-8 text-center">
+            <Bot className="mx-auto size-12 text-[#D1D5DB]" />
+            <p className="mt-3 text-sm font-medium text-[#1A1A1A]">
+              No agents yet
+            </p>
+            <p className="mt-1 text-sm text-[#6B7280]">
+              Generate an invitation code to let an AI agent connect.
+            </p>
+            <Link
+              to="/settings"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#4F46E5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#4338CA]"
+            >
+              <UserPlus className="size-4" />
+              Invite Agent
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Agent Budgets (preserved from original) */}
+      {!budgetLoading && agentBudgets.length > 0 && (
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-6">
+          <h2 className="mb-4 text-lg font-semibold text-[#1A1A1A]">
+            Agent Budgets
+          </h2>
+          <AgentBudgets summaries={agentBudgets} />
+        </div>
+      )}
+
+      {/* Section 5: Recent Transactions */}
+      <div>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[#1A1A1A]">
+            Recent Transactions
+          </h2>
+          <Link
+            to="/transactions"
+            className="text-sm font-medium text-[#4F46E5] hover:text-[#4338CA]"
+          >
+            View all
+          </Link>
+        </div>
+        <div className="rounded-xl border border-[#F0EDE8] bg-white p-8 text-center">
+          <ArrowUpDown className="mx-auto size-12 text-[#D1D5DB]" />
+          <p className="mt-3 text-sm font-medium text-[#1A1A1A]">
+            No transactions yet
+          </p>
+          <p className="mt-1 text-sm text-[#6B7280]">
+            Transactions will appear here once your agents start spending.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
