@@ -1,0 +1,42 @@
+:root {
+  /* === COLORS === */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F8F9FA;
+  --surface-hover: #F2F2F7;
+  --text-primary: #111111;
+  --text-secondary: #8E8E93;
+  --text-tertiary: #C7C7CC;
+  --accent-green: #8FB5AA;
+  --accent-yellow: #F2D48C;
+  --accent-terracotta: #D9A58B;
+  --accent-blue: #BCCCDC;
+  --accent-green-dim: rgba(143, 181, 170, 0.15);
+  --accent-yellow-dim: rgba(242, 212, 140, 0.15);
+  --accent-terracotta-dim: rgba(217, 165, 139, 0.15);
+  --accent-blue-dim: rgba(188, 204, 220, 0.15);
+  --status-active-text: #4A6E65;
+  --status-pending-text: #8F7843;
+  --status-paused-text: #8F6652;
+  --color-danger: #E5484D;
+  --color-link: #0052FF;
+  --color-positive: #4A6E65;
+  --black: #000000;
+  --white: #FFFFFF;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 32px;
+  --radius-pill: 999px;
+  --shadow-subtle: 0 4px 24px rgba(0, 0, 0, 0.04);
+  --shadow-float: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --shadow-fab: 0 8px 24px rgba(0, 0, 0, 0.15);
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  --transition-fast: 0.1s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.4s ease;
+}

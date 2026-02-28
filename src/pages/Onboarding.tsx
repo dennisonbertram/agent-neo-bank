@@ -1,127 +1,81 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { invoke } from "@tauri-apps/api/core";
-import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
-import { EmailStep } from "@/components/onboarding/EmailStep";
-import { OtpStep } from "@/components/onboarding/OtpStep";
-import { FundStep } from "@/components/onboarding/FundStep";
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { AppLogo } from '../components/icons/AppLogo'
+import { Button } from '../components/ui/Button'
 
-interface AuthLoginResponse {
-  status: "otp_sent" | "verified";
-  flow_id?: string;
-}
+const slides = [
+  {
+    title: "Your Agents,\nYour Rules",
+    description: "Set spending limits, approve transactions, and keep your AI agents accountable — all from one dashboard.",
+  },
+  {
+    title: "Smart Spending\nPolicies",
+    description: "Define daily, weekly, and per-transaction limits. Agents operate within your boundaries automatically.",
+  },
+  {
+    title: "Real-Time\nTransparency",
+    description: "Every transaction includes metadata — what was purchased, why, and for which service. Full audit trail.",
+  },
+  {
+    title: "Get Started\nin Minutes",
+    description: "Connect your Coinbase wallet, set up your first agent, and start managing AI spending today.",
+  },
+]
 
-interface AuthVerifyResponse {
-  status: "verified" | "otp_sent";
-}
+export default function Onboarding() {
+  const [currentSlide, setCurrentSlide] = useState(0)
+  const navigate = useNavigate()
+  const isLast = currentSlide === slides.length - 1
 
-export function Onboarding() {
-  const [step, setStep] = useState(0);
-  const [email, setEmail] = useState("");
-  const [walletAddress, setWalletAddress] = useState("0x...");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleEmailSubmit(submittedEmail: string) {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await invoke<AuthLoginResponse>("auth_login", {
-        email: submittedEmail,
-      });
-      setEmail(submittedEmail);
-      if (result.status === "otp_sent") {
-        setStep(2);
-      } else if (result.status === "verified") {
-        // Already verified (e.g. returning user), skip OTP but fetch wallet address
-        try {
-          const status = await invoke<{ address?: string }>("auth_status");
-          if (status.address) {
-            setWalletAddress(status.address);
-          }
-        } catch {
-          // auth_status may not return address yet; use placeholder
-        }
-        setStep(3);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
+  const handleNext = () => {
+    if (isLast) {
+      navigate('/setup/install')
+    } else {
+      setCurrentSlide((prev) => prev + 1)
     }
   }
 
-  async function handleOtpSubmit(otp: string) {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await invoke<AuthVerifyResponse>("auth_verify", { otp });
-      if (result.status === "verified") {
-        // Fetch wallet address after successful auth
-        try {
-          const status = await invoke<{ address?: string }>("auth_status");
-          if (status.address) {
-            setWalletAddress(status.address);
-          }
-        } catch {
-          // auth_status may not return address yet; use placeholder
-        }
-        setStep(3);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const navigate = useNavigate();
-
-  function handleComplete() {
-    navigate("/");
-  }
-
-  function handleBackToEmail() {
-    setError(null);
-    setStep(1);
-  }
-
-  function handleBackToWelcome() {
-    setError(null);
-    setStep(0);
-  }
+  const slide = slides[currentSlide]!
 
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{
-        background:
-          "radial-gradient(ellipse at 50% 30%, #EEF2FF 0%, #FAFAF9 70%)",
-      }}
-    >
-      <div className="w-full max-w-[440px] px-4">
-        {step === 0 && <WelcomeStep onNext={() => setStep(1)} />}
-        {step === 1 && (
-          <EmailStep
-            onNext={handleEmailSubmit}
-            onBack={handleBackToWelcome}
-            loading={loading}
-            serverError={error}
-          />
-        )}
-        {step === 2 && (
-          <OtpStep
-            onNext={handleOtpSubmit}
-            onBack={handleBackToEmail}
-            loading={loading}
-            serverError={error}
-            email={email}
-          />
-        )}
-        {step === 3 && (
-          <FundStep address={walletAddress} onNext={handleComplete} />
-        )}
+    <div className="flex flex-col h-full relative">
+      {/* Content area — centered vertically */}
+      <div className="flex-1 flex flex-col items-center justify-center px-10">
+        <AppLogo size={60} className="mb-8" />
+
+        {/* Slide content with animation key to trigger re-render */}
+        <div key={currentSlide} className="animate-slide-up text-center">
+          <h1
+            className="text-[28px] font-semibold leading-tight tracking-[-0.5px] text-[var(--text-primary)] whitespace-pre-line"
+          >
+            {slide.title}
+          </h1>
+          <p className="text-body mt-4 max-w-[280px] mx-auto">
+            {slide.description}
+          </p>
+        </div>
+
+        {/* Indicator dots */}
+        <div className="flex items-center gap-[6px] mt-10">
+          {slides.map((_, i) => (
+            <div
+              key={i}
+              className={
+                i === currentSlide
+                  ? 'w-[24px] h-[6px] rounded-[4px] bg-[var(--text-primary)] transition-all duration-300'
+                  : 'w-[6px] h-[6px] rounded-full bg-[var(--text-tertiary)] transition-all duration-300'
+              }
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* CTA button pinned to bottom */}
+      <div className="absolute bottom-[50px] left-[40px] right-[40px]">
+        <Button variant="primary" onClick={handleNext}>
+          {isLast ? 'Get set up' : 'Next'}
+        </Button>
       </div>
     </div>
-  );
+  )
 }

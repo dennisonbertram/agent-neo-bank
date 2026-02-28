@@ -12,10 +12,13 @@
     "windows": [
       {
         "title": "Agent Neo Bank",
-        "width": 1200,
-        "height": 800,
-        "resizable": true,
-        "fullscreen": false
+        "width": 390,
+        "height": 844,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "center": true
       }
     ],
     "security": {

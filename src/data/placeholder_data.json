@@ -1,0 +1,225 @@
+{
+  "_comment": "Centralized placeholder data for features not yet backed by the Rust backend. Replace with real Tauri invoke calls as backend stubs are implemented.",
+
+  "wallet": {
+    "_backend_status": "get_balance and get_address are stubs (TODO in wallet.rs)",
+    "address": "0x72AE334bfbaAB69350EB4f5c5EfBac5697C504B4",
+    "balances": {
+      "USDC": { "raw": "20000000", "formatted": "20.00", "decimals": 6 },
+      "ETH": { "raw": "100000000000000000", "formatted": "0.10", "decimals": 18 }
+    },
+    "network": "Base",
+    "totalBalanceUsd": "$20.32"
+  },
+
+  "user": {
+    "_backend_status": "auth_status returns email when authenticated",
+    "name": "Dennison Bertram",
+    "email": "dennison@dennisonbertram.com",
+    "initials": "DB"
+  },
+
+  "onboarding": {
+    "_backend_status": "Pure UI — no backend needed",
+    "slides": [
+      {
+        "title": "Your Agents,\nYour Rules",
+        "description": "Set spending limits, approve transactions, and keep your AI agents accountable — all from one dashboard.",
+        "cta": "Next"
+      },
+      {
+        "title": "Smart Spending\nPolicies",
+        "description": "Define daily, weekly, and per-transaction limits. Agents operate within your boundaries automatically.",
+        "cta": "Next"
+      },
+      {
+        "title": "Real-Time\nTransparency",
+        "description": "Every transaction includes metadata — what was purchased, why, and for which service. Full audit trail.",
+        "cta": "Next"
+      },
+      {
+        "title": "Get Started\nin Minutes",
+        "description": "Connect your Coinbase wallet, set up your first agent, and start managing AI spending today.",
+        "cta": "Get set up"
+      }
+    ]
+  },
+
+  "agents": {
+    "_backend_status": "list_agents and get_agent work but DB may be empty. These are sample agents for UI development.",
+    "samples": [
+      {
+        "id": "agent-research-001",
+        "name": "Research Agent",
+        "description": "Gathers market data and analyzes trends",
+        "purpose": "Market research and data collection",
+        "agent_type": "research",
+        "capabilities": ["web_search", "data_analysis"],
+        "status": "active",
+        "accentColor": "#8FB5AA",
+        "icon": "Search"
+      },
+      {
+        "id": "agent-deploy-002",
+        "name": "Deploy Bot",
+        "description": "Deploys and manages smart contracts",
+        "purpose": "Contract deployment and management",
+        "agent_type": "deployment",
+        "capabilities": ["contract_deploy", "gas_estimation"],
+        "status": "active",
+        "accentColor": "#F2D48C",
+        "icon": "Rocket"
+      },
+      {
+        "id": "agent-treasury-003",
+        "name": "Treasury",
+        "description": "Manages portfolio rebalancing and yield",
+        "purpose": "Treasury management and yield optimization",
+        "agent_type": "treasury",
+        "capabilities": ["swap", "stake"],
+        "status": "pending",
+        "accentColor": "#D9A58B",
+        "icon": "Landmark"
+      }
+    ]
+  },
+
+  "transactions": {
+    "_backend_status": "list_transactions works but DB may be empty. These are sample transactions for UI development.",
+    "samples": [
+      {
+        "id": "tx-001",
+        "agent_id": "agent-research-001",
+        "agent_name": "Research Agent",
+        "tx_type": "send",
+        "amount": "-2.50",
+        "asset": "USDC",
+        "status": "confirmed",
+        "category": "API Fee",
+        "description": "OpenAI GPT-4 API call",
+        "service_name": "OpenAI",
+        "created_at": 1740700800,
+        "memo": "Market analysis batch job"
+      },
+      {
+        "id": "tx-002",
+        "agent_id": "agent-deploy-002",
+        "agent_name": "Deploy Bot",
+        "tx_type": "send",
+        "amount": "-0.0034",
+        "asset": "ETH",
+        "status": "confirmed",
+        "category": "Gas",
+        "description": "Contract deployment gas",
+        "service_name": "Base Network",
+        "created_at": 1740697200,
+        "memo": ""
+      },
+      {
+        "id": "tx-003",
+        "agent_id": "agent-research-001",
+        "agent_name": "Research Agent",
+        "tx_type": "send",
+        "amount": "-1.00",
+        "asset": "USDC",
+        "status": "confirmed",
+        "category": "API Fee",
+        "description": "Anthropic Claude API call",
+        "service_name": "Anthropic",
+        "created_at": 1740693600,
+        "memo": "Sentiment analysis run"
+      },
+      {
+        "id": "tx-004",
+        "agent_id": "agent-treasury-003",
+        "agent_name": "Treasury",
+        "tx_type": "send",
+        "amount": "-5.00",
+        "asset": "USDC",
+        "status": "awaiting_approval",
+        "category": "Swap",
+        "description": "USDC to ETH swap via Uniswap",
+        "service_name": "Uniswap",
+        "created_at": 1740690000,
+        "memo": "Portfolio rebalance"
+      },
+      {
+        "id": "tx-005",
+        "agent_id": null,
+        "agent_name": null,
+        "tx_type": "receive",
+        "amount": "+10.00",
+        "asset": "USDC",
+        "status": "confirmed",
+        "category": "Deposit",
+        "description": "Funding deposit",
+        "service_name": "",
+        "created_at": 1740686400,
+        "memo": "Initial funding"
+      }
+    ]
+  },
+
+  "budgetSummaries": {
+    "_backend_status": "get_agent_budget_summaries works but may return empty. Sample data for UI.",
+    "samples": [
+      {
+        "agent_id": "agent-research-001",
+        "agent_name": "Research Agent",
+        "daily_spent": "3.50",
+        "daily_cap": "25.00",
+        "weekly_spent": "18.75",
+        "weekly_cap": "100.00",
+        "monthly_spent": "45.00",
+        "monthly_cap": "500.00"
+      },
+      {
+        "agent_id": "agent-deploy-002",
+        "agent_name": "Deploy Bot",
+        "daily_spent": "0.0034",
+        "daily_cap": "0.05",
+        "weekly_spent": "0.012",
+        "weekly_cap": "0.25",
+        "monthly_spent": "0.034",
+        "monthly_cap": "1.00"
+      },
+      {
+        "agent_id": "agent-treasury-003",
+        "agent_name": "Treasury",
+        "daily_spent": "0.00",
+        "daily_cap": "50.00",
+        "weekly_spent": "0.00",
+        "weekly_cap": "200.00",
+        "monthly_spent": "0.00",
+        "monthly_cap": "1000.00"
+      }
+    ]
+  },
+
+  "notifications": {
+    "_backend_status": "get_notification_preferences exists in backend but may need defaults",
+    "defaults": {
+      "enabled": true,
+      "on_all_tx": false,
+      "on_large_tx": true,
+      "large_tx_threshold": "10.00",
+      "on_errors": true,
+      "on_limit_requests": true,
+      "on_agent_registration": true
+    }
+  },
+
+  "missingBackendFeatures": {
+    "_comment": "Features shown in the design that have NO backend support at all",
+    "install_skill": "No install_skill Tauri command — InstallSkill screen fakes success immediately",
+    "export_wallet_history": "No export command — Settings screen shows this as a non-functional row",
+    "buy_with_card": "No onramp integration — AddFunds screen shows 'Coming Soon' disabled button",
+    "qr_code": "No QR generation — AddFunds screen shows a placeholder grid icon",
+    "resume_agent": "No resume_agent command — only suspend_agent exists. Resuming a paused agent needs backend work"
+  },
+
+  "app": {
+    "version": "0.1.0",
+    "walletName": "Agent Wallet"
+  }
+}

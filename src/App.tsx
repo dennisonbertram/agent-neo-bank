@@ -1,27 +1,60 @@
-import { Routes, Route } from "react-router-dom";
-import { Dashboard } from "./pages/Dashboard";
-import { Onboarding } from "./pages/Onboarding";
-import { Agents } from "./pages/Agents";
-import { AgentDetail } from "./pages/AgentDetail";
-import { Transactions } from "./pages/Transactions";
-import { Settings } from "./pages/Settings";
-import { Approvals } from "./pages/Approvals";
-import { Fund } from "./pages/Fund";
-import { Shell } from "./components/layout/Shell";
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useAuthStore } from './stores/authStore'
+
+// Auth flow pages
+import Onboarding from './pages/Onboarding'
+import InstallSkill from './pages/InstallSkill'
+import ConnectCoinbase from './pages/ConnectCoinbase'
+import VerifyOtp from './pages/VerifyOtp'
+
+// Main app pages
+import Home from './pages/Home'
+import AddFunds from './pages/AddFunds'
+import AgentsList from './pages/AgentsList'
+import AgentDetail from './pages/AgentDetail'
+import TransactionDetail from './pages/TransactionDetail'
+import Settings from './pages/Settings'
+import Stats from './pages/Stats'
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuthStore()
+  if (!isAuthenticated) return <Navigate to="/onboarding" replace />
+  return <>{children}</>
+}
+
+function DefaultRedirect() {
+  const { isAuthenticated } = useAuthStore()
+  return <Navigate to={isAuthenticated ? '/home' : '/onboarding'} replace />
+}
 
 export function App() {
+  const { checkAuthStatus } = useAuthStore()
+
+  useEffect(() => {
+    checkAuthStatus()
+  }, [checkAuthStatus])
+
   return (
     <Routes>
+      {/* Onboarding flow — Wave 2 */}
       <Route path="/onboarding" element={<Onboarding />} />
-      <Route element={<Shell />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/agents" element={<Agents />} />
-        <Route path="/agents/:id" element={<AgentDetail />} />
-        <Route path="/transactions" element={<Transactions />} />
-        <Route path="/approvals" element={<Approvals />} />
-        <Route path="/fund" element={<Fund />} />
-        <Route path="/settings" element={<Settings />} />
-      </Route>
+      <Route path="/setup/install" element={<InstallSkill />} />
+      <Route path="/setup/connect" element={<ConnectCoinbase />} />
+      <Route path="/setup/verify" element={<VerifyOtp />} />
+
+      {/* Main app — requires auth */}
+      <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+      <Route path="/add-funds" element={<ProtectedRoute><AddFunds /></ProtectedRoute>} />
+      <Route path="/agents" element={<ProtectedRoute><AgentsList /></ProtectedRoute>} />
+      <Route path="/agents/:agentId" element={<ProtectedRoute><AgentDetail /></ProtectedRoute>} />
+      <Route path="/transactions/:txId" element={<ProtectedRoute><TransactionDetail /></ProtectedRoute>} />
+      <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+
+      {/* Default redirect */}
+      <Route path="/" element={<DefaultRedirect />} />
+      <Route path="*" element={<DefaultRedirect />} />
     </Routes>
-  );
+  )
 }
