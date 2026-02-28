@@ -49,6 +49,22 @@ export function OtpStep({ onNext, onBack, loading, serverError, email }: OtpStep
     }
   }
 
+  function handlePaste(e: React.ClipboardEvent) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const next = [...digits];
+    for (let i = 0; i < 6; i++) {
+      next[i] = pasted[i] ?? "";
+    }
+    setDigits(next);
+    if (error) setError(null);
+    // Focus the next empty input, or the last one if all filled
+    const nextEmpty = next.findIndex((d) => !d);
+    const focusIdx = nextEmpty === -1 ? 5 : nextEmpty;
+    refs[focusIdx]?.current?.focus();
+  }
+
   function handleVerify() {
     const otp = digits.join("");
     if (!/^\d{6}$/.test(otp)) {
@@ -93,11 +109,15 @@ export function OtpStep({ onNext, onBack, loading, serverError, email }: OtpStep
             value={digit}
             onChange={(e) => handleDigitChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
+            onPaste={handlePaste}
             aria-label={`Digit ${i + 1}`}
             className="size-12 rounded-xl border-2 border-[#E8E5E0] bg-white text-center text-xl font-bold text-[#1A1A1A] focus:border-[#4F46E5] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/20"
           />
         ))}
       </div>
+      <p className="mt-2 text-center text-xs text-[#9CA3AF]">
+        Copy the code from your email and paste it here
+      </p>
 
       {error && (
         <p className="mt-3 text-center text-sm text-[#EF4444]">{error}</p>
