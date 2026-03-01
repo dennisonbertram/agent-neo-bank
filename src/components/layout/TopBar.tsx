@@ -1,4 +1,5 @@
-import { Bell } from 'lucide-react'
+import { Settings } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { cn } from '../../lib/cn'
 
 interface TopBarProps {
@@ -8,6 +9,8 @@ interface TopBarProps {
 }
 
 export function TopBar({ walletName = 'Tally Wallet', initials = 'DB', className }: TopBarProps) {
+  const navigate = useNavigate()
+
   return (
     <div
       className={cn(
@@ -23,9 +26,10 @@ export function TopBar({ walletName = 'Tally Wallet', initials = 'DB', className
       </div>
       <button
         type="button"
+        onClick={() => navigate('/settings')}
         className="w-[40px] h-[40px] rounded-full border border-[var(--surface-hover)] bg-transparent flex items-center justify-center cursor-pointer"
       >
-        <Bell size={20} color="var(--text-primary)" />
+        <Settings size={20} color="var(--text-primary)" />
       </button>
     </div>
   )

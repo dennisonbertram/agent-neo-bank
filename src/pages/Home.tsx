@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Users, Search, Rocket, Landmark, ArrowDownLeft, Code } from 'lucide-react'
-import { TopBar } from '../components/layout/TopBar'
-import { BottomNav } from '../components/layout/BottomNav'
+import { Plus, Users, Search, Rocket, Landmark, ArrowDownLeft, Code, Settings } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { SegmentControl } from '../components/ui/SegmentControl'
 import { AgentPillRow } from '../components/agent/AgentPillRow'
 import { TransactionItem } from '../components/transaction/TransactionItem'
+import { useWalletStore } from '../stores/walletStore'
 import { safeTauriCall, tauriApi, placeholderData } from '../lib/tauri'
-import type { Transaction, Agent, AgentBudgetSummary, BalanceResponse, AddressResponse } from '../types'
+import type { Transaction, Agent, AgentBudgetSummary } from '../types'
 
 /** Map placeholder agent data to the shape the Agent pills need */
 const placeholderAgents = placeholderData.agents.samples
@@ -33,9 +32,10 @@ export default function Home() {
   const [segment, setSegment] = useState('Overview')
   const [loading, setLoading] = useState(true)
 
-  // Data states
-  const [balance, setBalance] = useState<BalanceResponse | null>(null)
-  const [address, setAddress] = useState<string>(placeholderData.wallet.address)
+  // Wallet data from global store (fetched once at app level)
+  const { address: walletAddress, balances, totalBalance } = useWalletStore()
+
+  // Page-specific data (transactions, agents, budgets)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
   const [budgets, setBudgets] = useState<AgentBudgetSummary[]>([])
@@ -44,15 +44,7 @@ export default function Home() {
     let cancelled = false
 
     async function load() {
-      const [balRes, addrRes, txRes, agentRes, budgetRes] = await Promise.all([
-        safeTauriCall(
-          () => tauriApi.wallet.getBalance(),
-          null,
-        ),
-        safeTauriCall(
-          () => tauriApi.wallet.getAddress(),
-          { address: placeholderData.wallet.address } as AddressResponse,
-        ),
+      const [txRes, agentRes, budgetRes] = await Promise.all([
         safeTauriCall(
           () => tauriApi.transactions.list({ limit: 5, offset: 0 }),
           null,
@@ -69,8 +61,6 @@ export default function Home() {
 
       if (cancelled) return
 
-      setBalance(balRes)
-      setAddress(addrRes?.address ?? placeholderData.wallet.address)
       setTransactions(txRes?.transactions ?? [])
       setAgents(agentRes ?? [])
       setBudgets(budgetRes ?? [])
@@ -81,23 +71,10 @@ export default function Home() {
     return () => { cancelled = true }
   }, [])
 
-  // Poll balance every 15 seconds
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const balRes = await safeTauriCall(
-        () => tauriApi.wallet.getBalance(),
-        null,
-      )
-      if (balRes) setBalance(balRes)
-    }, 15_000)
-    return () => clearInterval(interval)
-  }, [])
-
   // Derive display values — fall back to placeholder when backend returns empty / null
-  const totalBalanceUsd = balance?.balance ?? placeholderData.wallet.totalBalanceUsd
-  const ethFormatted = balance?.balances?.ETH?.formatted ?? placeholderData.wallet.balances.ETH.formatted
-  const usdcFormatted = balance?.balances?.USDC?.formatted ?? placeholderData.wallet.balances.USDC.formatted
-  const walletAddress = address
+  const totalBalanceUsd = totalBalance ?? placeholderData.wallet.totalBalanceUsd
+  const ethFormatted = balances?.ETH?.formatted ?? placeholderData.wallet.balances.ETH.formatted
+  const usdcFormatted = balances?.USDC?.formatted ?? placeholderData.wallet.balances.USDC.formatted
 
   // Use real transactions if available, otherwise placeholder samples
   const displayTransactions: Array<{
@@ -146,34 +123,36 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-full relative">
+      <div className="flex flex-col h-full">
         <div className="flex-1 flex items-center justify-center">
           <div className="w-6 h-6 border-2 border-black/20 border-t-black rounded-full animate-spin" />
         </div>
-        <BottomNav activeTab="home" />
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-full relative">
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide pb-[100px]">
-        {/* Top bar with gradient fade */}
-        <div className="sticky top-0 z-10 pt-[16px] pb-4 bg-gradient-to-b from-white from-80% to-transparent">
-          <TopBar walletName={placeholderData.app.walletName} initials={user.initials} />
-        </div>
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Floating settings button — bottom right */}
+      <button
+        type="button"
+        onClick={() => navigate('/settings')}
+        className="fixed bottom-6 right-6 z-50 w-[44px] h-[44px] rounded-full bg-black/80 backdrop-blur-sm flex items-center justify-center cursor-pointer border-none shadow-lg hover:bg-black transition-colors"
+      >
+        <Settings size={20} color="white" />
+      </button>
 
-        <div className="px-6">
+      {/* Fixed header area — never scrolls */}
+      <div className="flex-none">
+        <div className="px-6 pt-6">
           {/* Balance Card */}
-          <div className="bg-black text-white rounded-[32px] p-8 mb-6 relative overflow-hidden">
+          <div className="bg-black text-white rounded-[32px] p-8 mb-6 relative overflow-hidden flex flex-col justify-between min-h-[198px]">
             {/* Decorative glow */}
             <div className="absolute -top-1/2 -right-[20%] w-[200px] h-[200px] bg-[radial-gradient(circle,rgba(143,181,170,0.2)_0%,transparent_70%)] pointer-events-none" />
 
-            <div className="flex justify-between items-start mb-6 relative z-[1]">
+            <div className="flex justify-between items-start relative z-[1]">
               <div>
-                <p className="text-[11px] text-white/60">Base Network Balance</p>
-                <p className="text-[40px] font-semibold mt-1 leading-none">{totalBalanceUsd}</p>
+                <p className="text-[40px] font-semibold leading-none">${totalBalanceUsd}</p>
               </div>
               <div className="bg-white/10 px-2 py-1 rounded-[8px] flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-[#0052FF]" />
@@ -211,63 +190,63 @@ export default function Home() {
             onChange={setSegment}
             className="mb-6"
           />
-
-          {segment === 'Agents' ? (
-            /* Agent Pills */
-            <div className="flex flex-col gap-3 mb-8">
-              {agentPills.map(pill => (
-                <AgentPillRow
-                  key={pill.id}
-                  icon={pill.icon}
-                  label={pill.label}
-                  value={pill.value}
-                  subValue={pill.subValue}
-                  accentColor={pill.accentColor}
-                />
-              ))}
-            </div>
-          ) : (
-            /* Activity Feed */
-            <div className="mb-8">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-title" style={{ fontSize: 20 }}>Activity</h3>
-                <button
-                  type="button"
-                  className="text-[13px] font-semibold text-[#0052FF] bg-transparent border-none cursor-pointer"
-                >
-                  View All
-                </button>
-              </div>
-
-              {displayTransactions.map((tx, i) => (
-                <TransactionItem
-                  key={tx.id}
-                  icon={
-                    tx.tx_type === 'receive' ? ArrowDownLeft :
-                    tx.agent_name === 'Deploy Bot' ? Code : Search
-                  }
-                  iconBgColor={
-                    tx.tx_type === 'receive' ? 'var(--accent-blue-dim)' :
-                    tx.agent_name === 'Deploy Bot' ? 'var(--accent-yellow-dim)' :
-                    tx.agent_name === 'Treasury' ? 'var(--accent-terracotta-dim)' :
-                    'var(--accent-green-dim)'
-                  }
-                  label={tx.agent_name || 'Deposit'}
-                  subLabel={tx.description}
-                  amount={`${tx.amount} ${tx.asset}`}
-                  tag={tx.category.toUpperCase()}
-                  isPositive={tx.tx_type === 'receive'}
-                  isLast={i === displayTransactions.length - 1}
-                  onClick={() => navigate(`/transactions/${tx.id}`)}
-                />
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Bottom Nav */}
-      <BottomNav activeTab="home" />
+      {/* Scrollable content area — only this part scrolls */}
+      <div className="flex-1 overflow-y-auto scrollbar-hide px-6">
+        {segment === 'Agents' ? (
+          /* Agent Pills */
+          <div className="flex flex-col gap-3 pb-6">
+            {agentPills.map(pill => (
+              <AgentPillRow
+                key={pill.id}
+                icon={pill.icon}
+                label={pill.label}
+                value={pill.value}
+                subValue={pill.subValue}
+                accentColor={pill.accentColor}
+              />
+            ))}
+          </div>
+        ) : (
+          /* Activity Feed */
+          <div className="pb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-title" style={{ fontSize: 20 }}>Activity</h3>
+              <button
+                type="button"
+                className="text-[13px] font-semibold text-[#0052FF] bg-transparent border-none cursor-pointer"
+              >
+                View All
+              </button>
+            </div>
+
+            {displayTransactions.map((tx, i) => (
+              <TransactionItem
+                key={tx.id}
+                icon={
+                  tx.tx_type === 'receive' ? ArrowDownLeft :
+                  tx.agent_name === 'Deploy Bot' ? Code : Search
+                }
+                iconBgColor={
+                  tx.tx_type === 'receive' ? 'var(--accent-blue-dim)' :
+                  tx.agent_name === 'Deploy Bot' ? 'var(--accent-yellow-dim)' :
+                  tx.agent_name === 'Treasury' ? 'var(--accent-terracotta-dim)' :
+                  'var(--accent-green-dim)'
+                }
+                label={tx.agent_name || 'Deposit'}
+                subLabel={tx.description}
+                amount={`${tx.amount} ${tx.asset}`}
+                tag={tx.category.toUpperCase()}
+                isPositive={tx.tx_type === 'receive'}
+                isLast={i === displayTransactions.length - 1}
+                onClick={() => navigate(`/transactions/${tx.id}`)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
