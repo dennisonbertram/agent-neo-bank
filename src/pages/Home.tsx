@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Users, Search, Rocket, Landmark, ArrowDownLeft, Code, Settings } from 'lucide-react'
-import { Button } from '../components/ui/Button'
+import { Search, Rocket, Landmark, ArrowDownLeft, Code, Settings } from 'lucide-react'
 import { SegmentControl } from '../components/ui/SegmentControl'
 import { AgentPillRow } from '../components/agent/AgentPillRow'
 import { TransactionItem } from '../components/transaction/TransactionItem'
+import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { useWalletStore } from '../stores/walletStore'
 import { safeTauriCall, tauriApi, placeholderData } from '../lib/tauri'
 import type { Transaction, Agent, AgentBudgetSummary } from '../types'
@@ -31,6 +31,7 @@ export default function Home() {
   const navigate = useNavigate()
   const [segment, setSegment] = useState('Overview')
   const [loading, setLoading] = useState(true)
+  const [showDetails, setShowDetails] = useState(false)
 
   // Wallet data from global store (fetched once at app level)
   const { address: walletAddress, balances, totalBalance } = useWalletStore()
@@ -73,8 +74,6 @@ export default function Home() {
 
   // Derive display values — fall back to placeholder when backend returns empty / null
   const totalBalanceUsd = totalBalance ?? placeholderData.wallet.totalBalanceUsd
-  const ethFormatted = balances?.ETH?.formatted ?? placeholderData.wallet.balances.ETH.formatted
-  const usdcFormatted = balances?.USDC?.formatted ?? placeholderData.wallet.balances.USDC.formatted
 
   // Use real transactions if available, otherwise placeholder samples
   const displayTransactions: Array<{
@@ -164,89 +163,120 @@ export default function Home() {
               <span className="font-mono text-[13px] text-white/50">
                 {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : '...'}
               </span>
-              <div className="flex gap-3">
-                <span className="text-[12px] font-medium">{ethFormatted} ETH</span>
-                <span className="text-[12px] font-medium">{usdcFormatted} USDC</span>
+              <div className="flex gap-2 items-center">
+                <button
+                  type="button"
+                  onClick={() => navigate('/add-funds')}
+                  className="text-[11px] font-medium text-white/50 hover:text-white/80 bg-transparent border-none cursor-pointer p-0 transition-colors"
+                >
+                  Add Funds
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDetails(d => !d)}
+                  className="text-[11px] font-semibold text-white/70 bg-white/10 hover:bg-white/20 border-none cursor-pointer px-2.5 py-1 rounded-full transition-colors"
+                >
+                  Details
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 mb-8">
-            <Button variant="action" onClick={() => navigate('/add-funds')}>
-              <Plus size={20} strokeWidth={2.5} />
-              Add Funds
-            </Button>
-            <Button variant="action" onClick={() => navigate('/agents')}>
-              <Users size={20} strokeWidth={2.5} />
-              Agents
-            </Button>
-          </div>
-
-          {/* Segment Control */}
-          <SegmentControl
-            options={['Overview', 'Agents']}
-            value={segment}
-            onChange={setSegment}
-            className="mb-6"
-          />
+          {!showDetails && (
+            <SegmentControl
+              options={['Overview', 'Agents']}
+              value={segment}
+              onChange={setSegment}
+              className="mb-6"
+            />
+          )}
         </div>
       </div>
 
-      {/* Scrollable content area — only this part scrolls */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide px-6">
-        {segment === 'Agents' ? (
-          /* Agent Pills */
-          <div className="flex flex-col gap-3 pb-6">
-            {agentPills.map(pill => (
-              <AgentPillRow
-                key={pill.id}
-                icon={pill.icon}
-                label={pill.label}
-                value={pill.value}
-                subValue={pill.subValue}
-                accentColor={pill.accentColor}
-              />
-            ))}
+      {showDetails ? (
+        <>
+          <div className="px-6 pt-2">
+            <ScreenHeader
+              breadcrumbs={[{ label: 'Home', path: '/home' }, { label: 'Balances' }]}
+              onBack={() => setShowDetails(false)}
+            />
           </div>
-        ) : (
-          /* Activity Feed */
-          <div className="pb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-title" style={{ fontSize: 20 }}>Activity</h3>
-              <button
-                type="button"
-                className="text-[13px] font-semibold text-[#0052FF] bg-transparent border-none cursor-pointer"
-              >
-                View All
-              </button>
+          <div className="flex-1 overflow-y-auto scrollbar-hide px-6">
+            <div className="bg-[var(--bg-secondary)] rounded-[20px] p-5">
+              <h3 className="text-caption mb-4">Token Balances</h3>
+              {Object.entries(balances ?? {}).map(([symbol, asset], i, arr) => (
+                <div key={symbol} className={`flex justify-between items-center py-3 ${i < arr.length - 1 ? 'border-b border-black/5' : ''}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: symbol === 'ETH' ? '#627EEA' : '#2775CA' }} />
+                    <span className="text-[15px] font-medium text-[var(--text-primary)]">{symbol}</span>
+                  </div>
+                  <span className="font-mono text-[15px] font-semibold text-[var(--text-primary)]">
+                    {asset.formatted} {symbol}
+                  </span>
+                </div>
+              ))}
+              {(!balances || Object.keys(balances).length === 0) && (
+                <p className="text-body text-center py-4">No token balances available</p>
+              )}
             </div>
-
-            {displayTransactions.map((tx, i) => (
-              <TransactionItem
-                key={tx.id}
-                icon={
-                  tx.tx_type === 'receive' ? ArrowDownLeft :
-                  tx.agent_name === 'Deploy Bot' ? Code : Search
-                }
-                iconBgColor={
-                  tx.tx_type === 'receive' ? 'var(--accent-blue-dim)' :
-                  tx.agent_name === 'Deploy Bot' ? 'var(--accent-yellow-dim)' :
-                  tx.agent_name === 'Treasury' ? 'var(--accent-terracotta-dim)' :
-                  'var(--accent-green-dim)'
-                }
-                label={tx.agent_name || 'Deposit'}
-                subLabel={tx.description}
-                amount={`${tx.amount} ${tx.asset}`}
-                tag={tx.category.toUpperCase()}
-                isPositive={tx.tx_type === 'receive'}
-                isLast={i === displayTransactions.length - 1}
-                onClick={() => navigate(`/transactions/${tx.id}`)}
-              />
-            ))}
           </div>
-        )}
-      </div>
+        </>
+      ) : (
+        /* Scrollable content area — only this part scrolls */
+        <div className="flex-1 overflow-y-auto scrollbar-hide px-6">
+          {segment === 'Agents' ? (
+            /* Agent Pills */
+            <div className="flex flex-col gap-3 pb-6">
+              {agentPills.map(pill => (
+                <AgentPillRow
+                  key={pill.id}
+                  icon={pill.icon}
+                  label={pill.label}
+                  value={pill.value}
+                  subValue={pill.subValue}
+                  accentColor={pill.accentColor}
+                />
+              ))}
+            </div>
+          ) : (
+            /* Activity Feed */
+            <div className="pb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-title" style={{ fontSize: 20 }}>Activity</h3>
+                <button
+                  type="button"
+                  className="text-[13px] font-semibold text-[#0052FF] bg-transparent border-none cursor-pointer"
+                >
+                  View All
+                </button>
+              </div>
+
+              {displayTransactions.map((tx, i) => (
+                <TransactionItem
+                  key={tx.id}
+                  icon={
+                    tx.tx_type === 'receive' ? ArrowDownLeft :
+                    tx.agent_name === 'Deploy Bot' ? Code : Search
+                  }
+                  iconBgColor={
+                    tx.tx_type === 'receive' ? 'var(--accent-blue-dim)' :
+                    tx.agent_name === 'Deploy Bot' ? 'var(--accent-yellow-dim)' :
+                    tx.agent_name === 'Treasury' ? 'var(--accent-terracotta-dim)' :
+                    'var(--accent-green-dim)'
+                  }
+                  label={tx.agent_name || 'Deposit'}
+                  subLabel={tx.description}
+                  amount={`${tx.amount} ${tx.asset}`}
+                  tag={tx.category.toUpperCase()}
+                  isPositive={tx.tx_type === 'receive'}
+                  isLast={i === displayTransactions.length - 1}
+                  onClick={() => navigate(`/transactions/${tx.id}`)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
