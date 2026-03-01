@@ -114,6 +114,8 @@ impl CliExecutable for RealCliExecutor {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
 
+        command.kill_on_drop(true);
+
         let child = command.spawn().map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
                 CliError::NotFound(format!("Binary '{}' not found", self.binary))
@@ -128,6 +130,8 @@ impl CliExecutable for RealCliExecutor {
         let result = tokio::time::timeout(self.timeout, child.wait_with_output()).await;
 
         match result {
+            // Timeout: the child is killed automatically via kill_on_drop(true)
+            // when the future is dropped.
             Err(_) => Err(CliError::Timeout),
             Ok(Err(e)) => Err(CliError::CommandFailed {
                 stderr: e.to_string(),

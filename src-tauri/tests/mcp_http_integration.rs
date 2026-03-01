@@ -149,7 +149,8 @@ async fn test_full_session_lifecycle() {
     assert_eq!(resp.status(), 200);
     let json: Value = resp.json().await.unwrap();
     let tools = json["result"]["tools"].as_array().unwrap();
-    assert!(tools.len() >= 6, "Should have at least 6 tools, got {}", tools.len());
+    assert_eq!(tools.len(), 1, "Unauthenticated should only see register_agent, got {}", tools.len());
+    assert_eq!(tools[0]["name"], "register_agent");
 
     // 4. tools/call register_agent (no auth needed)
     let register_body = serde_json::json!({

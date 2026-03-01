@@ -231,13 +231,11 @@ async fn test_fresh_agent_journey() {
     // 2. Send initialized notification
     client.send_initialized_notification().await;
 
-    // 3. List tools
+    // 3. List tools (unauthenticated — should only see register_agent)
     let tools = client.list_tools().await;
-    assert!(tools.len() >= 6, "Should have at least 6 tools, got {}", tools.len());
+    assert_eq!(tools.len(), 1, "Unauthenticated should only see register_agent, got {}", tools.len());
     let tool_names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     assert!(tool_names.contains(&"register_agent"));
-    assert!(tool_names.contains(&"send_payment"));
-    assert!(tool_names.contains(&"check_balance"));
 
     // 4. Register (no auth needed)
     let register_result = client

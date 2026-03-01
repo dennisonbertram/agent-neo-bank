@@ -14,9 +14,8 @@ use axum::Router;
 use dashmap::DashMap;
 use serde_json::Value;
 
-use crate::api::mcp_router::{error_code, McpRouter};
+use crate::api::mcp_router::{error_code, McpRouter, MCP_PROTOCOL_VERSION};
 use crate::api::mcp_server::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
-use crate::api::mcp_tools::get_tool_definitions;
 use crate::db::queries;
 use crate::db::schema::Database;
 use crate::state::app_state::AppState;
@@ -25,9 +24,20 @@ use crate::state::app_state::AppState;
 // Constants
 // -------------------------------------------------------------------------
 
-const PROTOCOL_VERSION: &str = "2025-11-25";
 const SERVER_NAME: &str = "tally-agentic-wallet-mcp";
 const SERVER_VERSION: &str = "0.1.0";
+
+/// Sessions expire after 30 minutes of inactivity.
+const SESSION_TTL_SECS: u64 = 1800;
+
+/// Maximum number of concurrent sessions.
+const MAX_SESSIONS: usize = 100;
+
+/// Maximum requests per session per 60-second window.
+const RATE_LIMIT_MAX: u64 = 60;
+
+/// Rate-limit window duration in seconds.
+const RATE_LIMIT_WINDOW_SECS: u64 = 60;
 
 // -------------------------------------------------------------------------
 // Session types
@@ -37,7 +47,10 @@ struct McpSession {
     agent_id: Option<String>,
     #[allow(dead_code)]
     created_at: std::time::Instant,
+    last_active: std::time::Instant,
     protocol_version: String,
+    request_count: u64,
+    window_start: std::time::Instant,
 }
 
 // -------------------------------------------------------------------------
@@ -82,6 +95,7 @@ pub fn build_router(state: McpHttpState) -> Router {
         .route("/mcp", post(handle_post))
         .route("/mcp", get(handle_get))
         .route("/mcp", delete(handle_delete))
+        .layer(tower_http::limit::RequestBodyLimitLayer::new(64 * 1024)) // 64 KB
         .with_state(state)
 }
 
@@ -103,10 +117,13 @@ pub async fn start(app_state: Arc<AppState>, port: u16) -> Result<(), Box<dyn st
 fn validate_origin(headers: &HeaderMap) -> Result<(), StatusCode> {
     if let Some(origin) = headers.get("origin") {
         let origin_str = origin.to_str().unwrap_or("");
-        let allowed = origin_str.starts_with("http://localhost")
-            || origin_str.starts_with("http://127.0.0.1")
-            || origin_str.starts_with("https://localhost")
-            || origin_str.starts_with("https://127.0.0.1");
+        let allowed = match url::Url::parse(origin_str) {
+            Ok(url) => matches!(
+                url.host_str(),
+                Some("localhost") | Some("127.0.0.1") | Some("[::1]")
+            ),
+            Err(_) => false,
+        };
         if !allowed {
             return Err(StatusCode::FORBIDDEN);
         }
@@ -180,18 +197,52 @@ async fn handle_post(
                 }
             };
 
-            // Verify session exists
-            if !state.sessions.contains_key(&session_id) {
-                return (
-                    StatusCode::NOT_FOUND,
-                    "Session not found or expired — re-initialize",
-                )
-                    .into_response();
+            // Verify session exists and is not expired
+            {
+                let session = match state.sessions.get(&session_id) {
+                    Some(s) => s,
+                    None => {
+                        return (
+                            StatusCode::NOT_FOUND,
+                            "Session not found or expired — re-initialize",
+                        )
+                            .into_response();
+                    }
+                };
+                if session.last_active.elapsed().as_secs() > SESSION_TTL_SECS {
+                    drop(session);
+                    state.sessions.remove(&session_id);
+                    return (
+                        StatusCode::NOT_FOUND,
+                        "Session expired — re-initialize",
+                    )
+                        .into_response();
+                }
+            }
+
+            // Rate limiting
+            {
+                let mut session = state.sessions.get_mut(&session_id).unwrap();
+                let now = std::time::Instant::now();
+                if now.duration_since(session.window_start).as_secs() >= RATE_LIMIT_WINDOW_SECS {
+                    session.request_count = 1;
+                    session.window_start = now;
+                } else {
+                    session.request_count += 1;
+                    if session.request_count > RATE_LIMIT_MAX {
+                        return (
+                            StatusCode::TOO_MANY_REQUESTS,
+                            "Rate limit exceeded — try again later",
+                        )
+                            .into_response();
+                    }
+                }
+                session.last_active = now;
             }
 
             match method {
-                "tools/list" => handle_tools_list(&state, &request),
-                "tools/call" => handle_tools_call(&state, &request, &headers, &session_id),
+                "tools/list" => handle_tools_list(&state, &request, &headers, &session_id),
+                "tools/call" => handle_tools_call(&state, &request, &headers, &session_id).await,
                 _ => {
                     let err_resp = JsonRpcResponse {
                         jsonrpc: "2.0".to_string(),
@@ -218,16 +269,37 @@ fn handle_initialize(
     request: &JsonRpcRequest,
     _headers: &HeaderMap,
 ) -> Response {
+    // Clean up expired sessions first
+    cleanup_expired_sessions(&state.sessions);
+
+    // Reject if at max capacity
+    if state.sessions.len() >= MAX_SESSIONS {
+        let resp = JsonRpcResponse {
+            jsonrpc: "2.0".to_string(),
+            id: request.id.clone(),
+            result: None,
+            error: Some(JsonRpcError {
+                code: -32000,
+                message: "Server at session capacity — try again later".to_string(),
+            }),
+        };
+        return (StatusCode::SERVICE_UNAVAILABLE, axum::Json(resp)).into_response();
+    }
+
+    let now = std::time::Instant::now();
     let session_id = uuid::Uuid::new_v4().to_string();
     let session = McpSession {
         agent_id: None,
-        created_at: std::time::Instant::now(),
-        protocol_version: PROTOCOL_VERSION.to_string(),
+        created_at: now,
+        last_active: now,
+        protocol_version: MCP_PROTOCOL_VERSION.to_string(),
+        request_count: 0,
+        window_start: now,
     };
     state.sessions.insert(session_id.clone(), session);
 
     let result = serde_json::json!({
-        "protocolVersion": PROTOCOL_VERSION,
+        "protocolVersion": MCP_PROTOCOL_VERSION,
         "serverInfo": {
             "name": SERVER_NAME,
             "version": SERVER_VERSION,
@@ -252,8 +324,27 @@ fn handle_initialize(
     response
 }
 
-fn handle_tools_list(_state: &McpHttpState, request: &JsonRpcRequest) -> Response {
-    let tools = get_tool_definitions();
+fn handle_tools_list(
+    state: &McpHttpState,
+    request: &JsonRpcRequest,
+    headers: &HeaderMap,
+    session_id: &str,
+) -> Response {
+    // Check if the session has an authenticated agent (either via session or bearer token)
+    let authenticated = {
+        let has_session_agent = state
+            .sessions
+            .get(session_id)
+            .map(|s| s.agent_id.is_some())
+            .unwrap_or(false);
+        let has_bearer = extract_bearer_token(headers)
+            .and_then(|t| validate_bearer_token(&state.db, &t))
+            .is_some();
+        has_session_agent || has_bearer
+    };
+
+    let router = McpRouter::new(state.db.clone(), String::new());
+    let tools = router.list_tools(authenticated);
     let resp = JsonRpcResponse {
         jsonrpc: "2.0".to_string(),
         id: request.id.clone(),
@@ -263,7 +354,7 @@ fn handle_tools_list(_state: &McpHttpState, request: &JsonRpcRequest) -> Respons
     (StatusCode::OK, axum::Json(resp)).into_response()
 }
 
-fn handle_tools_call(
+async fn handle_tools_call(
     state: &McpHttpState,
     request: &JsonRpcRequest,
     headers: &HeaderMap,
@@ -276,7 +367,8 @@ fn handle_tools_call(
     let tool_name = params
         .get("name")
         .and_then(|v| v.as_str())
-        .unwrap_or("");
+        .unwrap_or("")
+        .to_string();
     let arguments = params
         .get("arguments")
         .cloned()
@@ -322,17 +414,28 @@ fn handle_tools_call(
         }
     };
 
-    // Dispatch via McpRouter
-    let router = if let Some(ref cli) = state.cli {
-        McpRouter::new_with_cli(state.db.clone(), agent_id, cli.clone())
-    } else {
-        McpRouter::new(state.db.clone(), agent_id)
-    };
-    match router.handle_tool_call(tool_name, arguments) {
-        Ok(content) => {
+    // Dispatch via McpRouter on a blocking thread to avoid blocking the
+    // async runtime with synchronous DB / CLI operations.
+    let db = state.db.clone();
+    let cli = state.cli.clone();
+    let request_id = request.id.clone();
+    let tool_name_owned = tool_name.clone();
+
+    let result = tokio::task::spawn_blocking(move || {
+        let router = if let Some(cli) = cli {
+            McpRouter::new_with_cli(db, agent_id, cli)
+        } else {
+            McpRouter::new(db, agent_id)
+        };
+        router.handle_tool_call(&tool_name_owned, arguments)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(content)) => {
             let resp = JsonRpcResponse {
                 jsonrpc: "2.0".to_string(),
-                id: request.id.clone(),
+                id: request_id,
                 result: Some(serde_json::json!({
                     "content": [{ "type": "text", "text": content.to_string() }]
                 })),
@@ -340,10 +443,10 @@ fn handle_tools_call(
             };
             (StatusCode::OK, axum::Json(resp)).into_response()
         }
-        Err(e) => {
+        Ok(Err(e)) => {
             let resp = JsonRpcResponse {
                 jsonrpc: "2.0".to_string(),
-                id: request.id.clone(),
+                id: request_id,
                 result: None,
                 error: Some(JsonRpcError {
                     code: error_code(&e),
@@ -351,6 +454,18 @@ fn handle_tools_call(
                 }),
             };
             (StatusCode::OK, axum::Json(resp)).into_response()
+        }
+        Err(_join_err) => {
+            let resp = JsonRpcResponse {
+                jsonrpc: "2.0".to_string(),
+                id: request_id,
+                result: None,
+                error: Some(JsonRpcError {
+                    code: -32603,
+                    message: "Internal error".to_string(),
+                }),
+            };
+            (StatusCode::INTERNAL_SERVER_ERROR, axum::Json(resp)).into_response()
         }
     }
 }
@@ -440,6 +555,22 @@ async fn handle_delete(
         StatusCode::OK.into_response()
     } else {
         (StatusCode::NOT_FOUND, "Session not found").into_response()
+    }
+}
+
+// -------------------------------------------------------------------------
+// Session cleanup
+// -------------------------------------------------------------------------
+
+/// Remove sessions that have been inactive for longer than `SESSION_TTL_SECS`.
+fn cleanup_expired_sessions(sessions: &DashMap<String, McpSession>) {
+    let expired_keys: Vec<String> = sessions
+        .iter()
+        .filter(|entry| entry.value().last_active.elapsed().as_secs() > SESSION_TTL_SECS)
+        .map(|entry| entry.key().clone())
+        .collect();
+    for key in expired_keys {
+        sessions.remove(&key);
     }
 }
 
@@ -564,7 +695,7 @@ mod tests {
         let (session_id, json) = do_initialize(&app).await;
 
         assert!(!session_id.is_empty(), "MCP-Session-Id should be set");
-        assert_eq!(json["result"]["protocolVersion"], PROTOCOL_VERSION);
+        assert_eq!(json["result"]["protocolVersion"], MCP_PROTOCOL_VERSION);
         assert_eq!(json["result"]["serverInfo"]["name"], SERVER_NAME);
         assert!(json["result"]["capabilities"]["tools"].is_object());
         assert!(json.get("error").is_none());
@@ -629,10 +760,10 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // 5. POST tools/list -> returns tools array
+    // 5. POST tools/list unauthenticated -> returns only register_agent
     // ------------------------------------------------------------------
     #[tokio::test]
-    async fn test_post_tools_list_returns_tools() {
+    async fn test_post_tools_list_unauthenticated_returns_register_only() {
         let state = test_state();
         let app = build_router(state);
         let (session_id, _) = do_initialize(&app).await;
@@ -646,7 +777,33 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let json = body_json(resp).await;
         let tools = json["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 13);
+        assert_eq!(tools.len(), 1, "Unauthenticated session should only see register_agent");
+        assert_eq!(tools[0]["name"], "register_agent");
+    }
+
+    // ------------------------------------------------------------------
+    // 5b. POST tools/list authenticated -> returns all tools
+    // ------------------------------------------------------------------
+    #[tokio::test]
+    async fn test_post_tools_list_authenticated_returns_all() {
+        let (state, _agent_id, token) = test_state_with_token_agent();
+        let app = build_router(state);
+        let (session_id, _) = do_initialize(&app).await;
+
+        let auth_header = format!("Bearer {}", token);
+        let resp = post_mcp(
+            &app,
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
+            vec![
+                ("mcp-session-id", &session_id),
+                ("authorization", &auth_header),
+            ],
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json = body_json(resp).await;
+        let tools = json["result"]["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), 13, "Authenticated session should see all tools");
     }
 
     // ------------------------------------------------------------------
@@ -1057,5 +1214,85 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    // ------------------------------------------------------------------
+    // 21. DNS rebinding: http://localhost.evil.com must be rejected
+    // ------------------------------------------------------------------
+    #[tokio::test]
+    async fn test_origin_validation_rejects_dns_rebinding() {
+        let state = test_state();
+        let app = build_router(state);
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("content-type", "application/json")
+            .header("accept", "application/json, text/event-stream")
+            .header("origin", "http://localhost.evil.com")
+            .body(Body::from(
+                r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#,
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::FORBIDDEN,
+            "http://localhost.evil.com should be rejected (DNS rebinding)"
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // 22. Suspended agent token must be rejected
+    // ------------------------------------------------------------------
+    #[tokio::test]
+    async fn test_suspended_agent_token_rejected() {
+        let state = test_state();
+        let raw_token = "test_suspended_token_xyz";
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(raw_token.as_bytes());
+        let token_hash = format!("{:x}", hasher.finalize());
+
+        // Create a SUSPENDED agent with a valid token hash
+        let mut agent = create_test_agent("SuspendedBot", AgentStatus::Suspended);
+        let agent_id = agent.id.clone();
+        agent.api_token_hash = Some(token_hash);
+        insert_agent(&state.db, &agent).unwrap();
+        let policy =
+            create_test_spending_policy(&agent_id, "100", "1000", "5000", "20000", "50");
+        insert_spending_policy(&state.db, &policy).unwrap();
+
+        let app = build_router(state);
+        let (session_id, _) = do_initialize(&app).await;
+
+        let body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 50,
+            "method": "tools/call",
+            "params": {
+                "name": "check_balance",
+                "arguments": {}
+            }
+        });
+
+        let auth_header = format!("Bearer {}", raw_token);
+        let resp = post_mcp(
+            &app,
+            &body.to_string(),
+            vec![
+                ("mcp-session-id", &session_id),
+                ("authorization", &auth_header),
+            ],
+        )
+        .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json = body_json(resp).await;
+        assert!(
+            json.get("error").is_some(),
+            "Suspended agent token should be rejected"
+        );
+        assert_eq!(json["error"]["code"], -32000);
     }
 }

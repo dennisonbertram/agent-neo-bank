@@ -20,6 +20,10 @@ use crate::error::AppError;
 
 use super::mcp_tools::{get_tool_definitions, McpTool};
 
+/// The MCP protocol version supported by this server.
+/// Used by both the stdio (`McpServer`) and HTTP (`McpHttpServer`) transports.
+pub const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
+
 /// Transport-agnostic router that handles MCP tool calls.
 ///
 /// The router is bound to a specific agent via `agent_id` and enforces
@@ -126,16 +130,8 @@ impl McpRouter {
             .and_then(|v| v.as_str())
             .ok_or_else(|| AppError::InvalidInput("Missing 'amount' field".to_string()))?
             .to_string();
-        let asset = arguments
-            .get("asset")
-            .and_then(|v| v.as_str())
-            .unwrap_or("USDC")
-            .to_string();
-        let memo = arguments
-            .get("memo")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
+        let asset = "USDC".to_string();
+        let memo = String::new();
 
         let now = chrono::Utc::now();
         let now_ts = now.timestamp();
@@ -455,6 +451,13 @@ impl McpRouter {
         }))
     }
 
+    /// Handle a token trade request (e.g. ETH -> USDC).
+    ///
+    /// **Spending cap semantics**: the `amount` field is denominated in units of the
+    /// *source* asset (`from_asset`), **not** in USD or any common numeraire.  This
+    /// means a per-transaction cap of "0.5" will deny a trade of "1.0" ETH even
+    /// though 1 ETH may be worth far more than $0.50.  The policy engine compares
+    /// the raw amount string against the agent's spending policy limits directly.
     fn handle_trade_tokens(&self, arguments: Value) -> Result<Value, AppError> {
         let from_asset = arguments
             .get("from_asset")
@@ -471,6 +474,10 @@ impl McpRouter {
             .and_then(|v| v.as_str())
             .ok_or_else(|| AppError::InvalidInput("Missing 'amount' field".to_string()))?
             .to_string();
+        let slippage = arguments
+            .get("slippage")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32);
 
         if from_asset == to_asset {
             return Err(AppError::InvalidInput(
@@ -534,6 +541,7 @@ impl McpRouter {
                         from: from_asset.clone(),
                         to: to_asset.clone(),
                         amount: amount.clone(),
+                        slippage,
                     }) {
                         Ok(output) => {
                             let hash = output.data.get("tx_hash")
@@ -652,12 +660,23 @@ impl McpRouter {
         let max_amount = arguments
             .get("max_amount")
             .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::InvalidInput("max_amount is required for x402 payments".into()))?
+            .to_string();
+        let method = arguments
+            .get("method")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let data = arguments
+            .get("data")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let headers = arguments
+            .get("headers")
+            .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
         // For x402, we use the max_amount as the policy-checked amount.
-        // If no max_amount is provided, we use "0" as a placeholder
-        // (real implementation will query the service for the price first).
-        let policy_amount = max_amount.as_deref().unwrap_or("0");
+        let policy_amount = max_amount.as_str();
 
         let now = chrono::Utc::now();
         let now_ts = now.timestamp();
@@ -711,7 +730,13 @@ impl McpRouter {
             AtomicPolicyResult::AutoApproved => {
                 // Execute x402 payment via CLI if available
                 let (chain_tx_hash, cli_status) = if self.cli.is_some() {
-                    match self.run_cli(AwalCommand::X402Pay { url: url.clone() }) {
+                    match self.run_cli(AwalCommand::X402Pay {
+                        url: url.clone(),
+                        max_amount: Some(max_amount.clone()),
+                        method: method.clone(),
+                        data: data.clone(),
+                        headers: headers.clone(),
+                    }) {
                         Ok(output) => {
                             let hash = output.data.get("tx_hash")
                                 .and_then(|v| v.as_str())
@@ -1356,6 +1381,39 @@ mod tests {
         }
     }
 
+    /// Spending caps are denominated in the source asset's units, not USD.
+    /// A per_tx_max of "0.5" must deny a trade of "1.0" regardless of the
+    /// assets' dollar values.
+    #[test]
+    fn test_trade_tokens_caps_denominated_in_source_asset() {
+        let db = setup_test_db();
+        let agent = create_test_agent("SmallCapBot", AgentStatus::Active);
+        let agent_id = agent.id.clone();
+        insert_agent(&db, &agent).unwrap();
+        // per_tx_max = 0.5
+        let policy = create_test_spending_policy(&agent_id, "0.5", "1000", "5000", "20000", "0.5");
+        insert_spending_policy(&db, &policy).unwrap();
+
+        let router = make_router(db, &agent_id);
+
+        let result = router.handle_tool_call(
+            "trade_tokens",
+            serde_json::json!({
+                "from_asset": "ETH",
+                "to_asset": "USDC",
+                "amount": "1.0"
+            }),
+        );
+
+        assert!(result.is_err(), "Trade of 1.0 should be denied with per_tx_max of 0.5");
+        match result.unwrap_err() {
+            AppError::PolicyViolation(msg) => {
+                assert!(msg.contains("per-tx"), "Denial reason should mention per-tx limit, got: {}", msg);
+            }
+            other => panic!("Expected PolicyViolation, got: {:?}", other),
+        }
+    }
+
     // -- pay_x402 tests --
 
     #[test]
@@ -1369,6 +1427,26 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             AppError::InvalidInput(msg) => assert!(msg.contains("url")),
+            other => panic!("Expected InvalidInput, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_pay_x402_requires_max_amount() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        // url present but max_amount missing -> should error
+        let result = router.handle_tool_call(
+            "pay_x402",
+            serde_json::json!({ "url": "https://example.com/api" }),
+        );
+        assert!(result.is_err(), "pay_x402 without max_amount should fail");
+        match result.unwrap_err() {
+            AppError::InvalidInput(msg) => {
+                assert!(msg.contains("max_amount"), "Error should mention max_amount, got: {}", msg);
+            }
             other => panic!("Expected InvalidInput, got: {:?}", other),
         }
     }

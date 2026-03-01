@@ -7,7 +7,7 @@ use crate::db::queries;
 use crate::db::schema::Database;
 use crate::error::AppError;
 
-use super::mcp_router::{error_code, McpRouter};
+use super::mcp_router::{error_code, McpRouter, MCP_PROTOCOL_VERSION};
 use super::mcp_tools::get_tool_definitions;
 
 // -------------------------------------------------------------------------
@@ -141,7 +141,7 @@ impl McpServer {
     pub fn handle_request(&self, request: &JsonRpcRequest) -> JsonRpcResponse {
         let result = match request.method.as_str() {
             "initialize" => Ok(serde_json::json!({
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": MCP_PROTOCOL_VERSION,
                 "serverInfo": {
                     "name": "tally-agentic-wallet-mcp",
                     "version": "0.1.0"
@@ -244,6 +244,11 @@ impl McpServer {
                     continue;
                 }
             };
+
+            // JSON-RPC notifications (no `id` field) must not produce responses.
+            if request.id.is_none() {
+                continue;
+            }
 
             let response = self.handle_request(&request);
             let json = serde_json::to_string(&response)

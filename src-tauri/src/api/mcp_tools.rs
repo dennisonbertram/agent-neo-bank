@@ -13,14 +13,12 @@ pub fn get_tool_definitions() -> Vec<McpTool> {
     vec![
         McpTool {
             name: "send_payment".to_string(),
-            description: "Send a payment to a recipient address".to_string(),
+            description: "Send USDC to an Ethereum address on Base".to_string(),
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "to": { "type": "string", "description": "Recipient address" },
-                    "amount": { "type": "string", "description": "Amount to send (decimal string)" },
-                    "asset": { "type": "string", "description": "Asset (default: USDC)" },
-                    "memo": { "type": "string", "description": "Optional memo" }
+                    "amount": { "type": "string", "description": "Amount to send (decimal string)" }
                 },
                 "required": ["to", "amount"]
             }),
@@ -85,7 +83,8 @@ pub fn get_tool_definitions() -> Vec<McpTool> {
                 "properties": {
                     "from_asset": { "type": "string", "enum": ["ETH", "USDC", "WETH"], "description": "Source token" },
                     "to_asset": { "type": "string", "enum": ["ETH", "USDC", "WETH"], "description": "Destination token" },
-                    "amount": { "type": "string", "description": "Amount of source token to swap" }
+                    "amount": { "type": "string", "description": "Amount of source token to swap" },
+                    "slippage": { "type": "integer", "description": "Slippage tolerance in basis points (default: 100 = 1%)" }
                 },
                 "required": ["from_asset", "to_asset", "amount"]
             }),
@@ -97,9 +96,12 @@ pub fn get_tool_definitions() -> Vec<McpTool> {
                 "type": "object",
                 "properties": {
                     "url": { "type": "string", "description": "X402-enabled service URL" },
-                    "max_amount": { "type": "string", "description": "Maximum amount willing to pay (optional safety cap)" }
+                    "max_amount": { "type": "string", "description": "Maximum amount willing to pay (required safety cap)" },
+                    "method": { "type": "string", "description": "HTTP method (GET, POST, PUT, DELETE, PATCH). Default: GET", "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
+                    "data": { "type": "string", "description": "Request body as JSON string (for POST/PUT requests)" },
+                    "headers": { "type": "string", "description": "Custom headers as JSON string" }
                 },
-                "required": ["url"]
+                "required": ["url", "max_amount"]
             }),
         },
         McpTool {

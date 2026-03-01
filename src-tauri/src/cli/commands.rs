@@ -7,12 +7,13 @@ pub enum AwalCommand {
     AuthLogin { email: String },
     AuthVerify { flow_id: String, otp: String },
     AuthStatus,
+    /// Note: `auth logout` may not be a real awal CLI subcommand — only `login` and `verify` are documented.
     AuthLogout,
     GetBalance { chain: Option<String> },
     GetAddress,
     Send { to: String, amount: Decimal, chain: Option<String> },
-    Trade { from: String, to: String, amount: String },
-    X402Pay { url: String },
+    Trade { from: String, to: String, amount: String, slippage: Option<u32> },
+    X402Pay { url: String, max_amount: Option<String>, method: Option<String>, data: Option<String>, headers: Option<String> },
     X402BazaarList,
     X402BazaarSearch { query: String },
     X402Details { url: String },
@@ -55,11 +56,35 @@ impl AwalCommand {
                 args.push("--json".into());
                 args
             }
-            AwalCommand::Trade { from, to, amount } => {
-                vec!["trade".into(), amount.clone(), from.clone(), to.clone(), "--json".into()]
+            AwalCommand::Trade { from, to, amount, slippage } => {
+                let mut args = vec!["trade".into(), amount.clone(), from.clone(), to.clone()];
+                if let Some(s) = slippage {
+                    args.push("--slippage".into());
+                    args.push(s.to_string());
+                }
+                args.push("--json".into());
+                args
             }
-            AwalCommand::X402Pay { url } => {
-                vec!["x402".into(), "pay".into(), url.clone(), "--json".into()]
+            AwalCommand::X402Pay { url, max_amount, method, data, headers } => {
+                let mut args = vec!["x402".into(), "pay".into(), url.clone()];
+                if let Some(m) = max_amount {
+                    args.push("--max-amount".into());
+                    args.push(m.clone());
+                }
+                if let Some(mt) = method {
+                    args.push("--method".into());
+                    args.push(mt.clone());
+                }
+                if let Some(d) = data {
+                    args.push("--data".into());
+                    args.push(d.clone());
+                }
+                if let Some(h) = headers {
+                    args.push("--headers".into());
+                    args.push(h.clone());
+                }
+                args.push("--json".into());
+                args
             }
             AwalCommand::X402BazaarList => {
                 vec!["x402".into(), "bazaar".into(), "list".into(), "--json".into()]
@@ -205,16 +230,49 @@ mod tests {
             from: "ETH".into(),
             to: "USDC".into(),
             amount: "1.0".into(),
+            slippage: None,
         };
         let args = cmd.to_args();
         assert_eq!(args, vec!["trade", "1.0", "ETH", "USDC", "--json"]);
     }
 
     #[test]
+    fn test_cli_command_to_args_trade_with_slippage() {
+        let cmd = AwalCommand::Trade {
+            from: "ETH".into(),
+            to: "USDC".into(),
+            amount: "1.0".into(),
+            slippage: Some(50),
+        };
+        let args = cmd.to_args();
+        assert_eq!(args, vec!["trade", "1.0", "ETH", "USDC", "--slippage", "50", "--json"]);
+    }
+
+    #[test]
     fn test_cli_command_to_args_x402_pay() {
-        let cmd = AwalCommand::X402Pay { url: "https://example.com/api".into() };
+        let cmd = AwalCommand::X402Pay { url: "https://example.com/api".into(), max_amount: None, method: None, data: None, headers: None };
         let args = cmd.to_args();
         assert_eq!(args, vec!["x402", "pay", "https://example.com/api", "--json"]);
+    }
+
+    #[test]
+    fn test_cli_command_to_args_x402_pay_with_all_params() {
+        let cmd = AwalCommand::X402Pay {
+            url: "https://example.com/api".into(),
+            max_amount: Some("1.00".into()),
+            method: Some("POST".into()),
+            data: Some("{\"key\":\"val\"}".into()),
+            headers: Some("{\"X-Custom\":\"yes\"}".into()),
+        };
+        let args = cmd.to_args();
+        assert_eq!(args, vec![
+            "x402", "pay", "https://example.com/api",
+            "--max-amount", "1.00",
+            "--method", "POST",
+            "--data", "{\"key\":\"val\"}",
+            "--headers", "{\"X-Custom\":\"yes\"}",
+            "--json"
+        ]);
     }
 
     #[test]
@@ -239,8 +297,8 @@ mod tests {
 
     #[test]
     fn test_command_key_new_variants() {
-        assert_eq!(AwalCommand::Trade { from: "ETH".into(), to: "USDC".into(), amount: "1".into() }.command_key(), "trade");
-        assert_eq!(AwalCommand::X402Pay { url: "url".into() }.command_key(), "x402_pay");
+        assert_eq!(AwalCommand::Trade { from: "ETH".into(), to: "USDC".into(), amount: "1".into(), slippage: None }.command_key(), "trade");
+        assert_eq!(AwalCommand::X402Pay { url: "url".into(), max_amount: None, method: None, data: None, headers: None }.command_key(), "x402_pay");
         assert_eq!(AwalCommand::X402BazaarList.command_key(), "x402_bazaar_list");
         assert_eq!(AwalCommand::X402BazaarSearch { query: "q".into() }.command_key(), "x402_bazaar_search");
         assert_eq!(AwalCommand::X402Details { url: "url".into() }.command_key(), "x402_details");

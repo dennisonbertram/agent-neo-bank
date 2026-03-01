@@ -282,7 +282,7 @@ fn test_mcp_initialize_e2e() {
     assert_eq!(response.id, Some(serde_json::json!(0)));
 
     let result = response.result.unwrap();
-    assert_eq!(result["protocolVersion"], "2024-11-05");
+    assert_eq!(result["protocolVersion"], "2025-11-25");
     assert_eq!(result["serverInfo"]["name"], "tally-agentic-wallet-mcp");
     assert_eq!(result["serverInfo"]["version"], "0.1.0");
     assert!(result["capabilities"]["tools"].is_object());
