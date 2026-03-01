@@ -739,6 +739,94 @@ pub fn use_invitation_code(
     Ok(())
 }
 
+/// Atomically check and consume an invitation code in a single UPDATE.
+/// Increments `use_count` and sets `used_at` but does NOT set `used_by`
+/// (which has a FK to agents) — the caller should set `used_by` after
+/// inserting the agent row via `set_invitation_code_used_by`.
+///
+/// Returns Ok on success, or an error if the code is invalid, exhausted,
+/// or expired.
+pub fn try_consume_invitation_code(
+    db: &Database,
+    code: &str,
+    _agent_id: &str,
+) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    let now = chrono::Utc::now().timestamp();
+
+    // Atomic conditional UPDATE: only increments if use_count < max_uses
+    // and the code is not expired.
+    let rows_affected = conn
+        .execute(
+            "UPDATE invitation_codes
+             SET use_count = use_count + 1, used_at = ?1
+             WHERE code = ?2
+               AND use_count < max_uses
+               AND (expires_at IS NULL OR expires_at > ?3)",
+            params![now, code, now],
+        )
+        .map_err(|e| {
+            AppError::DatabaseError(format!("Failed to consume invitation code: {}", e))
+        })?;
+
+    if rows_affected == 0 {
+        // Distinguish between "not found" and "exhausted/expired" using
+        // the same connection to avoid pool exhaustion.
+        let inv_result = conn.query_row(
+            "SELECT code, created_at, expires_at, used_by, used_at, max_uses, use_count, label
+             FROM invitation_codes WHERE code = ?1",
+            params![code],
+            |row| {
+                Ok(InvitationCode {
+                    code: row.get(0)?,
+                    created_at: row.get(1)?,
+                    expires_at: row.get(2)?,
+                    used_by: row.get(3)?,
+                    used_at: row.get(4)?,
+                    max_uses: row.get(5)?,
+                    use_count: row.get(6)?,
+                    label: row.get(7)?,
+                })
+            },
+        );
+
+        match inv_result {
+            Ok(inv) => {
+                if inv.use_count >= inv.max_uses {
+                    return Err(AppError::InvalidInvitationCode);
+                }
+                if let Some(exp) = inv.expires_at {
+                    if exp <= now {
+                        return Err(AppError::InvitationCodeExpired);
+                    }
+                }
+                Err(AppError::InvalidInvitationCode)
+            }
+            Err(_) => Err(AppError::InvalidInvitationCode),
+        }
+    } else {
+        Ok(())
+    }
+}
+
+/// Set the `used_by` field on an invitation code after the agent row has been
+/// inserted (to satisfy the FK constraint).
+pub fn set_invitation_code_used_by(
+    db: &Database,
+    code: &str,
+    agent_id: &str,
+) -> Result<(), AppError> {
+    let conn = db.get_connection()?;
+    conn.execute(
+        "UPDATE invitation_codes SET used_by = ?1 WHERE code = ?2",
+        params![agent_id, code],
+    )
+    .map_err(|e| {
+        AppError::DatabaseError(format!("Failed to set invitation code used_by: {}", e))
+    })?;
+    Ok(())
+}
+
 pub fn count_active_invitation_codes(db: &Database) -> Result<usize, AppError> {
     let conn = db.get_connection()?;
     let now = chrono::Utc::now().timestamp();

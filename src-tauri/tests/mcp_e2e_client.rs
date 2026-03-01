@@ -559,11 +559,11 @@ async fn test_protocol_compliance_headers() {
     let json: Value = resp.json().await.unwrap();
     assert_eq!(json["error"]["code"], -32700);
 
-    // GET /mcp -> 405
+    // GET /mcp without session ID -> 400 (missing MCP-Session-Id)
     let resp = client
         .get(format!("{}/mcp", base_url))
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), 405);
+    assert_eq!(resp.status(), 400);
 }

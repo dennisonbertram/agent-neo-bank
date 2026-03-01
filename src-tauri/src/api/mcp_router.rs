@@ -48,26 +48,43 @@ impl McpRouter {
     }
 
     /// Execute an awal CLI command. Returns an error if no CLI executor is configured.
+    ///
+    /// When a Tokio runtime handle is available, uses `handle.block_on()` on a
+    /// scoped thread so we reuse the existing runtime's I/O driver without
+    /// creating a brand-new runtime per call. When no runtime exists (e.g. in
+    /// sync unit tests), creates a lightweight current-thread runtime.
     fn run_cli(&self, cmd: AwalCommand) -> Result<crate::cli::executor::CliOutput, AppError> {
         let cli = self.cli.as_ref().ok_or_else(|| {
             AppError::Internal("CLI executor not configured".to_string())
         })?;
-        // The router methods are sync, but CLI execution is async.
-        // Spawn a blocking thread that creates its own runtime to avoid
-        // conflicts with both single-threaded and multi-threaded tokio runtimes.
         let cli = cli.clone();
-        std::thread::scope(|s| {
-            s.spawn(|| {
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => {
+                // A runtime exists. We may be on a runtime thread (tokio::test)
+                // or on a spawn_blocking thread. Use a scoped thread so we can
+                // safely call handle.block_on without "cannot block from within
+                // a runtime" panics, while still reusing the existing runtime's
+                // I/O reactor instead of creating a new one.
+                std::thread::scope(|s| {
+                    s.spawn(|| {
+                        handle
+                            .block_on(cli.run(cmd))
+                            .map_err(|e| AppError::Internal(format!("CLI error: {}", e)))
+                    })
+                    .join()
+                    .unwrap_or_else(|_| Err(AppError::Internal("CLI thread panicked".to_string())))
+                })
+            }
+            Err(_) => {
+                // No runtime active — create a lightweight one
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
                     .map_err(|e| AppError::Internal(format!("Runtime error: {}", e)))?;
                 rt.block_on(cli.run(cmd))
                     .map_err(|e| AppError::Internal(format!("CLI error: {}", e)))
-            })
-            .join()
-            .unwrap_or_else(|_| Err(AppError::Internal("CLI thread panicked".to_string())))
-        })
+            }
+        }
     }
 
     /// Get the agent ID this router is bound to.
@@ -202,10 +219,12 @@ impl McpRouter {
                         }
                         Err(e) => {
                             // CLI failed — rollback the spending reservation
-                            let _ = queries::rollback_reservation(
+                            if let Err(rollback_err) = queries::rollback_reservation(
                                 &self.db, &self.agent_id, &amount,
                                 &period_d, &period_w, &period_m, now_ts,
-                            );
+                            ) {
+                                eprintln!("CRITICAL: Failed to rollback reservation for agent {}: {}", self.agent_id, rollback_err);
+                            }
                             (None, TxStatus::Failed, Some(e.to_string()))
                         }
                     }
@@ -561,10 +580,12 @@ impl McpRouter {
                         }
                         Err(e) => {
                             // CLI failed — rollback the spending reservation
-                            let _ = queries::rollback_reservation(
+                            if let Err(rollback_err) = queries::rollback_reservation(
                                 &self.db, &self.agent_id, &amount,
                                 &period_d, &period_w, &period_m, now_ts,
-                            );
+                            ) {
+                                eprintln!("CRITICAL: Failed to rollback reservation for agent {}: {}", self.agent_id, rollback_err);
+                            }
                             (None, TxStatus::Failed, Some(e.to_string()))
                         }
                     }
@@ -763,10 +784,12 @@ impl McpRouter {
                         }
                         Err(e) => {
                             // CLI failed — rollback the spending reservation
-                            let _ = queries::rollback_reservation(
+                            if let Err(rollback_err) = queries::rollback_reservation(
                                 &self.db, &self.agent_id, policy_amount,
                                 &period_d, &period_w, &period_m, now_ts,
-                            );
+                            ) {
+                                eprintln!("CRITICAL: Failed to rollback reservation for agent {}: {}", self.agent_id, rollback_err);
+                            }
                             (None, TxStatus::Failed, Some(e.to_string()))
                         }
                     }
@@ -952,13 +975,11 @@ impl McpRouter {
             })?
             .to_string();
 
-        let code = queries::get_invitation_code(&self.db, &invitation_code)?;
-        if code.use_count >= code.max_uses {
-            return Err(AppError::InvalidInvitationCode);
-        }
-
         let now = chrono::Utc::now().timestamp();
         let agent_id = uuid::Uuid::new_v4().to_string();
+
+        // Atomically check and consume the invitation code (prevents race conditions)
+        queries::try_consume_invitation_code(&self.db, &invitation_code, &agent_id)?;
 
         // Generate a 32-byte random API token for the agent
         use rand::Rng;
@@ -991,8 +1012,8 @@ impl McpRouter {
 
         queries::insert_agent(&self.db, &agent)?;
 
-        // Increment the invitation code's use_count
-        queries::use_invitation_code(&self.db, &invitation_code, &agent_id, now)?;
+        // Now that the agent row exists, set used_by on the invitation code (FK-safe)
+        queries::set_invitation_code_used_by(&self.db, &invitation_code, &agent_id)?;
 
         Ok(serde_json::json!({
             "agent_id": agent_id,

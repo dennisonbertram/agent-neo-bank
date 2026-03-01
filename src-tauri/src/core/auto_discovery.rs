@@ -76,7 +76,7 @@ fn install_mcp_config(claude_dir: &Path, mcp_port: u16) -> Result<(), Box<dyn st
         .insert(
             MCP_SERVER_KEY.to_string(),
             serde_json::json!({
-                "url": format!("http://localhost:{}/mcp", mcp_port)
+                "url": format!("http://127.0.0.1:{}/mcp", mcp_port)
             }),
         );
 
@@ -196,7 +196,7 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
         assert_eq!(
             contents["mcpServers"]["tally-wallet"]["url"],
-            "http://localhost:7403/mcp"
+            "http://127.0.0.1:7403/mcp"
         );
     }
 
@@ -232,7 +232,7 @@ mod tests {
         );
         assert_eq!(
             contents["mcpServers"]["tally-wallet"]["url"],
-            "http://localhost:7403/mcp"
+            "http://127.0.0.1:7403/mcp"
         );
     }
 
@@ -253,7 +253,7 @@ mod tests {
         assert_eq!(servers.len(), 1);
         assert_eq!(
             contents["mcpServers"]["tally-wallet"]["url"],
-            "http://localhost:7403/mcp"
+            "http://127.0.0.1:7403/mcp"
         );
     }
 
@@ -335,7 +335,7 @@ mod tests {
         let existing = serde_json::json!({
             "mcpServers": {
                 "other-server": { "url": "http://localhost:9999/mcp" },
-                "tally-wallet": { "url": "http://localhost:7403/mcp" }
+                "tally-wallet": { "url": "http://127.0.0.1:7403/mcp" }
             }
         });
         std::fs::write(
@@ -385,7 +385,24 @@ mod tests {
         .unwrap();
         assert_eq!(
             contents["mcpServers"]["tally-wallet"]["url"],
-            "http://localhost:8080/mcp"
+            "http://127.0.0.1:8080/mcp"
+        );
+    }
+
+    #[test]
+    fn test_install_uses_127_0_0_1_not_localhost() {
+        let tmp = setup_dir();
+        let claude_dir = tmp.path().join(CLAUDE_DIR);
+        install_mcp_config(&claude_dir, 7403).unwrap();
+
+        let contents = std::fs::read_to_string(claude_dir.join(MCP_CONFIG_FILENAME)).unwrap();
+        assert!(
+            !contents.contains("localhost"),
+            "URL should use 127.0.0.1 not localhost to avoid IPv6 mismatch"
+        );
+        assert!(
+            contents.contains("127.0.0.1"),
+            "URL should contain 127.0.0.1"
         );
     }
 }

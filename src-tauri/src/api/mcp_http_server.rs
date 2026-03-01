@@ -4,14 +4,17 @@
 //! supporting POST (JSON-RPC), GET (SSE — currently 405), and DELETE (session
 //! termination). Uses `McpRouter` for transport-agnostic tool dispatch.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::Router;
 use dashmap::DashMap;
+use futures::stream;
 use serde_json::Value;
 
 use crate::api::mcp_router::{error_code, McpRouter, MCP_PROTOCOL_VERSION};
@@ -39,6 +42,12 @@ const RATE_LIMIT_MAX: u64 = 60;
 /// Rate-limit window duration in seconds.
 const RATE_LIMIT_WINDOW_SECS: u64 = 60;
 
+/// Maximum total requests per minute across all sessions.
+const GLOBAL_RATE_LIMIT_MAX: u64 = 300;
+
+/// Maximum initialize calls per minute.
+const INIT_RATE_LIMIT_MAX: u64 = 10;
+
 // -------------------------------------------------------------------------
 // Session types
 // -------------------------------------------------------------------------
@@ -62,22 +71,75 @@ pub struct McpHttpState {
     pub db: Arc<Database>,
     pub cli: Option<Arc<dyn crate::cli::executor::CliExecutable>>,
     sessions: Arc<DashMap<String, McpSession>>,
+    /// Global request counter across all sessions.
+    global_request_count: Arc<AtomicU64>,
+    /// Start of the current global rate-limit window.
+    global_window_start: Arc<std::sync::Mutex<std::time::Instant>>,
+    /// Initialize-specific rate limiter.
+    init_request_count: Arc<AtomicU64>,
+    init_window_start: Arc<std::sync::Mutex<std::time::Instant>>,
 }
 
 impl McpHttpState {
     pub fn new(db: Arc<Database>) -> Self {
+        let now = std::time::Instant::now();
         Self {
             db,
             cli: None,
             sessions: Arc::new(DashMap::new()),
+            global_request_count: Arc::new(AtomicU64::new(0)),
+            global_window_start: Arc::new(std::sync::Mutex::new(now)),
+            init_request_count: Arc::new(AtomicU64::new(0)),
+            init_window_start: Arc::new(std::sync::Mutex::new(now)),
         }
     }
 
     pub fn new_with_cli(db: Arc<Database>, cli: Arc<dyn crate::cli::executor::CliExecutable>) -> Self {
+        let now = std::time::Instant::now();
         Self {
             db,
             cli: Some(cli),
             sessions: Arc::new(DashMap::new()),
+            global_request_count: Arc::new(AtomicU64::new(0)),
+            global_window_start: Arc::new(std::sync::Mutex::new(now)),
+            init_request_count: Arc::new(AtomicU64::new(0)),
+            init_window_start: Arc::new(std::sync::Mutex::new(now)),
+        }
+    }
+
+    /// Check the global rate limit. Returns Err if limit exceeded.
+    fn check_global_rate_limit(&self) -> Result<(), StatusCode> {
+        let now = std::time::Instant::now();
+        let mut window_start = self.global_window_start.lock().unwrap();
+        if now.duration_since(*window_start).as_secs() >= RATE_LIMIT_WINDOW_SECS {
+            *window_start = now;
+            self.global_request_count.store(1, Ordering::Relaxed);
+            Ok(())
+        } else {
+            let count = self.global_request_count.fetch_add(1, Ordering::Relaxed) + 1;
+            if count > GLOBAL_RATE_LIMIT_MAX {
+                Err(StatusCode::TOO_MANY_REQUESTS)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    /// Check the initialize-specific rate limit. Returns Err if limit exceeded.
+    fn check_init_rate_limit(&self) -> Result<(), StatusCode> {
+        let now = std::time::Instant::now();
+        let mut window_start = self.init_window_start.lock().unwrap();
+        if now.duration_since(*window_start).as_secs() >= RATE_LIMIT_WINDOW_SECS {
+            *window_start = now;
+            self.init_request_count.store(1, Ordering::Relaxed);
+            Ok(())
+        } else {
+            let count = self.init_request_count.fetch_add(1, Ordering::Relaxed) + 1;
+            if count > INIT_RATE_LIMIT_MAX {
+                Err(StatusCode::TOO_MANY_REQUESTS)
+            } else {
+                Ok(())
+            }
         }
     }
 }
@@ -181,6 +243,11 @@ async fn handle_post(
         return StatusCode::ACCEPTED.into_response();
     }
 
+    // 4b. Global rate limit check (across all sessions)
+    if let Err(status) = state.check_global_rate_limit() {
+        return (status, "Global rate limit exceeded — try again later").into_response();
+    }
+
     // 5. Route by method
     match request.method.as_str() {
         "initialize" => handle_initialize(&state, &request, &headers).into_response(),
@@ -278,6 +345,20 @@ fn handle_initialize(
     request: &JsonRpcRequest,
     _headers: &HeaderMap,
 ) -> Response {
+    // Initialize-specific rate limit
+    if let Err(_status) = state.check_init_rate_limit() {
+        let resp = JsonRpcResponse {
+            jsonrpc: "2.0".to_string(),
+            id: request.id.clone(),
+            result: None,
+            error: Some(JsonRpcError {
+                code: -32000,
+                message: "Too many initialize requests — try again later".to_string(),
+            }),
+        };
+        return (StatusCode::TOO_MANY_REQUESTS, axum::Json(resp)).into_response();
+    }
+
     // Clean up expired sessions first
     cleanup_expired_sessions(&state.sessions);
 
@@ -526,19 +607,50 @@ fn handle_register_agent_call(
 }
 
 // -------------------------------------------------------------------------
-// GET /mcp handler (SSE — not yet implemented)
+// GET /mcp handler (SSE stream for server-initiated messages)
 // -------------------------------------------------------------------------
 
 async fn handle_get(
-    State(_state): State<McpHttpState>,
+    State(state): State<McpHttpState>,
     headers: HeaderMap,
 ) -> Response {
     if let Err(status) = validate_origin(&headers) {
         return (status, "Forbidden: invalid origin").into_response();
     }
 
-    // SSE not implemented yet — return 405
-    StatusCode::METHOD_NOT_ALLOWED.into_response()
+    // Require MCP-Session-Id
+    let session_id = match headers.get("mcp-session-id").and_then(|v| v.to_str().ok()) {
+        Some(id) => id.to_string(),
+        None => {
+            return (StatusCode::BAD_REQUEST, "Missing MCP-Session-Id header").into_response();
+        }
+    };
+
+    // Verify session exists and is not expired
+    {
+        let session = match state.sessions.get(&session_id) {
+            Some(s) => s,
+            None => {
+                return (StatusCode::NOT_FOUND, "Session not found or expired").into_response();
+            }
+        };
+        if session.last_active.elapsed().as_secs() > SESSION_TTL_SECS {
+            drop(session);
+            state.sessions.remove(&session_id);
+            return (StatusCode::NOT_FOUND, "Session expired — re-initialize").into_response();
+        }
+    }
+
+    // Return SSE stream with keep-alive pings (no real server-initiated
+    // notifications yet — this satisfies the MCP 2025-11-25 spec requirement
+    // that GET returns an SSE stream).
+    let sse_stream = stream::repeat_with(|| {
+        Ok::<_, std::convert::Infallible>(Event::default().comment("keep-alive"))
+    });
+
+    Sse::new(sse_stream)
+        .keep_alive(KeepAlive::new().interval(std::time::Duration::from_secs(30)))
+        .into_response()
 }
 
 // -------------------------------------------------------------------------
@@ -1078,10 +1190,39 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // 14. GET /mcp -> 405 (SSE not implemented yet)
+    // 14. GET /mcp with valid session -> 200 SSE stream
     // ------------------------------------------------------------------
     #[tokio::test]
-    async fn test_get_returns_405() {
+    async fn test_get_with_valid_session_returns_sse() {
+        let state = test_state();
+        let app = build_router(state);
+        let (session_id, _) = do_initialize(&app).await;
+
+        let req = Request::builder()
+            .method("GET")
+            .uri("/mcp")
+            .header("mcp-session-id", &session_id)
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let content_type = resp
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        assert!(
+            content_type.contains("text/event-stream"),
+            "GET /mcp should return SSE content type, got: {}",
+            content_type
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // 14b. GET /mcp without session -> 400
+    // ------------------------------------------------------------------
+    #[tokio::test]
+    async fn test_get_without_session_returns_400() {
         let state = test_state();
         let app = build_router(state);
 
@@ -1091,7 +1232,25 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // ------------------------------------------------------------------
+    // 14c. GET /mcp with unknown session -> 404
+    // ------------------------------------------------------------------
+    #[tokio::test]
+    async fn test_get_with_unknown_session_returns_404() {
+        let state = test_state();
+        let app = build_router(state);
+
+        let req = Request::builder()
+            .method("GET")
+            .uri("/mcp")
+            .header("mcp-session-id", "nonexistent-session")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
     // ------------------------------------------------------------------
@@ -1400,6 +1559,116 @@ mod tests {
             resp.status(),
             StatusCode::NOT_FOUND,
             "Should return 404 instead of panicking when session is removed concurrently"
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // 27. Global rate limiting kicks in after GLOBAL_RATE_LIMIT_MAX
+    // ------------------------------------------------------------------
+    #[tokio::test]
+    async fn test_global_rate_limit_kicks_in() {
+        let state = test_state();
+        let app = build_router(state.clone());
+        let (session_id, _) = do_initialize(&app).await;
+
+        // Exhaust the global rate limit counter AFTER initialize
+        state.global_request_count.store(GLOBAL_RATE_LIMIT_MAX, Ordering::Relaxed);
+
+        // Next request should be rate-limited
+        let resp = post_mcp(
+            &app,
+            r#"{"jsonrpc":"2.0","id":70,"method":"tools/list"}"#,
+            vec![("mcp-session-id", &session_id)],
+        )
+        .await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "Global rate limit should return 429"
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // 28. Initialize rate limiting kicks in after INIT_RATE_LIMIT_MAX
+    // ------------------------------------------------------------------
+    #[tokio::test]
+    async fn test_init_rate_limit_kicks_in() {
+        let state = test_state();
+        // Exhaust the init rate limit counter
+        state.init_request_count.store(INIT_RATE_LIMIT_MAX, Ordering::Relaxed);
+
+        let app = build_router(state);
+
+        // Next initialize should be rate-limited
+        let resp = post_mcp(
+            &app,
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{}}}"#,
+            vec![],
+        )
+        .await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "Initialize rate limit should return 429"
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // 29. Concurrent invitation code usage with max_uses=1 (only one succeeds)
+    // ------------------------------------------------------------------
+    #[tokio::test]
+    async fn test_concurrent_invitation_code_only_one_succeeds() {
+        let state = test_state();
+        // Create a single-use invitation code
+        let invitation = create_test_invitation("INV-RACE-001", "Race test");
+        crate::db::queries::insert_invitation_code(&state.db, &invitation).unwrap();
+
+        let app = build_router(state);
+        let (session_id, _) = do_initialize(&app).await;
+
+        let make_register_body = |id: i32| {
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": "tools/call",
+                "params": {
+                    "name": "register_agent",
+                    "arguments": {
+                        "name": format!("RaceAgent{}", id),
+                        "purpose": "Race testing",
+                        "invitation_code": "INV-RACE-001"
+                    }
+                }
+            })
+            .to_string()
+        };
+
+        // First registration should succeed
+        let resp1 = post_mcp(
+            &app,
+            &make_register_body(100),
+            vec![("mcp-session-id", &session_id)],
+        )
+        .await;
+        let json1 = body_json(resp1).await;
+        assert!(
+            json1.get("error").is_none(),
+            "First registration should succeed: {:?}",
+            json1
+        );
+
+        // Second registration with the same single-use code should fail
+        let resp2 = post_mcp(
+            &app,
+            &make_register_body(101),
+            vec![("mcp-session-id", &session_id)],
+        )
+        .await;
+        let json2 = body_json(resp2).await;
+        assert!(
+            json2.get("error").is_some(),
+            "Second registration with exhausted code should fail: {:?}",
+            json2
         );
     }
 }
