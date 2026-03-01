@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useAuthStore } from './stores/authStore'
 import { useWalletStore } from './stores/walletStore'
+import { useProvisioningStore } from './stores/provisioningStore'
 
 // Auth flow pages
 import Onboarding from './pages/Onboarding'
@@ -41,6 +42,7 @@ function SplashScreen() {
 export function App() {
   const { checkAuthStatus, isLoading, isAuthenticated } = useAuthStore()
   const { initialize: initWallet, teardown: teardownWallet } = useWalletStore()
+  const { initialize: initProvisioning } = useProvisioningStore()
 
   useEffect(() => {
     checkAuthStatus()
@@ -50,10 +52,11 @@ export function App() {
   useEffect(() => {
     if (isAuthenticated) {
       initWallet()
+      initProvisioning()
     } else {
       teardownWallet()
     }
-  }, [isAuthenticated, initWallet, teardownWallet])
+  }, [isAuthenticated, initWallet, teardownWallet, initProvisioning])
 
   if (isLoading) return <SplashScreen />
 

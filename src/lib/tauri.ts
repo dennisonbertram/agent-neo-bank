@@ -38,6 +38,14 @@ import type {
   BalanceResponse,
   AddressResponse,
   AuthStatusResponse,
+  ToolId,
+  DetectionResult,
+  ProvisionPreview,
+  ProvisionResult,
+  UnprovisionResult,
+  VerificationResult,
+  ProvisioningState,
+  McpInjectionConfig,
 } from '../types'
 
 interface ListTransactionsResponse {
@@ -128,5 +136,29 @@ export const tauriApi = {
       invoke<void>('update_global_policy', { policy }),
     toggleKillSwitch: (active: boolean, reason?: string) =>
       invoke<void>('toggle_kill_switch', { active, reason: reason ?? null }),
+  },
+  provisioning: {
+    detectTools: () =>
+      invoke<DetectionResult[]>('detect_tools'),
+    getPreview: (tool: ToolId, config: McpInjectionConfig) =>
+      invoke<ProvisionPreview>('get_provisioning_preview', { tool, config }),
+    provisionTool: (tool: ToolId, config: McpInjectionConfig) =>
+      invoke<ProvisionResult>('provision_tool', { tool, config }),
+    provisionAll: (config: McpInjectionConfig) =>
+      invoke<ProvisionResult[]>('provision_all', { config }),
+    unprovisionTool: (tool: ToolId) =>
+      invoke<UnprovisionResult>('unprovision_tool', { tool }),
+    unprovisionAll: () =>
+      invoke<UnprovisionResult[]>('unprovision_all'),
+    verify: () =>
+      invoke<VerificationResult[]>('verify_provisioning'),
+    getState: () =>
+      invoke<ProvisioningState>('get_provisioning_state'),
+    excludeTool: (tool: ToolId) =>
+      invoke<void>('exclude_tool', { tool }),
+    includeTool: (tool: ToolId) =>
+      invoke<void>('include_tool', { tool }),
+    refreshDetection: () =>
+      invoke<DetectionResult[]>('refresh_detection'),
   },
 }

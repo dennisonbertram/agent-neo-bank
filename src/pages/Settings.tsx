@@ -1,17 +1,31 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, LogOut, LifeBuoy, Wallet } from 'lucide-react'
+import { Download, LogOut, LifeBuoy, Wallet, Plug, Loader2 } from 'lucide-react'
 import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { Toggle } from '../components/ui/Toggle'
 import { safeTauriCall, tauriApi, isTauri, placeholderData } from '../lib/tauri'
 import { useAuthStore } from '../stores/authStore'
 import { useWalletStore } from '../stores/walletStore'
-import type { NotificationPreferences } from '../types'
+import { useProvisioningStore } from '../stores/provisioningStore'
+import type { NotificationPreferences, ToolId, ToolProvisioningState, DetectionResult } from '../types'
+
+const TOOL_NAMES: Record<ToolId, string> = {
+  claude_code: 'Claude Code',
+  cursor: 'Cursor',
+  windsurf: 'Windsurf',
+  claude_desktop: 'Claude Desktop',
+  codex: 'Codex CLI',
+  continue_dev: 'Continue',
+  cline: 'Cline',
+  aider: 'Aider',
+  copilot: 'GitHub Copilot',
+}
 
 export default function Settings() {
   const navigate = useNavigate()
   const { email, logout } = useAuthStore()
   const { address: walletAddress } = useWalletStore()
+  const { detectionResults, state, isDetecting, actionInProgress, actionError, initialize: initProvisioning, provisionTool, unprovisionTool } = useProvisioningStore()
   const user = placeholderData.user
 
   const [agentRequests, setAgentRequests] = useState(false)
@@ -44,6 +58,8 @@ export default function Settings() {
     }
     loadPrefs()
   }, [])
+
+  useEffect(() => { initProvisioning() }, [initProvisioning])
 
   const savePrefs = useCallback(
     async (updated: Partial<NotificationPreferences>) => {
@@ -86,6 +102,15 @@ export default function Settings() {
     }
   }
 
+  const sortedTools = [...detectionResults].sort((a, b) => {
+    const stateA = state?.tools[a.tool]
+    const stateB = state?.tools[b.tool]
+    const scoreA = stateA?.status === 'provisioned' ? 0 : a.detected ? 1 : 2
+    const scoreB = stateB?.status === 'provisioned' ? 0 : b.detected ? 1 : 2
+    if (scoreA !== scoreB) return scoreA - scoreB
+    return a.tool.localeCompare(b.tool)
+  })
+
   const truncatedAddress = walletAddress
     ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
     : '...'
@@ -117,6 +142,33 @@ export default function Settings() {
                 <p className="text-[13px] text-[var(--text-tertiary)] mt-0.5 font-mono">{truncatedAddress}</p>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Connected Tools */}
+        <div className="mb-6">
+          <span className="text-[12px] font-semibold tracking-wider uppercase text-[var(--text-tertiary)] block mb-2 px-1">Connected Tools</span>
+          <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-[var(--radius-lg)] overflow-hidden">
+            {isDetecting && detectionResults.length === 0 ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 size={20} className="animate-spin text-[var(--text-tertiary)]" />
+              </div>
+            ) : detectionResults.length === 0 ? (
+              <p className="text-[13px] text-[var(--text-tertiary)] text-center py-8">No AI coding tools detected</p>
+            ) : (
+              sortedTools.map((result, i) => (
+                <ToolRow
+                  key={result.tool}
+                  result={result}
+                  toolState={state?.tools[result.tool]}
+                  actionInProgress={actionInProgress[result.tool] ?? false}
+                  actionError={actionError[result.tool] ?? null}
+                  onProvision={() => provisionTool(result.tool)}
+                  onUnprovision={() => unprovisionTool(result.tool)}
+                  isLast={i === sortedTools.length - 1}
+                />
+              ))
+            )}
           </div>
         </div>
 
@@ -193,5 +245,81 @@ function ActionRow({ icon: Icon, label, description }: {
         <p className="text-[13px] text-[var(--text-tertiary)] mt-0.5">{description}</p>
       </div>
     </button>
+  )
+}
+
+function ToolRow({ result, toolState, actionInProgress: loading, actionError: error, onProvision, onUnprovision: _onUnprovision, isLast }: {
+  result: DetectionResult
+  toolState: ToolProvisioningState | undefined
+  actionInProgress: boolean
+  actionError: string | null
+  onProvision: () => void
+  onUnprovision: () => void
+  isLast: boolean
+}) {
+  const isProvisioned = toolState?.status === 'provisioned'
+  const needsUpdate = toolState?.status === 'needs_update'
+  const isRemoved = toolState?.status === 'removed'
+  const detected = result.detected
+
+  let description = 'Not installed on this machine'
+  if (detected && isProvisioned) description = 'Wallet connected'
+  else if (detected && needsUpdate) description = 'Update available'
+  else if (detected && isRemoved) description = 'Previously connected'
+  else if (detected) description = 'Detected, not connected'
+
+  return (
+    <div className={`px-4 py-3.5 ${!detected ? 'opacity-50' : ''} ${isLast ? '' : 'border-b border-[var(--border-subtle)]'}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <Plug size={18} className="text-[var(--text-secondary)] shrink-0" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-[15px] font-medium text-[var(--text-primary)]">{TOOL_NAMES[result.tool] ?? result.tool}</p>
+              {isProvisioned && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">Connected</span>
+              )}
+              {needsUpdate && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Update</span>
+              )}
+            </div>
+            <p className="text-[13px] text-[var(--text-tertiary)] mt-0.5">{description}</p>
+          </div>
+        </div>
+        {detected && (
+          <div className="shrink-0 ml-3">
+            {isProvisioned ? (
+              <button
+                type="button"
+                onClick={onProvision}
+                disabled={loading}
+                className="text-[12px] font-semibold px-3 py-1.5 rounded-full bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] transition-colors border border-[var(--border-subtle)] disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={14} className="animate-spin" /> : 'Reinstall'}
+              </button>
+            ) : needsUpdate ? (
+              <button
+                type="button"
+                onClick={onProvision}
+                disabled={loading}
+                className="text-[12px] font-semibold px-3 py-1.5 rounded-full bg-[var(--brand)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={14} className="animate-spin" /> : 'Update'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onProvision}
+                disabled={loading}
+                className="text-[12px] font-semibold px-3 py-1.5 rounded-full bg-[var(--brand)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {loading ? <Loader2 size={14} className="animate-spin" /> : isRemoved ? 'Reinstall' : 'Install'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {error && <p className="text-[12px] text-[#E5484D] mt-1">{error}</p>}
+    </div>
   )
 }

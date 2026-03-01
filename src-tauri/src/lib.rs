@@ -3,6 +3,7 @@ mod commands;
 pub mod cli;
 pub mod config;
 pub mod core;
+pub mod provisioning;
 pub mod db;
 pub mod error;
 mod state;
@@ -68,9 +69,16 @@ pub fn run() {
                 }
             });
 
-            // Install MCP auto-discovery (non-fatal if it fails)
-            if let Err(e) = crate::core::auto_discovery::install(config.mcp_port) {
-                tracing::warn!(error = %e, "Failed to install MCP auto-discovery");
+            // Initialize provisioning service (non-fatal if it fails)
+            match crate::provisioning::ProvisioningService::new() {
+                Ok(service) => {
+                    let service = std::sync::Arc::new(service);
+                    app.manage(service);
+                    tracing::info!("Provisioning service initialized");
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Failed to initialize provisioning service");
+                }
             }
 
             // Spawn MCP HTTP server
@@ -186,6 +194,17 @@ pub fn run() {
             commands::settings::toggle_kill_switch,
             commands::budget::get_agent_budget_summaries,
             commands::budget::get_global_budget_summary,
+            commands::provisioning::detect_tools,
+            commands::provisioning::get_provisioning_preview,
+            commands::provisioning::provision_tool,
+            commands::provisioning::provision_all,
+            commands::provisioning::unprovision_tool,
+            commands::provisioning::unprovision_all,
+            commands::provisioning::verify_provisioning,
+            commands::provisioning::get_provisioning_state,
+            commands::provisioning::exclude_tool,
+            commands::provisioning::include_tool,
+            commands::provisioning::refresh_detection,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

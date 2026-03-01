@@ -7,3 +7,4 @@ pub mod notifications;
 pub mod settings;
 pub mod transactions;
 pub mod wallet;
+pub mod provisioning;
