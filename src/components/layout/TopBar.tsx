@@ -18,19 +18,20 @@ export function TopBar({ walletName = 'Tally Wallet', initials = 'DB', className
         className
       )}
     >
-      <div className="flex items-center gap-3">
-        <div className="w-[36px] h-[36px] rounded-full bg-[var(--brand-container)] flex items-center justify-center text-[var(--brand-on-container)] text-[14px] font-semibold border border-[var(--brand-main)]/30">
-          {initials}
-        </div>
-        <span className="text-[16px] font-semibold text-[var(--text-primary)]">{walletName}</span>
-      </div>
+      {/* Interactive Profile Pill — single clickable element */}
       <button
         type="button"
         onClick={() => navigate('/settings')}
-        className="w-[36px] h-[36px] rounded-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] flex items-center justify-center cursor-pointer hover:bg-[var(--surface-hover)] transition-colors"
-        aria-label="Settings"
+        className="group flex items-center gap-2.5 p-1.5 pr-4 rounded-[var(--radius-pill)] hover:bg-[var(--surface-hover)] border border-transparent hover:border-[var(--border-subtle)] transition-all cursor-pointer bg-transparent"
+        aria-label="Open Settings"
       >
-        <Settings size={18} className="text-[var(--text-secondary)]" />
+        <div className="w-[32px] h-[32px] rounded-full bg-[var(--brand-container)] flex items-center justify-center text-[var(--brand-on-container)] text-[13px] font-semibold">
+          {initials}
+        </div>
+        <span className="text-[15px] font-semibold text-[var(--text-primary)] transition-colors">
+          {walletName}
+        </span>
+        <Settings size={16} className="text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)] transition-colors ml-0.5" />
       </button>
     </div>
   )
