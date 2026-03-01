@@ -31,7 +31,7 @@ fn test_mcp_end_to_end_send_payment() {
         .handle_tool_call(
             "send_payment",
             serde_json::json!({
-                "to": "0xRecipient",
+                "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "amount": "25.00"
             }),
         )
@@ -47,7 +47,7 @@ fn test_mcp_end_to_end_send_payment() {
     assert_eq!(tx.agent_id.as_deref(), Some(agent.id.as_str()));
     assert_eq!(tx.amount, "25.00");
     assert_eq!(tx.asset, "USDC");
-    assert_eq!(tx.recipient.as_deref(), Some("0xRecipient"));
+    assert_eq!(tx.recipient.as_deref(), Some("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
 }
 
 // =========================================================================

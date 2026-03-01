@@ -107,7 +107,7 @@ fn test_mcp_send_payment_e2e() {
 
     // Build JSON-RPC request for send_payment
     let request = make_tools_call_request(1, "send_payment", serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "5.00",
         "asset": "USDC"
     }));
@@ -123,7 +123,7 @@ fn test_mcp_send_payment_e2e() {
     assert_eq!(tool_result["status"], "pending");
     assert_eq!(tool_result["amount"], "5.00");
     assert_eq!(tool_result["asset"], "USDC");
-    assert_eq!(tool_result["to"], "0xRecipient");
+    assert_eq!(tool_result["to"], "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
     // Verify the transaction was persisted in the DB
     let tx_id = tool_result["tx_id"].as_str().unwrap();
@@ -131,7 +131,7 @@ fn test_mcp_send_payment_e2e() {
     assert_eq!(tx.agent_id.as_deref(), Some(agent_id.as_str()));
     assert_eq!(tx.amount, "5.00");
     assert_eq!(tx.asset, "USDC");
-    assert_eq!(tx.recipient.as_deref(), Some("0xRecipient"));
+    assert_eq!(tx.recipient.as_deref(), Some("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
 }
 
 // =========================================================================
@@ -352,7 +352,7 @@ fn test_mcp_transaction_isolation_between_agents() {
 
     // Agent A sends a payment
     let send_req = make_tools_call_request(1, "send_payment", serde_json::json!({
-        "to": "0xTarget",
+        "to": "0xcccccccccccccccccccccccccccccccccccccccc",
         "amount": "20.00"
     }));
     let send_resp = server_a.handle_request(&send_req);
@@ -443,7 +443,7 @@ fn test_mcp_full_lifecycle() {
 
     // Step 5: Send payment
     let send_req = make_tools_call_request(4, "send_payment", serde_json::json!({
-        "to": "0xLifecycleRecipient",
+        "to": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "amount": "10.00",
         "asset": "USDC",
         "memo": "lifecycle test"
@@ -523,7 +523,7 @@ fn test_mcp_send_payment_missing_fields() {
 
     // Missing 'amount'
     let req2 = make_tools_call_request(2, "send_payment", serde_json::json!({
-        "to": "0x123"
+        "to": "0xdddddddddddddddddddddddddddddddddddddddd"
     }));
     let resp2 = server.handle_request(&req2);
     assert!(resp2.error.is_some(), "Missing 'amount' should error");
@@ -604,7 +604,7 @@ fn test_mcp_send_payment_enforces_spending_policy() {
 
     // Send 15 which exceeds per_tx_max of 10
     let request = make_tools_call_request(1, "send_payment", serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "15",
         "asset": "USDC"
     }));
@@ -638,7 +638,7 @@ fn test_mcp_send_payment_enforces_daily_cap() {
 
     // First payment: 15 under daily_cap of 20 -> should succeed
     let req1 = make_tools_call_request(1, "send_payment", serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "15",
         "asset": "USDC"
     }));
@@ -647,7 +647,7 @@ fn test_mcp_send_payment_enforces_daily_cap() {
 
     // Second payment: 10 would bring total to 25 > daily_cap of 20 -> denied
     let req2 = make_tools_call_request(2, "send_payment", serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "10",
         "asset": "USDC"
     }));
@@ -688,7 +688,7 @@ fn test_mcp_send_payment_enforces_kill_switch() {
 
     // Try to send -- should be denied by kill switch
     let request = make_tools_call_request(1, "send_payment", serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "5",
         "asset": "USDC"
     }));
@@ -720,7 +720,7 @@ fn test_mcp_send_payment_updates_spending_ledger() {
 
     // Send a payment
     let request = make_tools_call_request(1, "send_payment", serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "25.50",
         "asset": "USDC"
     }));

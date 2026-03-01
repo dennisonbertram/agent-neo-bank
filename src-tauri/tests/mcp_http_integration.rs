@@ -209,7 +209,7 @@ async fn test_unauth_session_restricted_to_public_methods() {
     // send_payment without auth -> auth error
     let send_body = serde_json::json!({
         "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-        "params": { "name": "send_payment", "arguments": { "to": "0x1", "amount": "1" } }
+        "params": { "name": "send_payment", "arguments": { "to": "0xdddddddddddddddddddddddddddddddddddddddd", "amount": "1" } }
     });
     let resp = post_mcp(&client, &base_url, &send_body, Some(&session_id), None).await;
     assert_eq!(resp.status(), 200);
@@ -260,7 +260,7 @@ async fn test_valid_token_grants_access_to_all_tools() {
     // send_payment with valid token
     let send_body = serde_json::json!({
         "jsonrpc": "2.0", "id": 3, "method": "tools/call",
-        "params": { "name": "send_payment", "arguments": { "to": "0xTarget", "amount": "10", "asset": "USDC" } }
+        "params": { "name": "send_payment", "arguments": { "to": "0xdddddddddddddddddddddddddddddddddddddddd", "amount": "10", "asset": "USDC" } }
     });
     let resp = post_mcp(&client, &base_url, &send_body, Some(&session_id), Some(&token)).await;
     let json: Value = resp.json().await.unwrap();
@@ -288,7 +288,7 @@ async fn test_token_isolation_between_agents() {
     // Agent A sends a payment
     let send_body = serde_json::json!({
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-        "params": { "name": "send_payment", "arguments": { "to": "0xTarget", "amount": "5" } }
+        "params": { "name": "send_payment", "arguments": { "to": "0xdddddddddddddddddddddddddddddddddddddddd", "amount": "5" } }
     });
     let resp = post_mcp(&client, &base_url, &send_body, Some(&session_id), Some(&token_a)).await;
     let json: Value = resp.json().await.unwrap();
@@ -333,7 +333,7 @@ async fn test_policy_enforcement_per_tx_max() {
     // Send 15 -> exceeds per_tx_max -> denied
     let send_body = serde_json::json!({
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-        "params": { "name": "send_payment", "arguments": { "to": "0x1", "amount": "15" } }
+        "params": { "name": "send_payment", "arguments": { "to": "0xdddddddddddddddddddddddddddddddddddddddd", "amount": "15" } }
     });
     let resp = post_mcp(&client, &base_url, &send_body, Some(&session_id), Some(&token)).await;
     let json: Value = resp.json().await.unwrap();
@@ -342,7 +342,7 @@ async fn test_policy_enforcement_per_tx_max() {
     // Send 5 -> within limits -> succeeds
     let send_body2 = serde_json::json!({
         "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-        "params": { "name": "send_payment", "arguments": { "to": "0x1", "amount": "5" } }
+        "params": { "name": "send_payment", "arguments": { "to": "0xdddddddddddddddddddddddddddddddddddddddd", "amount": "5" } }
     });
     let resp = post_mcp(&client, &base_url, &send_body2, Some(&session_id), Some(&token)).await;
     let json: Value = resp.json().await.unwrap();
@@ -366,7 +366,7 @@ async fn test_daily_cap_accumulates() {
     let send = |id: u64, amount: &str| {
         serde_json::json!({
             "jsonrpc": "2.0", "id": id, "method": "tools/call",
-            "params": { "name": "send_payment", "arguments": { "to": "0x1", "amount": amount } }
+            "params": { "name": "send_payment", "arguments": { "to": "0xdddddddddddddddddddddddddddddddddddddddd", "amount": amount } }
         })
     };
 
@@ -408,7 +408,7 @@ async fn test_kill_switch_blocks_all_agents() {
 
     let send = |id: u64| serde_json::json!({
         "jsonrpc": "2.0", "id": id, "method": "tools/call",
-        "params": { "name": "send_payment", "arguments": { "to": "0x1", "amount": "1" } }
+        "params": { "name": "send_payment", "arguments": { "to": "0xdddddddddddddddddddddddddddddddddddddddd", "amount": "1" } }
     });
 
     // Agent A denied

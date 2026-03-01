@@ -108,7 +108,7 @@ async fn test_mock_mode_full_send_lifecycle() {
     // Step 5: POST /v1/send -> 202, mock CLI returns fake tx_hash
     let app = ApiServer::router(state.clone());
     let send_body = serde_json::json!({
-        "to": "0xMockRecipient",
+        "to": "0xcccccccccccccccccccccccccccccccccccccccc",
         "amount": "10.00",
         "asset": "USDC",
         "description": "Mock mode test payment"
@@ -203,7 +203,7 @@ async fn test_mock_mode_multiple_sends_accumulate() {
     for i in 0..3 {
         let app = ApiServer::router(state.clone());
         let send_body = serde_json::json!({
-            "to": "0xRecipient",
+            "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "amount": "10.00",
             "asset": "USDC"
         });
@@ -267,7 +267,7 @@ async fn test_mock_mode_spending_policy_still_enforced() {
     // Send 15 -> 403 (exceeds per_tx_max of 10, policy denied even in mock mode)
     let app = ApiServer::router(state.clone());
     let send_body = serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "15",
         "asset": "USDC"
     });
@@ -292,7 +292,7 @@ async fn test_mock_mode_spending_policy_still_enforced() {
     // Send 5 -> 202 (within per_tx_max, succeeds in mock mode)
     let app = ApiServer::router(state.clone());
     let send_body = serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "5",
         "asset": "USDC"
     });

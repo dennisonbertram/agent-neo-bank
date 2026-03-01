@@ -198,7 +198,7 @@ async fn test_token_reregistration_after_expiry() {
 
     let app = ApiServer::router(state.clone());
     let send_body = serde_json::json!({
-        "to": "0xRecipientRereg",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",
         "amount": "2.50",
         "asset": "USDC",
         "description": "Re-registration test payment"

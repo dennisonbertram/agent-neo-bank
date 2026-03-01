@@ -176,7 +176,7 @@ async fn test_lifecycle_send_and_poll_transaction() {
     // 8. POST /v1/send with Bearer token, amount 5.00
     let app = ApiServer::router(state.clone());
     let send_body = serde_json::json!({
-        "to": "0xRecipient123",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaac",
         "amount": "5.00",
         "asset": "USDC",
         "description": "Lifecycle test payment"
@@ -344,7 +344,7 @@ async fn test_lifecycle_full_happy_path() {
     // 8. Send 5.00 USDC
     let app = ApiServer::router(state.clone());
     let send_body = serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "5.00",
         "asset": "USDC"
     });

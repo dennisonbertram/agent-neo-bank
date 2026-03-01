@@ -290,7 +290,7 @@ async fn test_returning_agent_with_saved_token() {
         .call_tool(
             "send_payment",
             serde_json::json!({
-                "to": "0xRecipient",
+                "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 "amount": "25.00",
                 "asset": "USDC",
                 "memo": "E2E test payment"
@@ -335,7 +335,7 @@ async fn test_multiple_agents_isolated_spending() {
         let result = client_a
             .call_tool(
                 "send_payment",
-                serde_json::json!({ "to": format!("0xA{}", i), "amount": "10" }),
+                serde_json::json!({ "to": format!("0x{:0>40}", format!("a{}", i)), "amount": "10" }),
             )
             .await
             .unwrap();
@@ -346,7 +346,7 @@ async fn test_multiple_agents_isolated_spending() {
     let result = client_b
         .call_tool(
             "send_payment",
-            serde_json::json!({ "to": "0xB1", "amount": "50" }),
+            serde_json::json!({ "to": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "amount": "50" }),
         )
         .await
         .unwrap();
@@ -471,7 +471,7 @@ async fn test_concurrent_agents_atomic_policy() {
             client
                 .call_tool(
                     "send_payment",
-                    serde_json::json!({ "to": "0xShared", "amount": "30" }),
+                    serde_json::json!({ "to": "0xcccccccccccccccccccccccccccccccccccccccc", "amount": "30" }),
                 )
                 .await
         }));

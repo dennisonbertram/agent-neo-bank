@@ -81,6 +81,18 @@ export default function Home() {
     return () => { cancelled = true }
   }, [])
 
+  // Poll balance every 15 seconds
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const balRes = await safeTauriCall(
+        () => tauriApi.wallet.getBalance(),
+        null,
+      )
+      if (balRes) setBalance(balRes)
+    }, 15_000)
+    return () => clearInterval(interval)
+  }, [])
+
   // Derive display values — fall back to placeholder when backend returns empty / null
   const totalBalanceUsd = balance?.balance ?? placeholderData.wallet.totalBalanceUsd
   const ethFormatted = balance?.balances?.ETH?.formatted ?? placeholderData.wallet.balances.ETH.formatted

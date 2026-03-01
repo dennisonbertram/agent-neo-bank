@@ -138,7 +138,7 @@ async fn test_cli_failure_tx_status_is_failed() {
     // Send 5.00 -> should get 202 (accepted for background execution)
     let app = ApiServer::router(state.clone());
     let send_body = serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "5.00",
         "asset": "USDC"
     });
@@ -201,7 +201,7 @@ async fn test_cli_failure_spending_ledger_not_updated() {
     // Send 5.00 -> 202 -> fails in background
     let app = ApiServer::router(state.clone());
     let send_body = serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "5.00",
         "asset": "USDC"
     });
@@ -235,7 +235,7 @@ async fn test_cli_failure_spending_ledger_not_updated() {
 
     let app = ApiServer::router(state.clone());
     let send_body2 = serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "5.00",
         "asset": "USDC",
         "description": "Second send after CLI recovery"
@@ -298,7 +298,7 @@ async fn test_cli_failure_retry_succeeds() {
     // First send: fails in background
     let app = ApiServer::router(state.clone());
     let send_body = serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "5.00",
         "asset": "USDC"
     });
@@ -332,7 +332,7 @@ async fn test_cli_failure_retry_succeeds() {
     // Retry: send 5.00 again
     let app = ApiServer::router(state.clone());
     let send_body2 = serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": "5.00",
         "asset": "USDC"
     });

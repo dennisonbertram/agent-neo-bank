@@ -19,7 +19,7 @@ async fn send_amount(
 ) -> (u16, serde_json::Value) {
     let app = ApiServer::router(state.clone());
     let send_body = serde_json::json!({
-        "to": "0xRecipient",
+        "to": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "amount": amount,
         "asset": "USDC"
     });

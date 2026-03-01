@@ -77,7 +77,10 @@ impl McpRouter {
                     s.spawn(|| {
                         handle
                             .block_on(cli.run(cmd))
-                            .map_err(|e| AppError::Internal(format!("CLI error: {}", e)))
+                            .map_err(|e| {
+                                eprintln!("CLI error (sanitized): {}", e);
+                                AppError::CliError("Wallet operation failed. The wallet owner may need to re-authenticate.".into())
+                            })
                     })
                     .join()
                     .unwrap_or_else(|_| Err(AppError::Internal("CLI thread panicked".to_string())))
@@ -90,9 +93,26 @@ impl McpRouter {
                     .build()
                     .map_err(|e| AppError::Internal(format!("Runtime error: {}", e)))?;
                 rt.block_on(cli.run(cmd))
-                    .map_err(|e| AppError::Internal(format!("CLI error: {}", e)))
+                    .map_err(|e| {
+                        eprintln!("CLI error (sanitized): {}", e);
+                        AppError::CliError("Wallet operation failed. The wallet owner may need to re-authenticate.".into())
+                    })
             }
         }
+    }
+
+    /// Extract a transaction hash from CLI output, trying multiple key names.
+    ///
+    /// Different CLI versions or backends may return the hash under different
+    /// keys: `tx_hash`, `transaction_hash`, `hash`, or nested under
+    /// `transaction.hash`. This helper tries all known variants.
+    fn extract_tx_hash(data: &serde_json::Value) -> Option<String> {
+        data.get("tx_hash")
+            .or_else(|| data.get("transaction_hash"))
+            .or_else(|| data.get("hash"))
+            .or_else(|| data.get("transaction").and_then(|t| t.get("hash")))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 
     /// Fetch the current USDC balance from the CLI if available.
@@ -167,17 +187,32 @@ impl McpRouter {
     // Tool handlers
     // -----------------------------------------------------------------
 
+    /// Validate that a string is a valid Ethereum address (0x + 40 hex chars).
+    fn validate_eth_address(addr: &str) -> Result<(), AppError> {
+        if !addr.starts_with("0x") || addr.len() != 42 || !addr[2..].chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(AppError::InvalidInput(format!("Invalid Ethereum address: {}", addr)));
+        }
+        Ok(())
+    }
+
     fn handle_send_payment(&self, arguments: Value) -> Result<Value, AppError> {
         let to = arguments
             .get("to")
             .and_then(|v| v.as_str())
             .ok_or_else(|| AppError::InvalidInput("Missing 'to' field".to_string()))?
             .to_string();
+        Self::validate_eth_address(&to)?;
         let amount = arguments
             .get("amount")
             .and_then(|v| v.as_str())
             .ok_or_else(|| AppError::InvalidInput("Missing 'amount' field".to_string()))?
             .to_string();
+        // Validate amount is a positive number
+        let parsed_amount = amount.parse::<rust_decimal::Decimal>()
+            .map_err(|_| AppError::InvalidInput("Invalid amount format".to_string()))?;
+        if parsed_amount <= rust_decimal::Decimal::ZERO {
+            return Err(AppError::InvalidInput("Amount must be positive".to_string()));
+        }
         let asset = "USDC".to_string();
         let memo = String::new();
 
@@ -243,9 +278,8 @@ impl McpRouter {
                         chain: None,
                     }) {
                         Ok(output) => {
-                            let hash = output.data.get("tx_hash")
-                                .and_then(|v| v.as_str())
-                                .map(|s| s.to_string());
+                            eprintln!("CLI send output data: {:?}", output.data);
+                            let hash = Self::extract_tx_hash(&output.data);
                             // If CLI succeeded but returned no tx_hash, mark as Pending (not Confirmed)
                             let status = if hash.is_some() { TxStatus::Confirmed } else { TxStatus::Pending };
                             (hash, status, None)
@@ -535,6 +569,12 @@ impl McpRouter {
             .and_then(|v| v.as_str())
             .ok_or_else(|| AppError::InvalidInput("Missing 'amount' field".to_string()))?
             .to_string();
+        // Validate amount is a positive number
+        let parsed_amount = amount.parse::<rust_decimal::Decimal>()
+            .map_err(|_| AppError::InvalidInput("Invalid amount format".to_string()))?;
+        if parsed_amount <= rust_decimal::Decimal::ZERO {
+            return Err(AppError::InvalidInput("Amount must be positive".to_string()));
+        }
         let slippage = arguments
             .get("slippage")
             .and_then(|v| v.as_u64())
@@ -607,9 +647,8 @@ impl McpRouter {
                         slippage,
                     }) {
                         Ok(output) => {
-                            let hash = output.data.get("tx_hash")
-                                .and_then(|v| v.as_str())
-                                .map(|s| s.to_string());
+                            eprintln!("CLI trade output data: {:?}", output.data);
+                            let hash = Self::extract_tx_hash(&output.data);
                             let status = if hash.is_some() { TxStatus::Confirmed } else { TxStatus::Pending };
                             (hash, status, None)
                         }
@@ -735,6 +774,12 @@ impl McpRouter {
             .and_then(|v| v.as_str())
             .ok_or_else(|| AppError::InvalidInput("max_amount is required for x402 payments".into()))?
             .to_string();
+        // Validate max_amount is a positive number
+        let parsed_max_amount = max_amount.parse::<rust_decimal::Decimal>()
+            .map_err(|_| AppError::InvalidInput("Invalid amount format".to_string()))?;
+        if parsed_max_amount <= rust_decimal::Decimal::ZERO {
+            return Err(AppError::InvalidInput("Amount must be positive".to_string()));
+        }
         let method = arguments
             .get("method")
             .and_then(|v| v.as_str())
@@ -804,7 +849,7 @@ impl McpRouter {
             }
             AtomicPolicyResult::AutoApproved => {
                 // Execute x402 payment via CLI if available
-                let (chain_tx_hash, cli_status, error_msg) = if self.cli.is_some() {
+                let (chain_tx_hash, cli_status, error_msg, response_body, amount_paid, response_status) = if self.cli.is_some() {
                     match self.run_cli(AwalCommand::X402Pay {
                         url: url.clone(),
                         max_amount: Some(max_amount.clone()),
@@ -813,11 +858,19 @@ impl McpRouter {
                         headers: headers.clone(),
                     }) {
                         Ok(output) => {
-                            let hash = output.data.get("tx_hash")
+                            eprintln!("CLI x402 output data: {:?}", output.data);
+                            let hash = Self::extract_tx_hash(&output.data);
+                            let status = if hash.is_some() { TxStatus::Confirmed } else { TxStatus::Pending };
+                            // Capture response data for the agent
+                            let response_body = output.data.get("response_body").cloned();
+                            let amount_paid = output.data.get("amount_paid")
+                                .or_else(|| output.data.get("amount"))
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string());
-                            let status = if hash.is_some() { TxStatus::Confirmed } else { TxStatus::Pending };
-                            (hash, status, None)
+                            let response_status = output.data.get("response_status")
+                                .or_else(|| output.data.get("status_code"))
+                                .and_then(|v| v.as_u64());
+                            (hash, status, None, response_body, amount_paid, response_status)
                         }
                         Err(e) => {
                             // CLI failed — rollback the spending reservation
@@ -827,11 +880,11 @@ impl McpRouter {
                             ) {
                                 eprintln!("CRITICAL: Failed to rollback reservation for agent {}: {}", self.agent_id, rollback_err);
                             }
-                            (None, TxStatus::Failed, Some(e.to_string()))
+                            (None, TxStatus::Failed, Some(e.to_string()), None, None, None)
                         }
                     }
                 } else {
-                    (None, TxStatus::Pending, None)
+                    (None, TxStatus::Pending, None, None, None, None)
                 };
 
                 let tx = Transaction {
@@ -865,7 +918,10 @@ impl McpRouter {
                     "status": cli_status.to_string(),
                     "chain_tx_hash": chain_tx_hash,
                     "url": url,
-                    "amount": policy_amount
+                    "amount": policy_amount,
+                    "response_body": response_body,
+                    "amount_paid": amount_paid,
+                    "response_status": response_status
                 }))
             }
             AtomicPolicyResult::RequiresApproval { reason } => {
@@ -948,6 +1004,23 @@ impl McpRouter {
 
         if self.cli.is_some() {
             let output = self.run_cli(AwalCommand::X402BazaarSearch { query: query.clone() })?;
+            // Client-side filtering in case CLI returns unfiltered results
+            let query_lower = query.to_lowercase();
+            if let Some(services) = output.data.get("services").and_then(|s| s.as_array()) {
+                let filtered: Vec<&Value> = services.iter().filter(|svc| {
+                    let desc = svc.get("description").and_then(|v| v.as_str()).unwrap_or("");
+                    let resource = svc.get("resource").and_then(|v| v.as_str()).unwrap_or("");
+                    let name = svc.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    desc.to_lowercase().contains(&query_lower)
+                        || resource.to_lowercase().contains(&query_lower)
+                        || name.to_lowercase().contains(&query_lower)
+                }).collect();
+                return Ok(serde_json::json!({
+                    "query": query,
+                    "services": filtered,
+                    "total": filtered.len()
+                }));
+            }
             return Ok(output.data);
         }
 
@@ -1074,6 +1147,7 @@ pub fn error_code(err: &AppError) -> i32 {
         AppError::AgentSuspended(_) => -32003,
         AppError::InvalidInvitationCode => -32004,
         AppError::RateLimited => -32005,
+        AppError::CliError(_) => -32006,
         _ => -32603,
     }
 }
@@ -1151,7 +1225,7 @@ mod tests {
             .handle_tool_call(
                 "send_payment",
                 serde_json::json!({
-                    "to": "0x1234567890abcdef",
+                    "to": "0x1234567890abcdef1234567890abcdef12345678",
                     "amount": "25.50",
                     "asset": "USDC",
                     "memo": "test payment"
@@ -1163,7 +1237,7 @@ mod tests {
         assert_eq!(result["status"], "pending");
         assert_eq!(result["amount"], "25.50");
         assert_eq!(result["asset"], "USDC");
-        assert_eq!(result["to"], "0x1234567890abcdef");
+        assert_eq!(result["to"], "0x1234567890abcdef1234567890abcdef12345678");
 
         // Verify persistence
         let tx_id = result["tx_id"].as_str().unwrap();
@@ -1238,7 +1312,7 @@ mod tests {
                 .handle_tool_call(
                     "send_payment",
                     serde_json::json!({
-                        "to": format!("0x{:04}", i),
+                        "to": format!("0x{:0>40}", format!("{:04}", i)),
                         "amount": format!("{}.00", i + 1)
                     }),
                 )
@@ -1330,7 +1404,7 @@ mod tests {
         router_a
             .handle_tool_call(
                 "send_payment",
-                serde_json::json!({ "to": "0xaaa", "amount": "10" }),
+                serde_json::json!({ "to": "0x000000000000000000000000000000000000aaaa", "amount": "10" }),
             )
             .unwrap();
 
@@ -1781,7 +1855,7 @@ mod tests {
             .handle_tool_call(
                 "send_payment",
                 serde_json::json!({
-                    "to": "0x1234567890abcdef",
+                    "to": "0x1234567890abcdef1234567890abcdef12345678",
                     "amount": "25.50",
                     "asset": "USDC"
                 }),
@@ -1860,7 +1934,7 @@ mod tests {
         );
         let result = failing_router.handle_tool_call(
             "send_payment",
-            serde_json::json!({ "to": "0xabc", "amount": "40" }),
+            serde_json::json!({ "to": "0x000000000000000000000000000000000000abcd", "amount": "40" }),
         ).unwrap();
         assert_eq!(result["status"], "failed", "CLI failure should produce 'failed' status");
 
@@ -1869,7 +1943,7 @@ mod tests {
         let router = make_router(db.clone(), &agent_id);
         let result2 = router.handle_tool_call(
             "send_payment",
-            serde_json::json!({ "to": "0xdef", "amount": "40" }),
+            serde_json::json!({ "to": "0x0000000000000000000000000000000000000def", "amount": "40" }),
         ).unwrap();
         assert_eq!(result2["status"], "pending", "Second tx should succeed after rollback");
 
@@ -1877,7 +1951,7 @@ mod tests {
         // Daily cap is 1000, so 40 (pending) + 40 (this) = 80 < 1000
         let result3 = router.handle_tool_call(
             "send_payment",
-            serde_json::json!({ "to": "0xghi", "amount": "40" }),
+            serde_json::json!({ "to": "0x00000000000000000000000000000000000000ab", "amount": "40" }),
         ).unwrap();
         assert_eq!(result3["status"], "pending");
     }
@@ -1905,7 +1979,7 @@ mod tests {
 
         let result = router.handle_tool_call(
             "send_payment",
-            serde_json::json!({ "to": "0xabc", "amount": "25" }),
+            serde_json::json!({ "to": "0x000000000000000000000000000000000000abcd", "amount": "25" }),
         ).unwrap();
 
         let tx_id = result["tx_id"].as_str().unwrap();
@@ -1915,9 +1989,11 @@ mod tests {
             tx.error_message.is_some(),
             "Failed transaction should have error_message set"
         );
+        // After CLI error sanitization (BUG-1), the stored error is the sanitized message
+        let err_msg = tx.error_message.unwrap();
         assert!(
-            tx.error_message.unwrap().contains("insufficient funds"),
-            "Error message should contain the CLI error text"
+            err_msg.contains("Wallet operation failed") || err_msg.contains("insufficient funds"),
+            "Error message should contain sanitized or original error text, got: {}", err_msg
         );
     }
 
@@ -1947,7 +2023,7 @@ mod tests {
 
         let result = router.handle_tool_call(
             "send_payment",
-            serde_json::json!({ "to": "0xabc", "amount": "25" }),
+            serde_json::json!({ "to": "0x000000000000000000000000000000000000abcd", "amount": "25" }),
         ).unwrap();
 
         assert_eq!(
@@ -2123,11 +2199,15 @@ mod tests {
         ).unwrap();
         assert_eq!(result["status"], "failed");
 
-        // Verify error stored
+        // Verify error stored (sanitized after BUG-1 fix)
         let tx_id = result["tx_id"].as_str().unwrap();
         let tx = queries::get_transaction(&db, tx_id).unwrap();
         assert!(tx.error_message.is_some());
-        assert!(tx.error_message.unwrap().contains("x402 payment rejected"));
+        let err_msg = tx.error_message.unwrap();
+        assert!(
+            err_msg.contains("Wallet operation failed") || err_msg.contains("x402 payment rejected"),
+            "Error message should be sanitized, got: {}", err_msg
+        );
 
         // Subsequent x402 should succeed (reservation rolled back)
         let router = make_router(db.clone(), &agent_id);
@@ -2136,5 +2216,363 @@ mod tests {
             serde_json::json!({ "url": "https://example.com/api", "max_amount": "30" }),
         ).unwrap();
         assert_eq!(result2["status"], "pending");
+    }
+
+    // =====================================================================
+    // BUG-1, BUG-2, BUG-3 — TDD tests (written first, then implemented)
+    // =====================================================================
+
+    /// A valid Ethereum address for use in tests (42 chars: 0x + 40 hex).
+    const VALID_ETH_ADDR: &str = "0x1234567890abcdef1234567890abcdef12345678";
+
+    // -- BUG-2: Negative/invalid amount validation --
+
+    #[test]
+    fn test_send_payment_negative_amount() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": VALID_ETH_ADDR, "amount": "-1.0" }),
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::InvalidInput(msg) => assert!(msg.contains("positive"), "Error should mention 'positive', got: {}", msg),
+            other => panic!("Expected InvalidInput, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_send_payment_zero_amount() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": VALID_ETH_ADDR, "amount": "0" }),
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::InvalidInput(msg) => assert!(msg.contains("positive"), "Error should mention 'positive', got: {}", msg),
+            other => panic!("Expected InvalidInput, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_send_payment_non_numeric_amount() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": VALID_ETH_ADDR, "amount": "abc" }),
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::InvalidInput(msg) => assert!(msg.contains("Invalid amount"), "Error should mention 'Invalid amount', got: {}", msg),
+            other => panic!("Expected InvalidInput, got: {:?}", other),
+        }
+    }
+
+    // -- BUG-3: Ethereum address validation --
+
+    #[test]
+    fn test_send_payment_invalid_address_no_prefix() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": "1234567890abcdef1234567890abcdef12345678", "amount": "10" }),
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::InvalidInput(msg) => assert!(msg.contains("Invalid Ethereum address"), "Got: {}", msg),
+            other => panic!("Expected InvalidInput, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_send_payment_invalid_address_short() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": "0x1234", "amount": "10" }),
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::InvalidInput(msg) => assert!(msg.contains("Invalid Ethereum address"), "Got: {}", msg),
+            other => panic!("Expected InvalidInput, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_send_payment_invalid_address_non_hex() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db, &agent_id);
+
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": "0xGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG", "amount": "10" }),
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::InvalidInput(msg) => assert!(msg.contains("Invalid Ethereum address"), "Got: {}", msg),
+            other => panic!("Expected InvalidInput, got: {:?}", other),
+        }
+    }
+
+    // -- BUG-1: CLI error sanitization --
+
+    #[test]
+    fn test_cli_error_sanitized() {
+        use crate::cli::executor::{CliError, CliExecutable, CliOutput};
+
+        /// A CLI that fails with a message containing internal CLI details.
+        struct LeakyCli;
+
+        #[async_trait::async_trait]
+        impl CliExecutable for LeakyCli {
+            async fn run(&self, _cmd: crate::cli::commands::AwalCommand) -> Result<CliOutput, CliError> {
+                Err(CliError::CommandFailed {
+                    stderr: "npx awal auth login failed: ECONNREFUSED 127.0.0.1:3000".to_string(),
+                    exit_code: Some(1),
+                })
+            }
+        }
+
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = McpRouter::new_with_cli(db.clone(), agent_id.clone(), Arc::new(LeakyCli));
+
+        // send_payment exposes the CLI error in the tx record
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": VALID_ETH_ADDR, "amount": "25" }),
+        ).unwrap();
+
+        // The tx should be "failed" but the error should be sanitized
+        assert_eq!(result["status"], "failed");
+
+        // Verify the error_message field does NOT leak raw CLI internals
+        let tx_id = result["tx_id"].as_str().unwrap();
+        let tx = queries::get_transaction(&db, tx_id).unwrap();
+        let err_msg = tx.error_message.unwrap_or_default();
+        // The sanitized error should contain the generic message
+        assert!(
+            err_msg.contains("Wallet operation failed") || err_msg.contains("re-authenticate"),
+            "Error message should be sanitized, got: {}", err_msg
+        );
+        // It should NOT contain the raw CLI command/output
+        assert!(
+            !err_msg.contains("npx awal"),
+            "Sanitized error must not leak CLI command, got: {}", err_msg
+        );
+    }
+
+    // -- BUG-1: error_code mapping for CliError --
+
+    #[test]
+    fn test_error_code_cli_error() {
+        assert_eq!(error_code(&AppError::CliError("x".into())), -32006);
+    }
+
+    // =====================================================================
+    // BUG-4/5/6 TDD tests: tx hash propagation, x402 filtering, response body
+    // =====================================================================
+
+    /// BUG-4: CLI returns tx hash under "transaction_hash" key instead of "tx_hash".
+    /// The router should try multiple key names.
+    #[tokio::test]
+    async fn test_send_payment_cli_returns_transaction_hash() {
+        use crate::cli::executor::{CliExecutable, CliOutput, CliError};
+
+        struct TransactionHashCli;
+
+        #[async_trait::async_trait]
+        impl CliExecutable for TransactionHashCli {
+            async fn run(&self, _cmd: crate::cli::commands::AwalCommand) -> Result<CliOutput, CliError> {
+                Ok(CliOutput {
+                    success: true,
+                    data: serde_json::json!({"transaction_hash": "0xalt_hash_abc"}),
+                    raw: r#"{"transaction_hash":"0xalt_hash_abc"}"#.to_string(),
+                    stderr: String::new(),
+                })
+            }
+        }
+
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = McpRouter::new_with_cli(db.clone(), agent_id.clone(), Arc::new(TransactionHashCli));
+
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": "0x1234567890abcdef1234567890abcdef12345678", "amount": "25" }),
+        ).unwrap();
+
+        assert_eq!(
+            result["status"], "confirmed",
+            "CLI returning 'transaction_hash' should be recognized as confirmed"
+        );
+        assert_eq!(
+            result["chain_tx_hash"], "0xalt_hash_abc",
+            "chain_tx_hash should be extracted from 'transaction_hash' key"
+        );
+    }
+
+    /// BUG-4: CLI returns tx hash nested under "transaction.hash".
+    /// The router should try nested lookup.
+    #[tokio::test]
+    async fn test_send_payment_cli_returns_nested_hash() {
+        use crate::cli::executor::{CliExecutable, CliOutput, CliError};
+
+        struct NestedHashCli;
+
+        #[async_trait::async_trait]
+        impl CliExecutable for NestedHashCli {
+            async fn run(&self, _cmd: crate::cli::commands::AwalCommand) -> Result<CliOutput, CliError> {
+                Ok(CliOutput {
+                    success: true,
+                    data: serde_json::json!({"transaction": {"hash": "0xnested_hash_def"}}),
+                    raw: r#"{"transaction":{"hash":"0xnested_hash_def"}}"#.to_string(),
+                    stderr: String::new(),
+                })
+            }
+        }
+
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = McpRouter::new_with_cli(db.clone(), agent_id.clone(), Arc::new(NestedHashCli));
+
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": "0x1234567890abcdef1234567890abcdef12345678", "amount": "25" }),
+        ).unwrap();
+
+        assert_eq!(result["status"], "confirmed");
+        assert_eq!(result["chain_tx_hash"], "0xnested_hash_def");
+    }
+
+    /// BUG-4: CLI returns no hash at all -- should remain Pending.
+    #[tokio::test]
+    async fn test_send_payment_cli_no_hash() {
+        use crate::cli::executor::{CliExecutable, CliOutput, CliError};
+
+        struct NoHashCli;
+
+        #[async_trait::async_trait]
+        impl CliExecutable for NoHashCli {
+            async fn run(&self, _cmd: crate::cli::commands::AwalCommand) -> Result<CliOutput, CliError> {
+                Ok(CliOutput {
+                    success: true,
+                    data: serde_json::json!({"message": "submitted"}),
+                    raw: r#"{"message":"submitted"}"#.to_string(),
+                    stderr: String::new(),
+                })
+            }
+        }
+
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = McpRouter::new_with_cli(db.clone(), agent_id.clone(), Arc::new(NoHashCli));
+
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": "0x1234567890abcdef1234567890abcdef12345678", "amount": "25" }),
+        ).unwrap();
+
+        assert_eq!(result["status"], "pending", "No hash means status should be pending");
+        assert!(result["chain_tx_hash"].is_null(), "chain_tx_hash should be null when no hash returned");
+    }
+
+    /// BUG-5: search_x402_services should filter results client-side.
+    #[tokio::test]
+    async fn test_search_x402_filters_results() {
+        use crate::cli::executor::{CliExecutable, CliOutput, CliError};
+
+        struct UnfilteredSearchCli;
+
+        #[async_trait::async_trait]
+        impl CliExecutable for UnfilteredSearchCli {
+            async fn run(&self, _cmd: crate::cli::commands::AwalCommand) -> Result<CliOutput, CliError> {
+                // CLI returns 3 services but only 1 matches "weather"
+                Ok(CliOutput {
+                    success: true,
+                    data: serde_json::json!({
+                        "services": [
+                            { "name": "Weather API", "description": "Real-time weather data", "resource": "https://weather.x402.org" },
+                            { "name": "News Feed", "description": "Latest news articles", "resource": "https://news.x402.org" },
+                            { "name": "Stock Prices", "description": "Market data service", "resource": "https://stocks.x402.org" }
+                        ]
+                    }),
+                    raw: "{}".to_string(),
+                    stderr: String::new(),
+                })
+            }
+        }
+
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = McpRouter::new_with_cli(db.clone(), agent_id.clone(), Arc::new(UnfilteredSearchCli));
+
+        let result = router.handle_tool_call(
+            "search_x402_services",
+            serde_json::json!({ "query": "weather" }),
+        ).unwrap();
+
+        let services = result["services"].as_array().expect("services should be an array");
+        assert_eq!(services.len(), 1, "Only 1 of 3 services should match 'weather', got {}", services.len());
+        assert_eq!(services[0]["name"], "Weather API");
+        assert_eq!(result["total"], 1);
+    }
+
+    /// BUG-6: pay_x402 should include response_body, amount_paid, and response_status
+    /// from the CLI output in the MCP response.
+    #[tokio::test]
+    async fn test_pay_x402_includes_response_body() {
+        use crate::cli::executor::{CliExecutable, CliOutput, CliError};
+
+        struct X402WithBodyCli;
+
+        #[async_trait::async_trait]
+        impl CliExecutable for X402WithBodyCli {
+            async fn run(&self, _cmd: crate::cli::commands::AwalCommand) -> Result<CliOutput, CliError> {
+                Ok(CliOutput {
+                    success: true,
+                    data: serde_json::json!({
+                        "tx_hash": "0xx402_hash_123",
+                        "response_body": {"data": "hello", "status": "ok"},
+                        "amount_paid": "0.50",
+                        "response_status": 200
+                    }),
+                    raw: "{}".to_string(),
+                    stderr: String::new(),
+                })
+            }
+        }
+
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = McpRouter::new_with_cli(db.clone(), agent_id.clone(), Arc::new(X402WithBodyCli));
+
+        let result = router.handle_tool_call(
+            "pay_x402",
+            serde_json::json!({ "url": "https://example.com/api", "max_amount": "10" }),
+        ).unwrap();
+
+        assert_eq!(result["status"], "confirmed");
+        assert_eq!(result["chain_tx_hash"], "0xx402_hash_123");
+        assert_eq!(result["response_body"]["data"], "hello", "response_body should be propagated");
+        assert_eq!(result["amount_paid"], "0.50", "amount_paid should be propagated");
+        assert_eq!(result["response_status"], 200, "response_status should be propagated");
     }
 }

@@ -1039,7 +1039,7 @@ mod tests {
             "params": {
                 "name": "send_payment",
                 "arguments": {
-                    "to": "0xRecipient123",
+                    "to": "0x1234567890abcdef1234567890abcdef12345678",
                     "amount": "25.00",
                     "asset": "USDC"
                 }

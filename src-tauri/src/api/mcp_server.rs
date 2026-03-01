@@ -308,7 +308,7 @@ mod tests {
             .handle_tool_call(
                 "send_payment",
                 serde_json::json!({
-                    "to": "0x1234567890abcdef",
+                    "to": "0x1234567890abcdef1234567890abcdef12345678",
                     "amount": "25.50",
                     "asset": "USDC",
                     "memo": "test payment"
@@ -320,7 +320,7 @@ mod tests {
         assert_eq!(result["status"], "pending");
         assert_eq!(result["amount"], "25.50");
         assert_eq!(result["asset"], "USDC");
-        assert_eq!(result["to"], "0x1234567890abcdef");
+        assert_eq!(result["to"], "0x1234567890abcdef1234567890abcdef12345678");
 
         // Verify the transaction was persisted
         let tx_id = result["tx_id"].as_str().unwrap();
@@ -384,7 +384,7 @@ mod tests {
         server_a
             .handle_tool_call(
                 "send_payment",
-                serde_json::json!({ "to": "0xaaa", "amount": "10" }),
+                serde_json::json!({ "to": "0x000000000000000000000000000000000000aaaa", "amount": "10" }),
             )
             .unwrap();
 
@@ -583,7 +583,7 @@ mod tests {
                 .handle_tool_call(
                     "send_payment",
                     serde_json::json!({
-                        "to": format!("0x{:04}", i),
+                        "to": format!("0x{:0>40}", format!("{:04}", i)),
                         "amount": format!("{}.00", i + 1)
                     }),
                 )
