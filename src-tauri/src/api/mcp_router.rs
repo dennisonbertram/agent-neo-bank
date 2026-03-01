@@ -53,6 +53,14 @@ impl McpRouter {
     /// scoped thread so we reuse the existing runtime's I/O driver without
     /// creating a brand-new runtime per call. When no runtime exists (e.g. in
     /// sync unit tests), creates a lightweight current-thread runtime.
+    ///
+    /// **Why the extra thread is necessary**: Even though `handle_tools_call` in
+    /// `mcp_http_server.rs` dispatches via `spawn_blocking`, `block_on()` still
+    /// panics on a blocking-pool thread because that thread is managed by the
+    /// same Tokio runtime. The scoped-thread pattern is the canonical workaround:
+    /// it creates a short-lived OS thread that is *not* part of the runtime's
+    /// thread pool, so `handle.block_on()` succeeds. The scoped thread is
+    /// joined immediately, so the lifetime cost is minimal.
     fn run_cli(&self, cmd: AwalCommand) -> Result<crate::cli::executor::CliOutput, AppError> {
         let cli = self.cli.as_ref().ok_or_else(|| {
             AppError::Internal("CLI executor not configured".to_string())
@@ -84,6 +92,29 @@ impl McpRouter {
                 rt.block_on(cli.run(cmd))
                     .map_err(|e| AppError::Internal(format!("CLI error: {}", e)))
             }
+        }
+    }
+
+    /// Fetch the current USDC balance from the CLI if available.
+    ///
+    /// Returns "0" if the CLI is not configured or the balance fetch fails.
+    /// This is conservative — a "0" balance will deny transactions if a
+    /// min_reserve policy is set, which is safer than allowing them.
+    fn fetch_current_balance(&self) -> String {
+        if self.cli.is_none() {
+            return "0".to_string();
+        }
+        match self.run_cli(AwalCommand::GetBalance { chain: None }) {
+            Ok(output) => {
+                // Try to extract USDC balance from the CLI output
+                output.data.get("balances")
+                    .and_then(|b| b.get("USDC"))
+                    .and_then(|u| u.get("formatted"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "0".to_string())
+            }
+            Err(_) => "0".to_string(),
         }
     }
 
@@ -158,12 +189,14 @@ impl McpRouter {
         let period_w = weekly_period_key(&now);
         let period_m = monthly_period_key(&now);
 
+        let current_balance = self.fetch_current_balance();
+
         let policy_result = queries::check_policy_and_reserve_atomic(
             &self.db,
             &self.agent_id,
             &amount,
             &to,
-            "0",
+            &current_balance,
             &period_d,
             &period_w,
             &period_m,
@@ -521,12 +554,14 @@ impl McpRouter {
         let period_w = weekly_period_key(&now);
         let period_m = monthly_period_key(&now);
 
+        let current_balance = self.fetch_current_balance();
+
         let policy_result = queries::check_policy_and_reserve_atomic(
             &self.db,
             &self.agent_id,
             &amount,
             &format!("trade:{}>{}", from_asset, to_asset),
-            "0",
+            &current_balance,
             &period_d,
             &period_w,
             &period_m,
@@ -724,12 +759,14 @@ impl McpRouter {
         let period_w = weekly_period_key(&now);
         let period_m = monthly_period_key(&now);
 
+        let current_balance = self.fetch_current_balance();
+
         let policy_result = queries::check_policy_and_reserve_atomic(
             &self.db,
             &self.agent_id,
             policy_amount,
             &url,
-            "0",
+            &current_balance,
             &period_d,
             &period_w,
             &period_m,

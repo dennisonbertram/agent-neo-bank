@@ -78,6 +78,7 @@ async fn post_mcp(
         .post(format!("{}/mcp", base_url))
         .header("content-type", "application/json")
         .header("accept", "application/json, text/event-stream")
+        .header("origin", "http://localhost:1420")
         .json(body);
 
     if let Some(sid) = session_id {
@@ -175,6 +176,7 @@ async fn test_full_session_lifecycle() {
     let resp = client
         .delete(format!("{}/mcp", base_url))
         .header("mcp-session-id", &session_id)
+        .header("origin", "http://localhost:1420")
         .send()
         .await
         .unwrap();
@@ -459,6 +461,7 @@ async fn test_re_initialize_after_session_deletion() {
     let resp = client
         .delete(format!("{}/mcp", base_url))
         .header("mcp-session-id", &session1)
+        .header("origin", "http://localhost:1420")
         .send()
         .await
         .unwrap();
@@ -529,6 +532,7 @@ async fn test_multiple_concurrent_sessions() {
     client
         .delete(format!("{}/mcp", base_url))
         .header("mcp-session-id", &s2)
+        .header("origin", "http://localhost:1420")
         .send()
         .await
         .unwrap();

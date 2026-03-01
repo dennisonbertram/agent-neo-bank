@@ -14,8 +14,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
 use axum::Router;
 use dashmap::DashMap;
-use futures::stream;
 use serde_json::Value;
+use tokio_stream::wrappers::IntervalStream;
+use tokio_stream::StreamExt as TokioStreamExt;
 
 use crate::api::mcp_router::{error_code, McpRouter, MCP_PROTOCOL_VERSION};
 use crate::api::mcp_server::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
@@ -176,7 +177,13 @@ pub async fn start(app_state: Arc<AppState>, port: u16) -> Result<(), Box<dyn st
 // Origin validation
 // -------------------------------------------------------------------------
 
-fn validate_origin(headers: &HeaderMap) -> Result<(), StatusCode> {
+/// Validate the Origin header.
+///
+/// When `require_origin` is true (state-changing POST/DELETE), a missing Origin
+/// header is rejected with 403 to strengthen CSRF protection from browsers.
+/// When false (GET/SSE), missing Origin is allowed for non-browser clients
+/// (curl, CLI tools).
+fn validate_origin(headers: &HeaderMap, require_origin: bool) -> Result<(), StatusCode> {
     if let Some(origin) = headers.get("origin") {
         let origin_str = origin.to_str().unwrap_or("");
         let allowed = match url::Url::parse(origin_str) {
@@ -189,8 +196,11 @@ fn validate_origin(headers: &HeaderMap) -> Result<(), StatusCode> {
         if !allowed {
             return Err(StatusCode::FORBIDDEN);
         }
+    } else if require_origin {
+        // Missing Origin on state-changing requests is forbidden
+        return Err(StatusCode::FORBIDDEN);
     }
-    // No Origin header (e.g. curl, CLI tools) is allowed
+    // No Origin header on non-state-changing requests (e.g. curl, CLI tools) is allowed
     Ok(())
 }
 
@@ -203,9 +213,9 @@ async fn handle_post(
     headers: HeaderMap,
     body: String,
 ) -> Response {
-    // 1. Validate Origin
-    if let Err(status) = validate_origin(&headers) {
-        return (status, "Forbidden: invalid origin").into_response();
+    // 1. Validate Origin (POST is state-changing — require Origin from browsers)
+    if let Err(status) = validate_origin(&headers, true) {
+        return (status, "Forbidden: invalid or missing origin").into_response();
     }
 
     // 2. Validate Accept header
@@ -614,7 +624,8 @@ async fn handle_get(
     State(state): State<McpHttpState>,
     headers: HeaderMap,
 ) -> Response {
-    if let Err(status) = validate_origin(&headers) {
+    // GET is read-only (SSE) — allow missing Origin for non-browser clients
+    if let Err(status) = validate_origin(&headers, false) {
         return (status, "Forbidden: invalid origin").into_response();
     }
 
@@ -641,12 +652,12 @@ async fn handle_get(
         }
     }
 
-    // Return SSE stream with keep-alive pings (no real server-initiated
+    // Return SSE stream with timer-based keep-alive pings (no real server-initiated
     // notifications yet — this satisfies the MCP 2025-11-25 spec requirement
     // that GET returns an SSE stream).
-    let sse_stream = stream::repeat_with(|| {
-        Ok::<_, std::convert::Infallible>(Event::default().comment("keep-alive"))
-    });
+    // Uses IntervalStream to avoid an unthrottled tight loop that would peg the CPU.
+    let sse_stream = IntervalStream::new(tokio::time::interval(std::time::Duration::from_secs(15)))
+        .map(|_| Ok::<_, std::convert::Infallible>(Event::default().comment("keep-alive")));
 
     Sse::new(sse_stream)
         .keep_alive(KeepAlive::new().interval(std::time::Duration::from_secs(30)))
@@ -661,8 +672,9 @@ async fn handle_delete(
     State(state): State<McpHttpState>,
     headers: HeaderMap,
 ) -> Response {
-    if let Err(status) = validate_origin(&headers) {
-        return (status, "Forbidden: invalid origin").into_response();
+    // DELETE is state-changing — require Origin from browsers
+    if let Err(status) = validate_origin(&headers, true) {
+        return (status, "Forbidden: invalid or missing origin").into_response();
     }
 
     let session_id = match headers.get("mcp-session-id").and_then(|v| v.to_str().ok()) {
@@ -763,6 +775,7 @@ mod tests {
     }
 
     /// Send a POST request and return the response.
+    /// Includes a localhost Origin header by default (required for POST).
     async fn post_mcp(
         app: &Router,
         body: &str,
@@ -772,7 +785,8 @@ mod tests {
             .method("POST")
             .uri("/mcp")
             .header("content-type", "application/json")
-            .header("accept", "application/json, text/event-stream");
+            .header("accept", "application/json, text/event-stream")
+            .header("origin", "http://localhost:1420");
 
         for (k, v) in extra_headers {
             builder = builder.header(k, v);
@@ -856,6 +870,7 @@ mod tests {
             .method("POST")
             .uri("/mcp")
             .header("content-type", "application/json")
+            .header("origin", "http://localhost:1420")
             // No Accept header
             .body(Body::from(
                 r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#,
@@ -1086,6 +1101,7 @@ mod tests {
             .method("DELETE")
             .uri("/mcp")
             .header("mcp-session-id", &session_id)
+            .header("origin", "http://localhost:1420")
             .body(Body::empty())
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
@@ -1129,6 +1145,7 @@ mod tests {
         let state = test_state();
         let app = build_router(state);
 
+        // POST with valid localhost Origin should succeed
         let req = Request::builder()
             .method("POST")
             .uri("/mcp")
@@ -1136,7 +1153,7 @@ mod tests {
             .header("accept", "application/json, text/event-stream")
             .header("origin", "http://localhost:3000")
             .body(Body::from(
-                r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#,
+                r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{}}}"#,
             ))
             .unwrap();
 
@@ -1145,13 +1162,47 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_origin_validation_allows_no_origin() {
+    async fn test_post_without_origin_returns_403() {
         let state = test_state();
         let app = build_router(state);
 
-        // No origin header (CLI tools, curl)
-        let (_, json) = do_initialize(&app).await;
-        assert!(json.get("error").is_none());
+        // POST without Origin header should be rejected (CSRF protection)
+        let req = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("content-type", "application/json")
+            .header("accept", "application/json, text/event-stream")
+            // No origin header
+            .body(Body::from(
+                r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{}}}"#,
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::FORBIDDEN,
+            "POST without Origin should be rejected"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_without_origin_is_allowed() {
+        let state = test_state();
+        let app = build_router(state);
+        let (session_id, _) = do_initialize(&app).await;
+
+        // GET without Origin header should be allowed (non-browser clients)
+        let req = Request::builder()
+            .method("GET")
+            .uri("/mcp")
+            .header("mcp-session-id", &session_id)
+            // No origin header
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
     }
 
     // ------------------------------------------------------------------
@@ -1166,6 +1217,7 @@ mod tests {
             .method("DELETE")
             .uri("/mcp")
             .header("mcp-session-id", "nonexistent-session-id")
+            .header("origin", "http://localhost:1420")
             .body(Body::empty())
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
@@ -1183,6 +1235,7 @@ mod tests {
         let req = Request::builder()
             .method("DELETE")
             .uri("/mcp")
+            .header("origin", "http://localhost:1420")
             .body(Body::empty())
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
@@ -1337,6 +1390,7 @@ mod tests {
             .method("DELETE")
             .uri("/mcp")
             .header("mcp-session-id", &session_id)
+            .header("origin", "http://localhost:1420")
             .body(Body::empty())
             .unwrap();
         let _ = app.clone().oneshot(req).await.unwrap();
@@ -1368,6 +1422,29 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    // ------------------------------------------------------------------
+    // 19b. DELETE without Origin -> 403
+    // ------------------------------------------------------------------
+    #[tokio::test]
+    async fn test_delete_without_origin_returns_403() {
+        let state = test_state();
+        let app = build_router(state);
+
+        let req = Request::builder()
+            .method("DELETE")
+            .uri("/mcp")
+            .header("mcp-session-id", "some-session")
+            // No Origin header
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::FORBIDDEN,
+            "DELETE without Origin should be rejected"
+        );
     }
 
     // ------------------------------------------------------------------

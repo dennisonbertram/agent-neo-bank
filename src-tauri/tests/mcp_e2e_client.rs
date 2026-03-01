@@ -63,6 +63,7 @@ impl McpTestClient {
             .post(format!("{}/mcp", self.base_url))
             .header("content-type", "application/json")
             .header("accept", "application/json, text/event-stream")
+            .header("origin", "http://localhost:1420")
             .json(body);
 
         if let Some(sid) = &self.session_id {
@@ -156,6 +157,7 @@ impl McpTestClient {
             .client
             .delete(format!("{}/mcp", self.base_url))
             .header("mcp-session-id", sid)
+            .header("origin", "http://localhost:1420")
             .send()
             .await
             .unwrap();
@@ -529,6 +531,7 @@ async fn test_protocol_compliance_headers() {
     let resp = client
         .post(format!("{}/mcp", base_url))
         .header("content-type", "application/json")
+        .header("origin", "http://localhost:1420")
         .body(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#)
         .send()
         .await
@@ -547,11 +550,23 @@ async fn test_protocol_compliance_headers() {
         .unwrap();
     assert_eq!(resp.status(), 403, "Bad origin should be 403");
 
+    // Missing origin -> 403
+    let resp = client
+        .post(format!("{}/mcp", base_url))
+        .header("content-type", "application/json")
+        .header("accept", "application/json, text/event-stream")
+        .body(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 403, "Missing origin on POST should be 403");
+
     // Invalid JSON -> parse error
     let resp = client
         .post(format!("{}/mcp", base_url))
         .header("content-type", "application/json")
         .header("accept", "application/json, text/event-stream")
+        .header("origin", "http://localhost:1420")
         .body("not json{{{")
         .send()
         .await
