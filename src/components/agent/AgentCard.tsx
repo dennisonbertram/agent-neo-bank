@@ -47,7 +47,7 @@ export function AgentCard({
       type="button"
       onClick={() => navigate(`/agents/${id}`)}
       className={cn(
-        'bg-[var(--bg-secondary)] rounded-[20px] p-5 flex flex-col gap-4 w-full text-left border-none cursor-pointer transition-transform duration-200 active:scale-[0.98]',
+        'bg-[var(--bg-elevated)] rounded-[16px] p-5 flex flex-col gap-4 w-full text-left border border-[var(--border-subtle)] shadow-[var(--shadow-subtle)] cursor-pointer transition-all duration-200 hover:bg-[var(--surface-hover)] active:scale-[0.98]',
         className
       )}
     >

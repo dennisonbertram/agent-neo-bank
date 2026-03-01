@@ -50,7 +50,7 @@ function mergeAgentData(agents: Agent[], budgets: AgentBudgetSummary[]): AgentDi
 }
 
 export default function AgentsList() {
-  const [segment, setSegment] = useState('All Agents')
+  const [segment, setSegment] = useState('All')
   const [agentDisplayData, setAgentDisplayData] = useState<AgentDisplayData[]>([])
   const [loading, setLoading] = useState(true)
   useEffect(() => {
@@ -83,11 +83,26 @@ export default function AgentsList() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide">
+        {/* Aggregate spend summary */}
+        {!loading && filteredAgents.length > 0 && (
+          <div className="mt-2 mb-5">
+            <p className="text-[13px] font-medium text-[var(--text-secondary)] mb-1">Total Daily Spend</p>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[28px] font-semibold text-[var(--text-primary)] tracking-tight tabular-nums">
+                ${filteredAgents.reduce((sum, a) => sum + parseFloat(a.budget?.daily_spent || '0'), 0).toFixed(2)}
+              </span>
+              <span className="text-[14px] font-medium text-[var(--text-tertiary)] tabular-nums">
+                / ${filteredAgents.reduce((sum, a) => sum + parseFloat(a.budget?.daily_cap || '0'), 0).toFixed(2)} cap
+              </span>
+            </div>
+          </div>
+        )}
+
         <SegmentControl
-          options={['Active', 'All Agents', 'Archived']}
+          options={['All', 'Active', 'Archived']}
           value={segment}
           onChange={setSegment}
-          className="mb-6 mt-4"
+          className="mb-6"
         />
 
         {loading ? (
