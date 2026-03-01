@@ -22,6 +22,7 @@ use crate::error::AppError;
 pub enum AuthResult {
     OtpSent { flow_id: String },
     Verified,
+    AlreadyAuthenticated,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,10 +78,23 @@ impl AuthService {
             )));
         }
 
+        // Check for "already signed in" — CLI returns flowId="" with message
         let flow_id = output.data["flowId"]
             .as_str()
-            .unwrap_or("unknown")
+            .unwrap_or("")
             .to_string();
+
+        let message = output.data["message"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+
+        // If flowId is empty and message indicates already signed in, skip OTP
+        if flow_id.is_empty() && message.to_lowercase().contains("already signed in") {
+            // Do NOT store empty flow_id
+            *self.current_email.write().await = Some(email.to_string());
+            return Ok(AuthResult::AlreadyAuthenticated);
+        }
 
         // Store flow_id and email for the verify step
         *self.current_flow_id.write().await = Some(flow_id.clone());
@@ -571,6 +585,61 @@ mod tests {
         auth.logout().await.unwrap();
         assert!(auth.current_flow_id.read().await.is_none());
         assert!(auth.current_email.read().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_login_already_signed_in_returns_already_authenticated() {
+        let mock = Arc::new(MockCliExecutor::new());
+        mock.set_response(
+            "auth_login",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({"flowId": "", "message": "Already signed in. No action needed."}),
+                raw: r#"{"flowId": "", "message": "Already signed in. No action needed."}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        let db = setup_test_db();
+        let auth = make_auth_service(mock, db);
+
+        let result = auth.login("user@example.com").await.unwrap();
+        match result {
+            AuthResult::AlreadyAuthenticated => {}
+            other => panic!("Expected AlreadyAuthenticated, got: {:?}", other),
+        }
+
+        // flow_id should NOT be stored (it was empty)
+        assert!(auth.current_flow_id.read().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_login_already_signed_in_verify_fails() {
+        let mock = Arc::new(MockCliExecutor::new());
+        mock.set_response(
+            "auth_login",
+            CliOutput {
+                success: true,
+                data: serde_json::json!({"flowId": "", "message": "Already signed in. No action needed."}),
+                raw: r#"{"flowId": "", "message": "Already signed in. No action needed."}"#.to_string(),
+                stderr: String::new(),
+            },
+        );
+        let db = setup_test_db();
+        let auth = make_auth_service(mock, db);
+
+        // Login returns AlreadyAuthenticated
+        let result = auth.login("user@example.com").await.unwrap();
+        assert!(matches!(result, AuthResult::AlreadyAuthenticated));
+
+        // Verify should fail because no flow_id was stored
+        let verify_result = auth.verify("123456").await;
+        assert!(verify_result.is_err());
+        match verify_result.unwrap_err() {
+            AppError::AuthError(msg) => {
+                assert!(msg.contains("No active login flow"), "Expected 'No active login flow', got: {}", msg);
+            }
+            other => panic!("Expected AuthError, got: {:?}", other),
+        }
     }
 
     /// Helper: hash a token with argon2 for test purposes

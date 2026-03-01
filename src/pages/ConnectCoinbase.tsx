@@ -11,7 +11,7 @@ export default function ConnectCoinbase() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
-  const { setFlowId } = useAuthStore()
+  const { setFlowId, setAuthenticated } = useAuthStore()
 
   const handleSendCode = async () => {
     if (!email.trim()) return
@@ -21,6 +21,11 @@ export default function ConnectCoinbase() {
     try {
       if (isTauri()) {
         const result = await tauriApi.auth.login(email.trim())
+        if (result.status === 'already_authenticated') {
+          setAuthenticated(email.trim())
+          navigate('/home')
+          return
+        }
         if (result.flow_id) {
           setFlowId(result.flow_id)
         }

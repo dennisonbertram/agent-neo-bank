@@ -15,6 +15,9 @@ pub async fn auth_login(
             Ok(serde_json::json!({ "status": "otp_sent", "flow_id": flow_id }))
         }
         AuthResult::Verified => Ok(serde_json::json!({ "status": "verified" })),
+        AuthResult::AlreadyAuthenticated => {
+            Ok(serde_json::json!({ "status": "already_authenticated" }))
+        }
     }
 }
 
@@ -28,6 +31,9 @@ pub async fn auth_verify(
         AuthResult::Verified => Ok(serde_json::json!({ "status": "verified" })),
         AuthResult::OtpSent { flow_id } => {
             Ok(serde_json::json!({ "status": "otp_sent", "flow_id": flow_id }))
+        }
+        AuthResult::AlreadyAuthenticated => {
+            Ok(serde_json::json!({ "status": "already_authenticated" }))
         }
     }
 }
