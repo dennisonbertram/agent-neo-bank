@@ -222,7 +222,16 @@ async fn handle_post(
 
             // Rate limiting
             {
-                let mut session = state.sessions.get_mut(&session_id).unwrap();
+                let mut session = match state.sessions.get_mut(&session_id) {
+                    Some(s) => s,
+                    None => {
+                        return (
+                            StatusCode::NOT_FOUND,
+                            "Session expired — re-initialize",
+                        )
+                            .into_response();
+                    }
+                };
                 let now = std::time::Instant::now();
                 if now.duration_since(session.window_start).as_secs() >= RATE_LIMIT_WINDOW_SECS {
                     session.request_count = 1;
@@ -586,6 +595,10 @@ fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// Validate a bearer token and return the agent_id if valid.
+///
+/// Security: `get_agent_by_token_hash` uses `WHERE status = 'active'` so
+/// suspended/revoked agents are automatically rejected at the SQL level.
 fn validate_bearer_token(db: &Database, token: &str) -> Option<String> {
     use sha2::{Digest, Sha256};
 
@@ -1244,7 +1257,29 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // 22. Suspended agent token must be rejected
+    // 22. McpHttpState::new_with_cli stores the CLI executor (not None)
+    // ------------------------------------------------------------------
+    #[test]
+    fn test_mcp_http_state_new_with_cli_stores_cli() {
+        use crate::cli::executor::MockCliExecutor;
+        let db = setup_test_db();
+        let mock_cli = Arc::new(MockCliExecutor::with_defaults());
+        let state = McpHttpState::new_with_cli(db, mock_cli);
+        assert!(state.cli.is_some(), "new_with_cli must set cli to Some");
+    }
+
+    // ------------------------------------------------------------------
+    // 23. McpHttpState::new has cli = None
+    // ------------------------------------------------------------------
+    #[test]
+    fn test_mcp_http_state_new_has_no_cli() {
+        let db = setup_test_db();
+        let state = McpHttpState::new(db);
+        assert!(state.cli.is_none(), "new() should have cli = None");
+    }
+
+    // ------------------------------------------------------------------
+    // 24. Suspended agent token must be rejected
     // ------------------------------------------------------------------
     #[tokio::test]
     async fn test_suspended_agent_token_rejected() {
@@ -1294,5 +1329,77 @@ mod tests {
             "Suspended agent token should be rejected"
         );
         assert_eq!(json["error"]["code"], -32000);
+    }
+
+    // ------------------------------------------------------------------
+    // 25. Revoked agent token must also be rejected
+    // ------------------------------------------------------------------
+    #[tokio::test]
+    async fn test_revoked_agent_token_rejected() {
+        let state = test_state();
+        let raw_token = "test_revoked_token_xyz";
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(raw_token.as_bytes());
+        let token_hash = format!("{:x}", hasher.finalize());
+
+        let mut agent = create_test_agent("RevokedBot", AgentStatus::Revoked);
+        let agent_id = agent.id.clone();
+        agent.api_token_hash = Some(token_hash);
+        insert_agent(&state.db, &agent).unwrap();
+        let policy =
+            create_test_spending_policy(&agent_id, "100", "1000", "5000", "20000", "50");
+        insert_spending_policy(&state.db, &policy).unwrap();
+
+        let app = build_router(state);
+        let (session_id, _) = do_initialize(&app).await;
+
+        let body = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 51,
+            "method": "tools/call",
+            "params": { "name": "check_balance", "arguments": {} }
+        });
+
+        let auth_header = format!("Bearer {}", raw_token);
+        let resp = post_mcp(
+            &app,
+            &body.to_string(),
+            vec![
+                ("mcp-session-id", &session_id),
+                ("authorization", &auth_header),
+            ],
+        )
+        .await;
+        let json = body_json(resp).await;
+        assert!(json.get("error").is_some(), "Revoked agent token should be rejected");
+        assert_eq!(json["error"]["code"], -32000);
+    }
+
+    // ------------------------------------------------------------------
+    // 26. Rate-limit code doesn't panic if session is deleted between
+    //     existence check and rate-limit update (regression for unwrap)
+    // ------------------------------------------------------------------
+    #[tokio::test]
+    async fn test_rate_limit_after_session_deletion_returns_404_not_panic() {
+        let state = test_state();
+        let app = build_router(state.clone());
+        let (session_id, _) = do_initialize(&app).await;
+
+        // Manually remove the session from the DashMap to simulate a race
+        state.sessions.remove(&session_id);
+
+        // The next request should get 404, not panic
+        let resp = post_mcp(
+            &app,
+            r#"{"jsonrpc":"2.0","id":60,"method":"tools/list"}"#,
+            vec![("mcp-session-id", &session_id)],
+        )
+        .await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::NOT_FOUND,
+            "Should return 404 instead of panicking when session is removed concurrently"
+        );
     }
 }

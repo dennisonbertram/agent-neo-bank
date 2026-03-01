@@ -184,7 +184,7 @@ impl McpRouter {
             }
             AtomicPolicyResult::AutoApproved => {
                 // Execute send via CLI if available
-                let (chain_tx_hash, cli_status) = if self.cli.is_some() {
+                let (chain_tx_hash, cli_status, error_msg) = if self.cli.is_some() {
                     let decimal_amount = amount.parse::<rust_decimal::Decimal>()
                         .map_err(|_| AppError::InvalidInput(format!("Invalid amount: {}", amount)))?;
                     match self.run_cli(AwalCommand::Send {
@@ -196,12 +196,21 @@ impl McpRouter {
                             let hash = output.data.get("tx_hash")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string());
-                            (hash, TxStatus::Confirmed)
+                            // If CLI succeeded but returned no tx_hash, mark as Pending (not Confirmed)
+                            let status = if hash.is_some() { TxStatus::Confirmed } else { TxStatus::Pending };
+                            (hash, status, None)
                         }
-                        Err(_e) => (None, TxStatus::Failed)
+                        Err(e) => {
+                            // CLI failed — rollback the spending reservation
+                            let _ = queries::rollback_reservation(
+                                &self.db, &self.agent_id, &amount,
+                                &period_d, &period_w, &period_m, now_ts,
+                            );
+                            (None, TxStatus::Failed, Some(e.to_string()))
+                        }
                     }
                 } else {
-                    (None, TxStatus::Pending)
+                    (None, TxStatus::Pending, None)
                 };
 
                 let tx = Transaction {
@@ -221,7 +230,7 @@ impl McpRouter {
                     service_url: String::new(),
                     reason: String::new(),
                     webhook_url: None,
-                    error_message: None,
+                    error_message: error_msg,
                     period_daily: period_d,
                     period_weekly: period_w,
                     period_monthly: period_m,
@@ -536,7 +545,7 @@ impl McpRouter {
             }
             AtomicPolicyResult::AutoApproved => {
                 // Execute trade via CLI if available
-                let (chain_tx_hash, cli_status) = if self.cli.is_some() {
+                let (chain_tx_hash, cli_status, error_msg) = if self.cli.is_some() {
                     match self.run_cli(AwalCommand::Trade {
                         from: from_asset.clone(),
                         to: to_asset.clone(),
@@ -547,12 +556,20 @@ impl McpRouter {
                             let hash = output.data.get("tx_hash")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string());
-                            (hash, TxStatus::Confirmed)
+                            let status = if hash.is_some() { TxStatus::Confirmed } else { TxStatus::Pending };
+                            (hash, status, None)
                         }
-                        Err(_) => (None, TxStatus::Failed)
+                        Err(e) => {
+                            // CLI failed — rollback the spending reservation
+                            let _ = queries::rollback_reservation(
+                                &self.db, &self.agent_id, &amount,
+                                &period_d, &period_w, &period_m, now_ts,
+                            );
+                            (None, TxStatus::Failed, Some(e.to_string()))
+                        }
                     }
                 } else {
-                    (None, TxStatus::Pending)
+                    (None, TxStatus::Pending, None)
                 };
 
                 let tx = Transaction {
@@ -572,7 +589,7 @@ impl McpRouter {
                     service_url: String::new(),
                     reason: String::new(),
                     webhook_url: None,
-                    error_message: None,
+                    error_message: error_msg,
                     period_daily: period_d,
                     period_weekly: period_w,
                     period_monthly: period_m,
@@ -729,7 +746,7 @@ impl McpRouter {
             }
             AtomicPolicyResult::AutoApproved => {
                 // Execute x402 payment via CLI if available
-                let (chain_tx_hash, cli_status) = if self.cli.is_some() {
+                let (chain_tx_hash, cli_status, error_msg) = if self.cli.is_some() {
                     match self.run_cli(AwalCommand::X402Pay {
                         url: url.clone(),
                         max_amount: Some(max_amount.clone()),
@@ -741,12 +758,20 @@ impl McpRouter {
                             let hash = output.data.get("tx_hash")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string());
-                            (hash, TxStatus::Confirmed)
+                            let status = if hash.is_some() { TxStatus::Confirmed } else { TxStatus::Pending };
+                            (hash, status, None)
                         }
-                        Err(_e) => (None, TxStatus::Failed)
+                        Err(e) => {
+                            // CLI failed — rollback the spending reservation
+                            let _ = queries::rollback_reservation(
+                                &self.db, &self.agent_id, policy_amount,
+                                &period_d, &period_w, &period_m, now_ts,
+                            );
+                            (None, TxStatus::Failed, Some(e.to_string()))
+                        }
                     }
                 } else {
-                    (None, TxStatus::Pending)
+                    (None, TxStatus::Pending, None)
                 };
 
                 let tx = Transaction {
@@ -766,7 +791,7 @@ impl McpRouter {
                     service_url: url.clone(),
                     reason: String::new(),
                     webhook_url: None,
-                    error_message: None,
+                    error_message: error_msg,
                     period_daily: period_d,
                     period_weekly: period_w,
                     period_monthly: period_m,
@@ -907,6 +932,8 @@ impl McpRouter {
     }
 
     fn handle_register_agent(&self, arguments: Value) -> Result<Value, AppError> {
+        use sha2::{Digest, Sha256};
+
         let name = arguments
             .get("name")
             .and_then(|v| v.as_str())
@@ -933,6 +960,17 @@ impl McpRouter {
         let now = chrono::Utc::now().timestamp();
         let agent_id = uuid::Uuid::new_v4().to_string();
 
+        // Generate a 32-byte random API token for the agent
+        use rand::Rng;
+        let token_bytes: [u8; 32] = rand::thread_rng().gen();
+        let token: String = token_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+        let token_prefix = token[..8].to_string();
+
+        // Hash the token with SHA-256 for storage
+        let mut hasher = Sha256::new();
+        hasher.update(token.as_bytes());
+        let token_hash = format!("{:x}", hasher.finalize());
+
         let agent = Agent {
             id: agent_id.clone(),
             name: name.clone(),
@@ -941,10 +979,10 @@ impl McpRouter {
             agent_type: "mcp".to_string(),
             capabilities: vec!["send".to_string()],
             status: AgentStatus::Pending,
-            api_token_hash: None,
-            token_prefix: None,
+            api_token_hash: Some(token_hash),
+            token_prefix: Some(token_prefix),
             balance_visible: true,
-            invitation_code: Some(invitation_code),
+            invitation_code: Some(invitation_code.clone()),
             created_at: now,
             updated_at: now,
             last_active_at: None,
@@ -953,11 +991,15 @@ impl McpRouter {
 
         queries::insert_agent(&self.db, &agent)?;
 
+        // Increment the invitation code's use_count
+        queries::use_invitation_code(&self.db, &invitation_code, &agent_id, now)?;
+
         Ok(serde_json::json!({
             "agent_id": agent_id,
             "name": name,
             "status": "pending",
-            "message": "Agent registration submitted, pending approval"
+            "token": token,
+            "message": "Agent registration submitted, pending approval. Save this token — it will not be shown again."
         }))
     }
 }
@@ -1725,5 +1767,316 @@ mod tests {
         assert_eq!(error_code(&AppError::InvalidInvitationCode), -32004);
         assert_eq!(error_code(&AppError::RateLimited), -32005);
         assert_eq!(error_code(&AppError::Internal("x".into())), -32603);
+    }
+
+    // =====================================================================
+    // Regression tests for Round 2 review fixes
+    // =====================================================================
+
+    /// Regression: CLI failure must rollback spending reservation so the cap
+    /// isn't permanently consumed. A subsequent transaction within limits
+    /// should succeed (not be denied by a phantom reservation).
+    #[test]
+    fn test_cli_failure_rolls_back_spending_reservation() {
+        use crate::cli::executor::{CliError, CliExecutable, CliOutput};
+
+        // A CLI executor that always fails
+        struct FailingCli;
+
+        #[async_trait::async_trait]
+        impl CliExecutable for FailingCli {
+            async fn run(&self, _cmd: crate::cli::commands::AwalCommand) -> Result<CliOutput, CliError> {
+                Err(CliError::CommandFailed {
+                    stderr: "Simulated CLI failure".to_string(),
+                    exit_code: Some(1),
+                })
+            }
+        }
+
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db); // daily_cap=1000, per_tx=100, auto_approve=50
+
+        // First: send with failing CLI — should fail but NOT consume cap
+        let failing_router = McpRouter::new_with_cli(
+            db.clone(), agent_id.clone(), Arc::new(FailingCli),
+        );
+        let result = failing_router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": "0xabc", "amount": "40" }),
+        ).unwrap();
+        assert_eq!(result["status"], "failed", "CLI failure should produce 'failed' status");
+
+        // Second: send again with no CLI (Pending path) — should succeed
+        // because the first reservation was rolled back
+        let router = make_router(db.clone(), &agent_id);
+        let result2 = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": "0xdef", "amount": "40" }),
+        ).unwrap();
+        assert_eq!(result2["status"], "pending", "Second tx should succeed after rollback");
+
+        // Verify we can still do more — the 40 from the failed tx isn't counted
+        // Daily cap is 1000, so 40 (pending) + 40 (this) = 80 < 1000
+        let result3 = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": "0xghi", "amount": "40" }),
+        ).unwrap();
+        assert_eq!(result3["status"], "pending");
+    }
+
+    /// Regression: CLI failure must store the error message in the transaction record.
+    #[test]
+    fn test_cli_failure_stores_error_message_in_transaction() {
+        use crate::cli::executor::{CliError, CliExecutable, CliOutput};
+
+        struct FailingCli;
+
+        #[async_trait::async_trait]
+        impl CliExecutable for FailingCli {
+            async fn run(&self, _cmd: crate::cli::commands::AwalCommand) -> Result<CliOutput, CliError> {
+                Err(CliError::CommandFailed {
+                    stderr: "insufficient funds for gas".to_string(),
+                    exit_code: Some(1),
+                })
+            }
+        }
+
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = McpRouter::new_with_cli(db.clone(), agent_id.clone(), Arc::new(FailingCli));
+
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": "0xabc", "amount": "25" }),
+        ).unwrap();
+
+        let tx_id = result["tx_id"].as_str().unwrap();
+        let tx = queries::get_transaction(&db, tx_id).unwrap();
+        assert_eq!(tx.status, TxStatus::Failed);
+        assert!(
+            tx.error_message.is_some(),
+            "Failed transaction should have error_message set"
+        );
+        assert!(
+            tx.error_message.unwrap().contains("insufficient funds"),
+            "Error message should contain the CLI error text"
+        );
+    }
+
+    /// Regression: CLI success without tx_hash should mark as Pending, not Confirmed.
+    #[test]
+    fn test_cli_success_without_tx_hash_marks_pending() {
+        use crate::cli::executor::{CliExecutable, CliOutput, CliError};
+
+        // A CLI that succeeds but returns no tx_hash
+        struct NoHashCli;
+
+        #[async_trait::async_trait]
+        impl CliExecutable for NoHashCli {
+            async fn run(&self, _cmd: crate::cli::commands::AwalCommand) -> Result<CliOutput, CliError> {
+                Ok(CliOutput {
+                    success: true,
+                    data: serde_json::json!({"message": "submitted"}),
+                    raw: r#"{"message":"submitted"}"#.to_string(),
+                    stderr: String::new(),
+                })
+            }
+        }
+
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = McpRouter::new_with_cli(db.clone(), agent_id.clone(), Arc::new(NoHashCli));
+
+        let result = router.handle_tool_call(
+            "send_payment",
+            serde_json::json!({ "to": "0xabc", "amount": "25" }),
+        ).unwrap();
+
+        assert_eq!(
+            result["status"], "pending",
+            "CLI success without tx_hash should be 'pending', not 'confirmed'"
+        );
+        assert!(result["chain_tx_hash"].is_null());
+    }
+
+    /// Regression: register_agent must return a non-empty token that can authenticate.
+    #[test]
+    fn test_register_agent_returns_valid_token() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db.clone(), &agent_id);
+
+        let invitation = create_test_invitation("INV-TOKEN-001", "Token test");
+        queries::insert_invitation_code(&db, &invitation).unwrap();
+
+        let result = router.handle_tool_call(
+            "register_agent",
+            serde_json::json!({
+                "name": "TokenBot",
+                "purpose": "Test token generation",
+                "invitation_code": "INV-TOKEN-001"
+            }),
+        ).unwrap();
+
+        // Token must be present and non-empty
+        let token = result["token"].as_str().expect("Response must include 'token'");
+        assert!(!token.is_empty(), "Token must not be empty");
+        assert_eq!(token.len(), 64, "Token should be 32 bytes hex-encoded (64 chars)");
+
+        // The token hash should be stored in the agent record
+        let new_agent_id = result["agent_id"].as_str().unwrap();
+        let agent = queries::get_agent(&db, new_agent_id).unwrap();
+        assert!(agent.api_token_hash.is_some(), "Agent should have token hash");
+        assert!(agent.token_prefix.is_some(), "Agent should have token prefix");
+
+        // Verify the token actually hashes to the stored value
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(token.as_bytes());
+        let expected_hash = format!("{:x}", hasher.finalize());
+        assert_eq!(
+            agent.api_token_hash.unwrap(), expected_hash,
+            "Stored hash must match SHA-256 of the returned token"
+        );
+    }
+
+    /// Regression: register_agent must increment invitation code use_count.
+    #[test]
+    fn test_register_agent_increments_invitation_use_count() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db.clone(), &agent_id);
+
+        let invitation = create_test_invitation("INV-COUNT-001", "Count test");
+        queries::insert_invitation_code(&db, &invitation).unwrap();
+
+        // Before registration
+        let code_before = queries::get_invitation_code(&db, "INV-COUNT-001").unwrap();
+        assert_eq!(code_before.use_count, 0);
+
+        router.handle_tool_call(
+            "register_agent",
+            serde_json::json!({
+                "name": "CountBot",
+                "purpose": "Test code consumption",
+                "invitation_code": "INV-COUNT-001"
+            }),
+        ).unwrap();
+
+        // After registration — use_count should be 1
+        let code_after = queries::get_invitation_code(&db, "INV-COUNT-001").unwrap();
+        assert_eq!(code_after.use_count, 1, "use_count must be incremented after registration");
+    }
+
+    /// Regression: invitation code with max_uses=1 must reject a second registration.
+    #[test]
+    fn test_invitation_code_max_uses_enforced() {
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+        let router = make_router(db.clone(), &agent_id);
+
+        // max_uses defaults to 1 in create_test_invitation
+        let invitation = create_test_invitation("INV-ONCE-001", "Single use");
+        queries::insert_invitation_code(&db, &invitation).unwrap();
+
+        // First registration succeeds
+        router.handle_tool_call(
+            "register_agent",
+            serde_json::json!({
+                "name": "FirstBot",
+                "purpose": "First use",
+                "invitation_code": "INV-ONCE-001"
+            }),
+        ).unwrap();
+
+        // Second registration with same code must fail
+        let result = router.handle_tool_call(
+            "register_agent",
+            serde_json::json!({
+                "name": "SecondBot",
+                "purpose": "Second use",
+                "invitation_code": "INV-ONCE-001"
+            }),
+        );
+        assert!(result.is_err(), "Second use of max_uses=1 code must fail");
+    }
+
+    /// Regression: trade_tokens CLI failure must rollback reservation.
+    #[test]
+    fn test_trade_cli_failure_rolls_back_reservation() {
+        use crate::cli::executor::{CliError, CliExecutable, CliOutput};
+
+        struct FailingCli;
+
+        #[async_trait::async_trait]
+        impl CliExecutable for FailingCli {
+            async fn run(&self, _cmd: crate::cli::commands::AwalCommand) -> Result<CliOutput, CliError> {
+                Err(CliError::CommandFailed {
+                    stderr: "trade failed".to_string(),
+                    exit_code: Some(1),
+                })
+            }
+        }
+
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+
+        // Fail a trade
+        let failing_router = McpRouter::new_with_cli(db.clone(), agent_id.clone(), Arc::new(FailingCli));
+        let result = failing_router.handle_tool_call(
+            "trade_tokens",
+            serde_json::json!({ "from_asset": "ETH", "to_asset": "USDC", "amount": "40" }),
+        ).unwrap();
+        assert_eq!(result["status"], "failed");
+
+        // Subsequent trade should succeed (reservation was rolled back)
+        let router = make_router(db.clone(), &agent_id);
+        let result2 = router.handle_tool_call(
+            "trade_tokens",
+            serde_json::json!({ "from_asset": "ETH", "to_asset": "USDC", "amount": "40" }),
+        ).unwrap();
+        assert_eq!(result2["status"], "pending");
+    }
+
+    /// Regression: pay_x402 CLI failure must rollback reservation and store error.
+    #[test]
+    fn test_x402_cli_failure_rolls_back_and_stores_error() {
+        use crate::cli::executor::{CliError, CliExecutable, CliOutput};
+
+        struct FailingCli;
+
+        #[async_trait::async_trait]
+        impl CliExecutable for FailingCli {
+            async fn run(&self, _cmd: crate::cli::commands::AwalCommand) -> Result<CliOutput, CliError> {
+                Err(CliError::CommandFailed {
+                    stderr: "x402 payment rejected".to_string(),
+                    exit_code: Some(1),
+                })
+            }
+        }
+
+        let db = setup_test_db();
+        let agent_id = setup_agent_with_policy(&db);
+
+        let failing_router = McpRouter::new_with_cli(db.clone(), agent_id.clone(), Arc::new(FailingCli));
+        let result = failing_router.handle_tool_call(
+            "pay_x402",
+            serde_json::json!({ "url": "https://example.com/api", "max_amount": "30" }),
+        ).unwrap();
+        assert_eq!(result["status"], "failed");
+
+        // Verify error stored
+        let tx_id = result["tx_id"].as_str().unwrap();
+        let tx = queries::get_transaction(&db, tx_id).unwrap();
+        assert!(tx.error_message.is_some());
+        assert!(tx.error_message.unwrap().contains("x402 payment rejected"));
+
+        // Subsequent x402 should succeed (reservation rolled back)
+        let router = make_router(db.clone(), &agent_id);
+        let result2 = router.handle_tool_call(
+            "pay_x402",
+            serde_json::json!({ "url": "https://example.com/api", "max_amount": "30" }),
+        ).unwrap();
+        assert_eq!(result2["status"], "pending");
     }
 }

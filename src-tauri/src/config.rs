@@ -41,7 +41,7 @@ impl Default for AppConfig {
             unix_socket_path: "/tmp/tally-agentic-wallet.sock".to_string(),
             mcp_enabled: true,
             mcp_port: 7403,
-            token_hash_algorithm: "argon2id".to_string(),
+            token_hash_algorithm: "sha256".to_string(),
             token_cache_ttl_seconds: 300,
             rate_limit_requests_per_minute: 60,
             invitation_code_required: true,
@@ -118,7 +118,7 @@ impl AppConfig {
             unix_socket_path: "/tmp/tally-agentic-wallet-test.sock".to_string(),
             mcp_enabled: false,
             mcp_port: 0,
-            token_hash_algorithm: "argon2id".to_string(),
+            token_hash_algorithm: "sha256".to_string(),
             token_cache_ttl_seconds: 300,
             rate_limit_requests_per_minute: 1000,
             invitation_code_required: false,
@@ -228,5 +228,25 @@ mod tests {
         let config = AppConfig::from_env();
         assert_eq!(config.mcp_port, 8080);
         unsafe { std::env::remove_var("ANB_MCP_PORT"); }
+    }
+
+    /// Regression: config default must say "sha256" to match the actual hashing
+    /// algorithm used in validate_bearer_token and validate_token_with_cli.
+    #[test]
+    fn test_token_hash_algorithm_matches_actual_implementation() {
+        let config = AppConfig::default();
+        assert_eq!(
+            config.token_hash_algorithm, "sha256",
+            "Config default must match the SHA-256 hashing used in auth code"
+        );
+    }
+
+    #[test]
+    fn test_token_hash_algorithm_test_config_matches() {
+        let config = AppConfig::default_test();
+        assert_eq!(
+            config.token_hash_algorithm, "sha256",
+            "Test config must also use sha256"
+        );
     }
 }

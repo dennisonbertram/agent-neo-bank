@@ -103,6 +103,9 @@ impl McpServer {
     }
 
     /// Like `validate_token` but also wires a CLI executor for real awal calls.
+    ///
+    /// Security: `get_agent_by_token_hash` uses `WHERE status = 'active'` so
+    /// suspended/revoked agents are automatically rejected at the SQL level.
     pub fn validate_token_with_cli(
         db: Arc<Database>,
         token: &str,

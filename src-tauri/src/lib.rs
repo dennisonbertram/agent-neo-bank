@@ -76,10 +76,11 @@ pub fn run() {
             // Spawn MCP HTTP server
             if config.mcp_enabled {
                 let mcp_db = app_state.db.clone();
+                let mcp_cli = app_state.cli.clone();
                 let mcp_port = config.mcp_port;
                 tauri::async_runtime::spawn(async move {
-                    // Build MCP state directly from the shared database
-                    let mcp_state = crate::api::mcp_http_server::McpHttpState::new(mcp_db);
+                    // Build MCP state with CLI executor so financial operations are actually executed
+                    let mcp_state = crate::api::mcp_http_server::McpHttpState::new_with_cli(mcp_db, mcp_cli);
                     let router = crate::api::mcp_http_server::build_router(mcp_state);
                     let listener = match tokio::net::TcpListener::bind(
                         format!("127.0.0.1:{}", mcp_port),
