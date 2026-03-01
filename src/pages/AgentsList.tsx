@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Search, Rocket, Landmark, Database } from 'lucide-react'
-import { TopBar } from '../components/layout/TopBar'
+import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { SegmentControl } from '../components/ui/SegmentControl'
 import { AgentCard } from '../components/agent/AgentCard'
 import { safeTauriCall, tauriApi, placeholderData } from '../lib/tauri'
@@ -79,7 +79,7 @@ export default function AgentsList() {
 
   return (
     <div className="flex flex-col h-full relative">
-      <TopBar />
+      <ScreenHeader title="Agents" />
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide">
