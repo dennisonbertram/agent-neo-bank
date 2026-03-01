@@ -4,14 +4,17 @@ use std::time::Duration;
 use crate::cli::executor::{CliExecutable, MockCliExecutor, RealCliExecutor};
 use crate::config::AppConfig;
 use crate::core::auth_service::AuthService;
+use crate::core::wallet_service::WalletService;
 use crate::db::schema::Database;
 use crate::error::AppError;
 
-/// AppState wraps the CLI executor, database, auth service, and config for Tauri state management.
+/// AppState wraps the CLI executor, database, auth service, wallet service,
+/// and config for Tauri state management.
 /// Stored via `app.manage(AppState::new(...))` in the Tauri setup hook.
 pub struct AppState {
     pub cli: Arc<dyn CliExecutable>,
     pub auth_service: Arc<AuthService>,
+    pub wallet_service: Arc<WalletService>,
     pub db: Arc<Database>,
     pub config: AppConfig,
 }
@@ -50,10 +53,12 @@ impl AppState {
 
         let cache_ttl = Duration::from_secs(config.token_cache_ttl_seconds);
         let auth_service = Arc::new(AuthService::new(cli.clone(), db.clone(), cache_ttl));
+        let wallet_service = Arc::new(WalletService::new(cli.clone(), db.clone(), cache_ttl));
 
         Ok(Self {
             cli,
             auth_service,
+            wallet_service,
             db,
             config,
         })

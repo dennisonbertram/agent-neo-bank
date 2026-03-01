@@ -3,10 +3,10 @@ import { cn } from '../../lib/cn'
 type StatusType = 'active' | 'pending' | 'paused' | 'running'
 
 const statusStyles: Record<StatusType, string> = {
-  active: 'bg-[var(--accent-green-dim)] text-[var(--status-active-text)]',
-  running: 'bg-[var(--accent-green-dim)] text-[var(--status-active-text)]',
-  pending: 'bg-[var(--accent-yellow-dim)] text-[var(--status-pending-text)]',
-  paused: 'bg-[var(--accent-terracotta-dim)] text-[var(--status-paused-text)]',
+  active: 'bg-[var(--variant-success-container)] text-[var(--status-active-text)]',
+  running: 'bg-[var(--variant-success-container)] text-[var(--status-active-text)]',
+  pending: 'bg-[var(--variant-warning-container)] text-[var(--status-pending-text)]',
+  paused: 'bg-[var(--variant-danger-container)] text-[var(--status-paused-text)]',
 }
 
 const statusLabels: Record<StatusType, string> = {

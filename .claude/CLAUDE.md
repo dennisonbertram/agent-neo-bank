@@ -49,6 +49,54 @@ The app depends on `awal` (Coinbase Agent Wallet CLI) for all wallet operations.
 - Handle errors at system boundaries (user input, external APIs)
 - Keep functions small and focused
 
+## Architecture Rules (NON-NEGOTIABLE)
+
+- **Only architecturally correct implementations.** Never monkeypatch, bypass service layers, or scatter logic across the codebase.
+- **Respect the service layer.** Tauri commands call services, services call the CLI executor. Commands never call the CLI directly. If a service method is missing, add it. If a service isn't on AppState, add it.
+- **No hardcoded fallback data in the frontend.** If data comes from the backend, it must come from the backend. Placeholder JSON files are for development mocking only and must never be the primary data source in production paths.
+- **Follow existing patterns.** Before implementing anything, read how adjacent features are structured and follow the same architecture. Don't invent new patterns when one exists.
+- **No stub Tauri commands.** Every `#[tauri::command]` must be wired to its service. Never leave commands returning `{ "status": "not_implemented" }`. If the service exists, wire it. If it doesn't, build it.
+
+### Data Flow (NON-NEGOTIABLE)
+
+The app follows a strict layered data flow. **Every layer must be wired end-to-end. No stubs, no shortcuts.**
+
+```
+awal CLI  →  Rust Service (WalletService, AuthService, etc.)
+          →  Rust Tauri Command (injects State<AppState>, calls service)
+          →  React Zustand Store (single source of truth, initialized once at app level)
+          →  React Pages/Components (consume store, never fetch independently)
+```
+
+**Rules:**
+1. **Backend data is fetched ONCE at the app level.** Wallet data (address, balances) is loaded by `walletStore.initialize()` in `App.tsx` after authentication. Balance polling (15s) lives in the store, not in page components.
+2. **Pages never fetch backend data independently.** Pages consume Zustand stores via hooks (`useWalletStore()`, etc.). A page must NEVER call `tauriApi.*` or `safeTauriCall()` for data that a store already provides. If you need data in a page, check if a store provides it first. If no store exists, create one and initialize it at the app level.
+3. **One store per domain.** `walletStore` owns address + balances. `authStore` owns auth state. Future stores (agentStore, transactionStore) follow the same pattern: initialized once in `App.tsx`, consumed everywhere.
+4. **No loading screens for globally-available data.** If data is fetched at the app level, it's available by the time a protected page renders. Pages should not show "Loading wallet address..." for data the app already has.
+5. **Polling lives in stores, not components.** If data needs periodic refresh, the store manages the interval. Components are pure consumers.
+
+### Why This Architecture (Design Rationale)
+
+**Why Zustand stores (not React Query, not Context):**
+- The app has a small, well-defined data surface (address, balances, auth state) — not dozens of REST endpoints. Zustand is the right weight.
+- React Query / TanStack Query is overkill here. Those libraries shine with many REST endpoints needing complex caching, deduplication, and stale-while-revalidate. We have 2-3 Tauri IPC calls.
+- React Context causes unnecessary re-renders. Zustand's selector-based subscriptions avoid this.
+
+**Why poll-based updates (for now):**
+- Simple and predictable. The store polls balance every 15s via `setInterval`.
+- Sufficient for a desktop wallet where balances change infrequently.
+
+**Future evolution — event-driven updates:**
+- Tauri has a built-in event system (`emit`/`listen`) where the Rust backend can push updates to the frontend.
+- Instead of polling "what's the balance?", the backend could emit `balance-updated` events when it detects changes.
+- This is more efficient and more native to Tauri's architecture.
+- Migrate to this when polling becomes a bottleneck or when we need real-time responsiveness (e.g., watching pending transactions).
+
+**What NOT to introduce:**
+- Do not add React Query, SWR, or similar data-fetching libraries. Zustand handles our needs.
+- Do not add React Context for shared state. Zustand stores are the single mechanism.
+- Do not add per-page data fetching for data a store already owns.
+
 ## Testing (NON-NEGOTIABLE TDD REQUIREMENT)
 
 **All code in this project follows strict TDD. No exceptions.**

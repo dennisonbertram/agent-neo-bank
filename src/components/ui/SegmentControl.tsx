@@ -18,8 +18,8 @@ export function SegmentControl({ options, value, onChange, className }: SegmentC
           className={cn(
             'flex-1 text-center py-2 text-[14px] font-medium rounded-[999px] border-none cursor-pointer transition-all duration-200',
             value === option
-              ? 'bg-white text-[var(--text-primary)] shadow-[0_2px_8px_rgba(0,0,0,0.08)]'
-              : 'bg-transparent text-[var(--text-secondary)]'
+              ? 'bg-[var(--bg-elevated)] text-[var(--text-primary)] shadow-[var(--shadow-subtle)]'
+              : 'bg-transparent text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
           )}
         >
           {option}

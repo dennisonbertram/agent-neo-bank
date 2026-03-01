@@ -1,0 +1,179 @@
+<!-- Privacy.com Dashboard — HTML Structure Reference
+     Source: https://app.privacy.com/home
+     Extracted: 2026-02-28
+     Note: Simplified structure, sensitive data removed -->
+
+<div class="dashboard">
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="header-bar" style="background: #1b1c26; height: 64px;">
+      <div class="side-nav">
+        <button class="btn btn-content"><!-- hamburger menu --></button>
+      </div>
+      <div class="branding">
+        <a class="home-link" href="/">
+          <span class="brand-logo">PRIVACY</span>
+        </a>
+      </div>
+      <button class="search-input" type="submit">
+        <svg><!-- search icon --></svg>
+        <span class="text">Search</span>
+      </button>
+      <nav class="primary-nav">
+        <ul class="nav-list flex gap-64">
+          <li><a href="/home" class="active">Home</a></li>
+          <li><a href="/cards">Cards</a></li>
+          <li><a href="/transactions">Transactions</a></li>
+          <li><a href="https://support.privacy.com/">Help</a></li>
+        </ul>
+      </nav>
+      <div class="theme-switcher">
+        <!-- Auto | Light | Dark toggle -->
+        <button class="active">Auto</button>
+        <button>&#9728;&#65039;</button>
+        <button>&#127769;</button>
+      </div>
+      <div class="user-menu">
+        <span class="user-icon"><!-- avatar --></span>
+        <div class="user-info">
+          <span class="name">Dennison Bertram</span>
+          <span class="email">dennison@dennisonbertram.com</span>
+        </div>
+        <svg><!-- chevron --></svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main class="app-main">
+    <div class="page-content flex-column gap-24">
+
+      <!-- HERO BANNER -->
+      <div class="dashboard-hero p-40 flex flex-wrap">
+        <div class="welcome">
+          <div class="plan-badge">Personal Plan</div>
+          <h1 class="greeting"><strong>Good evening, Dennison.</strong></h1>
+          <h2 class="subheader">Welcome to your Privacy Dashboard.</h2>
+          <button class="btn btn-variant-brand radius-64 btn-new-card">
+            New Card <svg><!-- plus icon --></svg>
+          </button>
+        </div>
+        <div class="helpers">
+          <!-- Chrome Extension Promo -->
+          <div class="promo-helper p-24">
+            <div class="promo-icon"><!-- chrome icon --></div>
+            <h4>Privacy Extension</h4>
+            <p>Available for your browser</p>
+            <button>Add to Chrome <svg><!-- plus --></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- WALLET + SPEND ROW -->
+      <div class="wallet-spend-snapshot flex gap-24">
+
+        <!-- WALLET SECTION -->
+        <section class="wallet-section">
+          <header class="section-header">
+            <h3>Wallet</h3>
+            <div class="tabs">
+              <button>Favorites</button>
+              <button class="active">Recently Used</button>
+            </div>
+            <button class="btn">View All Cards</button>
+          </header>
+          <div class="card-carousel">
+            <!-- Horizontal scrolling cards -->
+            <div class="card" style="background: linear-gradient(red, purple)">
+              <div class="card-icon"><!-- Twilio logo --></div>
+              <div class="card-status"><!-- lock icon --></div>
+              <div class="card-label">Twilio</div>
+            </div>
+            <div class="card" style="background: linear-gradient(purple, blue)">
+              <div class="card-icon"><!-- lock --></div>
+              <span class="badge">PAU</span>
+              <div class="card-label">Monday</div>
+            </div>
+            <!-- More cards: Paramount+, healthCare, 3634 -->
+          </div>
+        </section>
+
+        <!-- SPEND SNAPSHOT -->
+        <section class="spend-snapshot">
+          <header class="section-header">
+            <h3>Your Spend Snapshot</h3>
+            <button class="btn">Spend Summary</button>
+          </header>
+          <div class="metrics flex-wrap gap-40">
+            <div class="metric">
+              <div class="label">Daily Spend Limit</div>
+              <div class="amount"><strong>$0.00</strong> of $5,000</div>
+              <div class="progress-bar" style="width: 0%"></div>
+              <div class="description">Your spending over the last 24 hours</div>
+            </div>
+            <div class="metric">
+              <div class="label">Monthly Spend Limit</div>
+              <div class="amount"><strong>$152.12</strong> of $20,000</div>
+              <div class="progress-bar" style="width: 0.76%"></div>
+              <div class="description">Your spending over the past 30 days</div>
+            </div>
+            <div class="metric">
+              <div class="label">Monthly Card Limit</div>
+              <div class="amount"><strong>0</strong> of 36</div>
+              <div class="progress-bar" style="width: 0%"></div>
+              <div class="description">Resets every month on the 1st</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- TRANSACTIONS + CASHBACK ROW -->
+      <div class="transactions-cashback flex gap-24">
+
+        <!-- RECENT TRANSACTIONS -->
+        <section class="transactions-section grow-1">
+          <header class="section-header">
+            <h3>Recent Transactions</h3>
+            <button class="btn">View All Transactions</button>
+          </header>
+          <div class="transaction-list">
+            <div class="transaction-row flex align-items-center">
+              <div class="merchant-icon"><!-- logo --></div>
+              <div class="transaction-date">Feb 25, 8:45pm</div>
+              <div class="transaction-label">Openrouter, Inc</div>
+              <span class="badge settling">SETTLING</span>
+              <div class="transaction-amount">$22.97</div>
+              <svg><!-- chevron right --></svg>
+            </div>
+            <!-- More transaction rows... -->
+            <!-- Statuses: SETTLING, AUTHORIZED, SETTLED -->
+          </div>
+        </section>
+
+        <!-- CASHBACK AND CREDITS -->
+        <section class="cashback-section">
+          <header class="section-header">
+            <h3>Cashback and Credits</h3>
+            <a class="btn">Refer a Friend</a>
+          </header>
+          <div class="cashback-content flex-column gap-24">
+            <div class="credit-box border radius-16 p-16">
+              <div class="credit-amount">$0.00</div>
+              <div class="credit-label">Available Credit</div>
+              <div class="auto-apply">
+                <label>Auto-apply balance to your upcoming purchases</label>
+                <input type="checkbox" />
+              </div>
+            </div>
+            <div class="upgrade-box border radius-16 p-24">
+              <div class="illustration"><!-- money bags illustration --></div>
+              <p>Want to Earn <strong>1% Cashback</strong> on purchases? Upgrade to a Privacy Pro or Premium Plan.</p>
+              <button class="btn btn-variant-brand">Upgrade Now</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+    </div>
+  </main>
+</div>

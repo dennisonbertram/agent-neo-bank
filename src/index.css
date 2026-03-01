@@ -6,6 +6,7 @@
 @theme {
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
+  --color-bg-elevated: var(--bg-elevated);
   --color-surface-hover: var(--surface-hover);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
@@ -16,10 +17,14 @@
   --color-accent-blue: var(--accent-blue);
   --color-danger: var(--color-danger);
   --color-link: var(--color-link);
+  --color-brand-main: var(--brand-main);
+  --color-brand-container: var(--brand-container);
+  --color-brand-on-container: var(--brand-on-container);
 
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
   --radius-pill: var(--radius-pill);
 
   --shadow-subtle: var(--shadow-subtle);

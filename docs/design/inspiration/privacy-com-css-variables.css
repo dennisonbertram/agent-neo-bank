@@ -1,0 +1,89 @@
+/* Privacy.com Design System — CSS Variables
+ * Source: https://app.privacy.com/home
+ * Extracted: 2026-02-28
+ * Theme: Dark
+ */
+
+:root {
+  /* Layout */
+  --app-header--header-bar-height: var(--size-64);
+  --app-header--header-notification-height: var(--size-56);
+  --main-content--gutter: var(--size-40);
+  --main-content--max-width: 124.25rem;
+  --main-content--min-width: 23.4375rem;
+
+  /* Typography */
+  --font-family--monospace: "Courier New", Courier, monospace;
+
+  /* Color Scheme: Dark */
+  --color-scheme: dark;
+  --page-background: #323242;
+  --container-background: #1b1c26;
+  --foreground-border: #4c4c5d;
+  --foreground-border-strong: #66667a;
+  --text-primary: #f0f0f5;
+  --text-subtle: #d1d1df;
+  --text-muted: #828299;
+
+  /* Brand */
+  --variant-brand-main: #4949f1;
+  --variant-brand-on-main: #fff;
+  --variant-brand-container: #302e6e;
+  --variant-brand-on-container: #b5b5f9;
+
+  /* Neutral */
+  --variant-neutral-main: #4c4c5d;
+  --variant-neutral-on-main: #f0f0f5;
+  --variant-neutral-container: #66667a;
+  --variant-neutral-on-container: #fff;
+
+  /* Strong */
+  --variant-strong-main: #f0f0f5;
+  --variant-strong-on-main: #1b1c26;
+  --variant-strong-container: #828299;
+  --variant-strong-on-container: #fff;
+
+  /* Success */
+  --variant-success-main: #55b938;
+  --variant-success-on-main: #fff;
+  --variant-success-container: #254d1e;
+  --variant-success-on-container: #a2ec8e;
+
+  /* Danger */
+  --variant-danger-main: #ed5a5a;
+  --variant-danger-on-main: #fff;
+  --variant-danger-container: #5e2121;
+  --variant-danger-on-container: #f7abab;
+
+  /* Warning */
+  --variant-warning-main: #df9e33;
+  --variant-warning-on-main: #fff;
+  --variant-warning-container: #5e4212;
+  --variant-warning-on-container: #f1d394;
+
+  /* Info */
+  --variant-info-main: #2c98d6;
+  --variant-info-on-main: #fff;
+  --variant-info-container: #133f58;
+  --variant-info-on-container: #9ed5f4;
+
+  /* Shadows */
+  --shadow: color-mix(in srgb, #000 8%, transparent);
+  --shadow-small: 0 2px 8px 1px var(--shadow);
+  --shadow-medium: 0 4px 12px 1px var(--shadow);
+  --shadow-large: 0 8px 16px 1px var(--shadow);
+
+  /* Borders */
+  --border-1: 1px solid var(--foreground-border);
+
+  /* Transitions */
+  --transition-ease-in-out-100: .1s ease-in-out;
+  --transition-ease-in-out-300: .3s ease-in-out;
+  --transition-bezier-200: .2s cubic-bezier(.55, 0, .1, 1);
+  --transition-bezier-500: .5s cubic-bezier(.55, 0, .1, 1);
+
+  /* Card */
+  --card-type--padding: var(--size-8);
+  --blank-card--width: 10.25rem;
+  --switch-bg: #fff;
+}

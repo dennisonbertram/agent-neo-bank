@@ -1,9 +1,17 @@
 import { cn } from '../../lib/cn'
-import type { LucideIcon } from 'lucide-react'
+
+const tagStyles: Record<string, string> = {
+  X402: 'bg-[var(--variant-info-container)] text-[var(--variant-info-text)]',
+  PAYMENT: 'bg-[var(--variant-success-container)] text-[var(--variant-success-text)]',
+  DEPOSIT: 'bg-[var(--variant-success-container)] text-[var(--variant-success-text)]',
+  TRADE: 'bg-[var(--variant-warning-container)] text-[var(--variant-warning-text)]',
+  SWAP: 'bg-[var(--variant-warning-container)] text-[var(--variant-warning-text)]',
+  GAS: 'bg-[var(--variant-neutral-container)] text-[var(--variant-neutral-text)]',
+}
+
+const defaultTagStyle = 'bg-[var(--variant-neutral-container)] text-[var(--variant-neutral-text)]'
 
 interface TransactionItemProps {
-  icon: LucideIcon
-  iconBgColor?: string
   label: string
   subLabel: string
   amount: string
@@ -15,8 +23,6 @@ interface TransactionItemProps {
 }
 
 export function TransactionItem({
-  icon: Icon,
-  iconBgColor = 'var(--bg-secondary)',
   label,
   subLabel,
   amount,
@@ -31,36 +37,45 @@ export function TransactionItem({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-3 py-3 w-full bg-transparent border-none cursor-pointer text-left',
-        !isLast && 'border-b border-[var(--surface-hover)]',
+        'group flex items-center gap-3 bg-transparent border-none cursor-pointer text-left py-3.5 -mx-3 px-3 rounded-[var(--radius-lg)] transition-all duration-200 w-[calc(100%+24px)]',
+        'hover:bg-[var(--surface-hover)]',
+        !isLast && 'border-b border-[var(--border-subtle)] hover:border-transparent',
         className
       )}
     >
-      <div
-        className="w-[40px] h-[40px] rounded-[12px] flex items-center justify-center shrink-0"
-        style={{ backgroundColor: iconBgColor }}
-      >
-        <Icon size={20} />
-      </div>
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
+        {/* Top row: label */}
+        <span className="text-[15px] font-semibold text-[var(--text-primary)] truncate leading-none">
+          {label}
+        </span>
+
+        {/* Bottom row: tag + description */}
         <div className="flex items-center gap-2">
-          <span className="text-[15px] font-medium text-[var(--text-primary)] truncate">{label}</span>
           {tag && (
-            <span className="text-mono text-[10px] bg-[var(--bg-secondary)] px-1.5 py-0.5 rounded-[6px] text-[var(--text-secondary)] shrink-0">
+            <span className={cn(
+              'text-[11px] px-2 py-0.5 rounded-[var(--radius-pill)] shrink-0 font-semibold uppercase tracking-wide leading-tight',
+              tagStyles[tag.toUpperCase()] || defaultTagStyle
+            )}>
               {tag}
             </span>
           )}
+          <span className="text-[13px] text-[var(--text-tertiary)] truncate leading-none">
+            {subLabel}
+          </span>
         </div>
-        <span className="text-[11px] font-medium text-[var(--text-secondary)]">{subLabel}</span>
       </div>
-      <span
-        className={cn(
-          'text-[17px] font-medium shrink-0',
-          isPositive ? 'text-[var(--color-positive)]' : 'text-[var(--text-primary)]'
-        )}
-      >
-        {amount}
-      </span>
+
+      {/* Amount */}
+      <div className="shrink-0 text-right pl-2">
+        <span
+          className={cn(
+            'text-[16px] font-semibold tabular-nums tracking-tight',
+            isPositive ? 'text-[var(--color-positive)]' : 'text-[var(--text-primary)]'
+          )}
+        >
+          {amount}
+        </span>
+      </div>
     </button>
   )
 }

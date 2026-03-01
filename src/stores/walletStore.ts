@@ -1,43 +1,73 @@
 import { create } from 'zustand'
-import { tauriApi } from '../lib/tauri'
-import type { AssetBalance } from '../types'
+import { safeTauriCall, tauriApi } from '../lib/tauri'
+import type { AssetBalance, BalanceResponse } from '../types'
 
 interface WalletState {
   address: string | null
   balances: Record<string, AssetBalance> | null
   totalBalance: string | null
   isLoading: boolean
+  isInitialized: boolean
 
-  fetchBalance: () => Promise<void>
-  fetchAddress: () => Promise<void>
+  /** Call once at app startup (after auth). Fetches address + balance, starts polling. */
+  initialize: () => void
+  /** Stop balance polling (call on logout / unmount). */
+  teardown: () => void
 }
 
-export const useWalletStore = create<WalletState>((set) => ({
+let pollInterval: ReturnType<typeof setInterval> | null = null
+
+export const useWalletStore = create<WalletState>((set, get) => ({
   address: null,
   balances: null,
   totalBalance: null,
   isLoading: false,
+  isInitialized: false,
 
-  fetchBalance: async () => {
-    set({ isLoading: true })
-    try {
-      const result = await tauriApi.wallet.getBalance()
-      set({
-        balances: result.balances,
-        totalBalance: result.balance,
-        isLoading: false,
-      })
-    } catch {
-      set({ isLoading: false })
+  initialize: () => {
+    if (get().isInitialized) return
+    set({ isLoading: true, isInitialized: true })
+
+    // Fetch address (stable, only need once)
+    safeTauriCall(
+      () => tauriApi.wallet.getAddress(),
+      { address: '' },
+    ).then((result) => {
+      if (result.address) set({ address: result.address })
+    })
+
+    // Fetch balance immediately, then poll
+    const fetchBalance = async () => {
+      const result = await safeTauriCall<BalanceResponse | null>(
+        () => tauriApi.wallet.getBalance(),
+        null,
+      )
+      if (result) {
+        set({
+          balances: result.balances,
+          totalBalance: result.balance,
+          isLoading: false,
+        })
+      } else {
+        set({ isLoading: false })
+      }
     }
+
+    fetchBalance()
+    pollInterval = setInterval(fetchBalance, 15_000)
   },
 
-  fetchAddress: async () => {
-    try {
-      const result = await tauriApi.wallet.getAddress()
-      set({ address: result.address })
-    } catch {
-      // Address fetch failed — leave as null
+  teardown: () => {
+    if (pollInterval) {
+      clearInterval(pollInterval)
+      pollInterval = null
     }
+    set({
+      address: null,
+      balances: null,
+      totalBalance: null,
+      isLoading: false,
+      isInitialized: false,
+    })
   },
 }))

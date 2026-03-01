@@ -1,0 +1,84 @@
+{
+  "extractedFrom": "https://app.privacy.com/home",
+  "date": "2026-02-28",
+  "theme": "dark",
+  "elements": {
+    "page-bg": {
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "color": "rgb(240, 240, 245)",
+      "fontFamily": "Graphik",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "lineHeight": "20.8px"
+    },
+    "header-bar": {
+      "backgroundColor": "rgb(27, 28, 38)",
+      "color": "rgb(240, 240, 245)",
+      "fontFamily": "Graphik",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "lineHeight": "20.8px",
+      "padding": "0px 40px",
+      "display": "flex"
+    },
+    "hero-banner": {
+      "backgroundColor": "rgb(27, 28, 38)",
+      "color": "rgb(240, 240, 245)",
+      "fontFamily": "Graphik",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "borderRadius": "16px",
+      "padding": "40px",
+      "display": "flex"
+    },
+    "greeting-h1": {
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "color": "rgb(240, 240, 245)",
+      "fontFamily": "Graphik",
+      "fontSize": "36px",
+      "fontWeight": "400",
+      "lineHeight": "46.8px"
+    },
+    "subheader-h2": {
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "color": "rgb(209, 209, 223)",
+      "fontFamily": "Graphik",
+      "fontSize": "20px",
+      "fontWeight": "400",
+      "lineHeight": "26px"
+    },
+    "new-card-btn": {
+      "backgroundColor": "rgb(73, 73, 241)",
+      "color": "rgb(255, 255, 255)",
+      "fontFamily": "Graphik",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "borderRadius": "64px",
+      "padding": "10px 24px"
+    },
+    "plan-badge": {
+      "backgroundColor": "rgb(48, 46, 110)",
+      "color": "rgb(181, 181, 249)",
+      "fontFamily": "Graphik",
+      "fontSize": "14px",
+      "fontWeight": "600",
+      "borderRadius": "64px",
+      "padding": "4px 12px"
+    },
+    "section-header": {
+      "display": "flex",
+      "padding": "0px 0px 16px"
+    },
+    "content-box": {
+      "backgroundColor": "rgb(27, 28, 38)",
+      "borderRadius": "16px",
+      "border": "1px solid rgb(76, 76, 93)"
+    },
+    "search-input": {
+      "backgroundColor": "rgb(50, 50, 66)",
+      "color": "rgb(130, 130, 153)",
+      "borderRadius": "64px",
+      "padding": "8px 16px"
+    }
+  }
+}
