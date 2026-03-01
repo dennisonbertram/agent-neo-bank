@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Settings, Search, Rocket, Landmark, Database } from 'lucide-react'
+import { Search, Rocket, Landmark, Database } from 'lucide-react'
+import { TopBar } from '../components/layout/TopBar'
 import { SegmentControl } from '../components/ui/SegmentControl'
 import { AgentCard } from '../components/agent/AgentCard'
-import { BottomNav } from '../components/layout/BottomNav'
 import { safeTauriCall, tauriApi, placeholderData } from '../lib/tauri'
 import type { Agent, AgentBudgetSummary, AgentStatus } from '../types'
 
@@ -54,8 +53,6 @@ export default function AgentsList() {
   const [segment, setSegment] = useState('All Agents')
   const [agentDisplayData, setAgentDisplayData] = useState<AgentDisplayData[]>([])
   const [loading, setLoading] = useState(true)
-  const navigate = useNavigate()
-
   useEffect(() => {
     async function loadData() {
       const [agents, budgets] = await Promise.all([
@@ -82,27 +79,15 @@ export default function AgentsList() {
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Header */}
-      <div className="pt-[16px] px-6 pb-4 flex justify-between items-center">
-        <h1 className="text-[24px] font-bold tracking-[-0.5px] text-[var(--text-primary)]">
-          My Agents
-        </h1>
-        <button
-          type="button"
-          onClick={() => navigate('/settings')}
-          className="w-[40px] h-[40px] rounded-full bg-[var(--bg-secondary)] border border-[var(--surface-hover)] flex items-center justify-center cursor-pointer"
-        >
-          <Settings size={20} />
-        </button>
-      </div>
+      <TopBar />
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 pb-[100px] scrollbar-hide">
+      <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide">
         <SegmentControl
           options={['Active', 'All Agents', 'Archived']}
           value={segment}
           onChange={setSegment}
-          className="mb-6"
+          className="mb-6 mt-4"
         />
 
         {loading ? (
@@ -139,9 +124,6 @@ export default function AgentsList() {
           </div>
         )}
       </div>
-
-      {/* Bottom Nav */}
-      <BottomNav activeTab="agents" />
     </div>
   )
 }

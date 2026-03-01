@@ -1,13 +1,20 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Rocket, Landmark, ArrowDownLeft, Code, Settings } from 'lucide-react'
+import { Search, Rocket, Landmark } from 'lucide-react'
 import { SegmentControl } from '../components/ui/SegmentControl'
 import { AgentPillRow } from '../components/agent/AgentPillRow'
 import { TransactionItem } from '../components/transaction/TransactionItem'
+import { TopBar } from '../components/layout/TopBar'
 import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { useWalletStore } from '../stores/walletStore'
 import { safeTauriCall, tauriApi, placeholderData } from '../lib/tauri'
 import type { Transaction, Agent, AgentBudgetSummary } from '../types'
+
+/** Format tx amount: strip existing sign, use typographical minus for sends */
+function formatTxAmount(amount: string, txType: string): string {
+  const abs = amount.replace(/^-/, '')
+  return txType === 'receive' ? `+$${abs}` : `\u2212$${abs}`
+}
 
 /** Map placeholder agent data to the shape the Agent pills need */
 const placeholderAgents = placeholderData.agents.samples
@@ -22,9 +29,9 @@ const AGENT_ICON: Record<string, typeof Search> = {
 
 /** Accent colour lookup for agent types */
 const AGENT_ACCENT: Record<string, string> = {
-  research: '#8FB5AA',
-  deployment: '#F2D48C',
-  treasury: '#D9A58B',
+  research: '#2c98d6',
+  deployment: '#df9e33',
+  treasury: '#ed5a5a',
 }
 
 export default function Home() {
@@ -105,7 +112,7 @@ export default function Home() {
           label: agent.name,
           value: budget ? `$${budget.daily_spent}` : '$0.00',
           subValue: agent.status === 'active' ? 'today' : agent.status,
-          accentColor: AGENT_ACCENT[agent.agent_type] ?? '#8FB5AA',
+          accentColor: AGENT_ACCENT[agent.agent_type] ?? '#2c98d6',
           icon: AGENT_ICON[agent.agent_type] ?? Search,
         }
       })
@@ -118,13 +125,11 @@ export default function Home() {
         icon: AGENT_ICON[a.agent_type] ?? Search,
       }))
 
-  const user = placeholderData.user
-
   if (loading) {
     return (
       <div className="flex flex-col h-full">
         <div className="flex-1 flex items-center justify-center">
-          <div className="w-6 h-6 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-[var(--text-tertiary)]/30 border-t-[var(--text-primary)] rounded-full animate-spin" />
         </div>
       </div>
     )
@@ -132,49 +137,43 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Floating settings button — bottom right */}
-      <button
-        type="button"
-        onClick={() => navigate('/settings')}
-        className="fixed bottom-6 right-6 z-50 w-[44px] h-[44px] rounded-full bg-black/80 backdrop-blur-sm flex items-center justify-center cursor-pointer border-none shadow-lg hover:bg-black transition-colors"
-      >
-        <Settings size={20} color="white" />
-      </button>
+      {/* Top bar with avatar + settings */}
+      <TopBar />
 
       {/* Fixed header area — never scrolls */}
       <div className="flex-none">
-        <div className="px-6 pt-6">
-          {/* Balance Card */}
-          <div className="bg-black text-white rounded-[32px] p-8 mb-6 relative overflow-hidden flex flex-col justify-between min-h-[198px]">
-            {/* Decorative glow */}
-            <div className="absolute -top-1/2 -right-[20%] w-[200px] h-[200px] bg-[radial-gradient(circle,rgba(143,181,170,0.2)_0%,transparent_70%)] pointer-events-none" />
+        <div className="px-6 pt-4">
+          {/* Balance Card — elevated dark surface */}
+          <div className="bg-[var(--bg-secondary)] text-[var(--text-primary)] rounded-[var(--radius-xl)] p-8 mb-6 relative overflow-hidden flex flex-col justify-between min-h-[198px] border border-[var(--border-subtle)]">
+            {/* Decorative glow — brand purple */}
+            <div className="absolute -top-1/2 -right-[20%] w-[200px] h-[200px] bg-[radial-gradient(circle,rgba(73,73,241,0.15)_0%,transparent_70%)] pointer-events-none" />
 
             <div className="flex justify-between items-start relative z-[1]">
               <div>
-                <p className="text-[40px] font-semibold leading-none">${totalBalanceUsd}</p>
+                <p className="text-[40px] font-semibold leading-none tabular-nums">${totalBalanceUsd}</p>
               </div>
-              <div className="bg-white/10 px-2 py-1 rounded-[8px] flex items-center gap-1.5">
+              <div className="bg-[var(--brand-container)] px-2.5 py-1 rounded-[var(--radius-sm)] flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full bg-[#0052FF]" />
-                <span className="text-[11px] font-semibold tracking-[0.5px]">BASE</span>
+                <span className="text-[11px] font-semibold tracking-[0.5px] text-[var(--brand-on-container)]">BASE</span>
               </div>
             </div>
 
             <div className="flex justify-between items-center relative z-[1]">
-              <span className="font-mono text-[13px] text-white/50">
+              <span className="font-mono text-[13px] text-[var(--text-tertiary)]">
                 {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : '...'}
               </span>
               <div className="flex gap-2 items-center">
                 <button
                   type="button"
                   onClick={() => navigate('/add-funds')}
-                  className="text-[11px] font-medium text-white/50 hover:text-white/80 bg-transparent border-none cursor-pointer p-0 transition-colors"
+                  className="text-[11px] font-medium text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] bg-transparent border-none cursor-pointer p-0 transition-colors"
                 >
                   Add Funds
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowDetails(d => !d)}
-                  className="text-[11px] font-semibold text-white/70 bg-white/10 hover:bg-white/20 border-none cursor-pointer px-2.5 py-1 rounded-full transition-colors"
+                  className="text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--surface-hover)] hover:bg-[var(--border-subtle)] border-none cursor-pointer px-2.5 py-1 rounded-full transition-colors"
                 >
                   Details
                 </button>
@@ -197,20 +196,20 @@ export default function Home() {
         <>
           <div className="px-6 pt-2">
             <ScreenHeader
-              breadcrumbs={[{ label: 'Home', path: '/home' }, { label: 'Balances' }]}
+              title="Balances"
               onBack={() => setShowDetails(false)}
             />
           </div>
           <div className="flex-1 overflow-y-auto scrollbar-hide px-6">
-            <div className="bg-[var(--bg-secondary)] rounded-[20px] p-5">
+            <div className="bg-[var(--bg-secondary)] rounded-[var(--radius-lg)] p-5 border border-[var(--border-subtle)]">
               <h3 className="text-caption mb-4">Token Balances</h3>
               {Object.entries(balances ?? {}).map(([symbol, asset], i, arr) => (
-                <div key={symbol} className={`flex justify-between items-center py-3 ${i < arr.length - 1 ? 'border-b border-black/5' : ''}`}>
+                <div key={symbol} className={`flex justify-between items-center py-3 ${i < arr.length - 1 ? 'border-b border-[var(--border-subtle)]' : ''}`}>
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: symbol === 'ETH' ? '#627EEA' : '#2775CA' }} />
                     <span className="text-[15px] font-medium text-[var(--text-primary)]">{symbol}</span>
                   </div>
-                  <span className="font-mono text-[15px] font-semibold text-[var(--text-primary)]">
+                  <span className="font-mono text-[15px] font-semibold text-[var(--text-primary)] tabular-nums">
                     {asset.formatted} {symbol}
                   </span>
                 </div>
@@ -222,11 +221,11 @@ export default function Home() {
           </div>
         </>
       ) : (
-        /* Scrollable content area — only this part scrolls */
-        <div className="flex-1 overflow-y-auto scrollbar-hide px-6">
+        /* Content area */
+        <div className="flex-1 min-h-0 flex flex-col px-6">
           {segment === 'Agents' ? (
             /* Agent Pills */
-            <div className="flex flex-col gap-3 pb-6">
+            <div className="flex flex-col gap-3 pb-6 flex-1 overflow-y-auto scrollbar-hide">
               {agentPills.map(pill => (
                 <AgentPillRow
                   key={pill.id}
@@ -235,41 +234,35 @@ export default function Home() {
                   value={pill.value}
                   subValue={pill.subValue}
                   accentColor={pill.accentColor}
+                  onClick={() => navigate(`/agents/${pill.id}`)}
                 />
               ))}
             </div>
           ) : (
-            /* Activity Feed */
-            <div className="pb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-title" style={{ fontSize: 20 }}>Activity</h3>
+            /* Recent Activity Feed — max 4 items */
+            <div className="flex flex-col">
+              <div className="flex justify-between items-end mb-3">
+                <h3 className="text-[16px] font-semibold text-[var(--text-primary)] leading-none">
+                  Recent Activity
+                </h3>
                 <button
                   type="button"
-                  className="text-[13px] font-semibold text-[#0052FF] bg-transparent border-none cursor-pointer"
+                  onClick={() => navigate('/transactions')}
+                  className="text-[13px] font-medium text-[var(--brand-main)] hover:text-[var(--brand-on-container)] bg-transparent border-none cursor-pointer transition-colors leading-none"
                 >
                   View All
                 </button>
               </div>
 
-              {displayTransactions.map((tx, i) => (
+              {displayTransactions.slice(0, 4).map((tx, i, arr) => (
                 <TransactionItem
                   key={tx.id}
-                  icon={
-                    tx.tx_type === 'receive' ? ArrowDownLeft :
-                    tx.agent_name === 'Deploy Bot' ? Code : Search
-                  }
-                  iconBgColor={
-                    tx.tx_type === 'receive' ? 'var(--accent-blue-dim)' :
-                    tx.agent_name === 'Deploy Bot' ? 'var(--accent-yellow-dim)' :
-                    tx.agent_name === 'Treasury' ? 'var(--accent-terracotta-dim)' :
-                    'var(--accent-green-dim)'
-                  }
                   label={tx.agent_name || 'Deposit'}
                   subLabel={tx.description}
-                  amount={`${tx.amount} ${tx.asset}`}
+                  amount={formatTxAmount(tx.amount, tx.tx_type)}
                   tag={tx.category.toUpperCase()}
                   isPositive={tx.tx_type === 'receive'}
-                  isLast={i === displayTransactions.length - 1}
+                  isLast={i === arr.length - 1}
                   onClick={() => navigate(`/transactions/${tx.id}`)}
                 />
               ))}

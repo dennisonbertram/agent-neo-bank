@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft, ExternalLink, Search } from 'lucide-react'
+import { useParams } from 'react-router-dom'
+import { ExternalLink, Search } from 'lucide-react'
+import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { Button } from '../components/ui/Button'
 import { MetaCard } from '../components/transaction/MetaCard'
 import { safeTauriCall, placeholderData } from '../lib/tauri'
@@ -9,7 +10,6 @@ import type { Transaction } from '../types'
 
 export default function TransactionDetail() {
   const { txId } = useParams()
-  const navigate = useNavigate()
   const [tx, setTx] = useState<Transaction | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -88,17 +88,8 @@ export default function TransactionDetail() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto px-6 pt-[16px] pb-[40px] animate-in">
-        {/* Back nav */}
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-[var(--text-primary)] font-semibold text-[15px] mb-6 bg-transparent border-none cursor-pointer p-0"
-        >
-          <ChevronLeft size={20} strokeWidth={2.5} />
-          Details
-        </button>
-
+      <ScreenHeader title="Transaction" />
+      <div className="flex-1 overflow-y-auto px-6 pt-4 pb-[40px] animate-in">
         {/* Amount hero */}
         <div className="text-center mb-8">
           <p className="text-caption">Transaction Amount</p>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft } from 'lucide-react'
 import { StatusPill } from '../components/ui/StatusPill'
+import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { Toggle } from '../components/ui/Toggle'
 import { Stepper } from '../components/ui/Stepper'
 import { Button } from '../components/ui/Button'
@@ -156,17 +156,10 @@ export default function AgentDetail() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Sticky header */}
-      <header className="sticky top-0 z-10 pt-[16px] pb-4 px-6 flex items-center justify-between bg-white/90 backdrop-blur-[10px]">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="w-[40px] h-[40px] rounded-full bg-[var(--bg-secondary)] flex items-center justify-center border-none cursor-pointer"
-        >
-          <ChevronLeft size={20} />
-        </button>
-        <StatusPill status={isPaused ? 'paused' : 'active'} />
-      </header>
+      <ScreenHeader
+        title={agent?.name || 'Agent'}
+        rightElement={<StatusPill status={isPaused ? 'paused' : 'active'} />}
+      />
 
       {/* Scrollable content */}
       <main className="flex-1 overflow-y-auto px-6 pb-[40px] animate-in">
@@ -193,7 +186,7 @@ export default function AgentDetail() {
           </div>
 
           {/* Progress bar */}
-          <div className="h-[6px] bg-black/5 rounded-[3px] mt-3 overflow-hidden">
+          <div className="h-[6px] bg-[var(--surface-hover)] rounded-[3px] mt-3 overflow-hidden">
             <div
               className="h-full rounded-[3px] transition-all duration-300"
               style={{
@@ -254,7 +247,7 @@ export default function AgentDetail() {
         <div className="mt-10">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-title">Agent History</h2>
-            <button type="button" className="text-[11px] font-semibold uppercase tracking-[0.5px] text-black border-b border-black bg-transparent cursor-pointer">
+            <button type="button" className="text-[11px] font-semibold uppercase tracking-[0.5px] text-[var(--text-secondary)] border-b border-[var(--text-secondary)] bg-transparent cursor-pointer">
               Filter
             </button>
           </div>

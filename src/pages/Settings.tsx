@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
-import { Button } from '../components/ui/Button'
+import { ScreenHeader } from '../components/layout/ScreenHeader'
 import { Toggle } from '../components/ui/Toggle'
-import { BottomNav } from '../components/layout/BottomNav'
 import { safeTauriCall, tauriApi, isTauri, placeholderData } from '../lib/tauri'
 import { useAuthStore } from '../stores/authStore'
 import type { NotificationPreferences } from '../types'
@@ -93,16 +92,8 @@ export default function Settings() {
 
   return (
     <div className="flex flex-col h-full relative">
-      <div className="flex-1 overflow-y-auto px-6 pt-[16px] pb-[100px] scrollbar-hide">
-        {/* Back button */}
-        <Button
-          variant="sm-outline"
-          onClick={() => navigate('/home')}
-          className="mb-4"
-        >
-          ← Home
-        </Button>
-
+      <ScreenHeader title="Settings" />
+      <div className="flex-1 overflow-y-auto px-6 pb-6 scrollbar-hide">
         {/* Profile header */}
         <div className="flex items-center gap-4 py-6 border-b border-[var(--surface-hover)] mb-6">
           <div className="w-[64px] h-[64px] rounded-full bg-[var(--accent-terracotta)] flex items-center justify-center text-white text-[24px] font-semibold">
@@ -159,7 +150,6 @@ export default function Settings() {
         </p>
       </div>
 
-      <BottomNav activeTab="settings" />
     </div>
   )
 }

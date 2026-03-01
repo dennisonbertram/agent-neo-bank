@@ -2,81 +2,61 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
-interface BreadcrumbItem {
-  label: string
-  path?: string
-}
-
 interface ScreenHeaderProps {
-  breadcrumbs: BreadcrumbItem[]
+  title: string
+  showBack?: boolean
   rightElement?: React.ReactNode
   onBack?: () => void
   className?: string
 }
 
-export function ScreenHeader({ breadcrumbs, rightElement, onBack, className }: ScreenHeaderProps) {
+export function ScreenHeader({
+  title,
+  showBack = true,
+  rightElement,
+  onBack,
+  className
+}: ScreenHeaderProps) {
   const navigate = useNavigate()
 
   const handleBack = () => {
     if (onBack) { onBack(); return }
-    // Navigate to the second-to-last breadcrumb's path, or go back
-    const parent = breadcrumbs.length >= 2 ? breadcrumbs[breadcrumbs.length - 2] : null
-    if (parent?.path) {
-      navigate(parent.path)
-    } else {
-      navigate(-1)
-    }
+    navigate(-1)
   }
 
   return (
     <header
       className={cn(
-        'sticky top-0 z-10 pt-[16px] pb-4 px-6 flex items-center justify-between bg-white/90 backdrop-blur-[10px]',
+        'sticky top-0 z-50 h-[56px] px-6 flex items-center justify-between',
+        'bg-[var(--bg-primary)]/80 backdrop-blur-md border-b border-[var(--border-subtle)]/50',
         className
       )}
     >
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={handleBack}
-          className="w-[40px] h-[40px] rounded-full border border-[var(--surface-hover)] bg-transparent flex items-center justify-center cursor-pointer flex-shrink-0"
-        >
-          <ChevronLeft size={20} />
-        </button>
-        <nav className="flex items-center gap-1 text-[14px] font-medium min-w-0">
-          {breadcrumbs.map((crumb, i) => {
-            const isLast = i === breadcrumbs.length - 1
-            return (
-              <span key={`${crumb.label}-${i}`} className="flex items-center gap-1 min-w-0">
-                {i > 0 && (
-                  <span className="text-[var(--text-tertiary)] flex-shrink-0">/</span>
-                )}
-                {isLast || !crumb.path ? (
-                  <span
-                    className={cn(
-                      'truncate',
-                      isLast
-                        ? 'text-[var(--text-primary)]'
-                        : 'text-[var(--text-secondary)]'
-                    )}
-                  >
-                    {crumb.label}
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => navigate(crumb.path!)}
-                    className="text-[var(--text-secondary)] hover:underline bg-transparent border-none cursor-pointer p-0 text-[14px] font-medium truncate"
-                  >
-                    {crumb.label}
-                  </button>
-                )}
-              </span>
-            )
-          })}
-        </nav>
+      {/* Left Action - Fixed Width to maintain center balance */}
+      <div className="flex-1 flex items-center justify-start">
+        {showBack && (
+          <button
+            type="button"
+            onClick={handleBack}
+            className="w-[36px] h-[36px] rounded-full bg-[var(--bg-secondary)] border border-[var(--border-subtle)] flex items-center justify-center cursor-pointer hover:bg-[var(--surface-hover)] transition-colors"
+            aria-label="Go back"
+          >
+            <ChevronLeft size={20} className="text-[var(--text-secondary)]" />
+          </button>
+        )}
       </div>
-      {rightElement || <div className="w-[40px] flex-shrink-0" />}
+
+      {/* Centered Title */}
+      <div className="flex-[2] flex justify-center text-center">
+        <h2 className="text-[16px] font-semibold text-[var(--text-primary)] truncate max-w-[200px]">
+          {title}
+        </h2>
+      </div>
+
+      {/* Right Action - Fixed Width */}
+      <div className="flex-1 flex items-center justify-end">
+        {rightElement}
+      </div>
     </header>
   )
 }

@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useAuthStore } from './stores/authStore'
+import { useWalletStore } from './stores/walletStore'
 
 // Auth flow pages
 import Onboarding from './pages/Onboarding'
@@ -16,6 +17,7 @@ import AgentDetail from './pages/AgentDetail'
 import TransactionDetail from './pages/TransactionDetail'
 import Settings from './pages/Settings'
 import Stats from './pages/Stats'
+import AllTransactions from './pages/AllTransactions'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -37,11 +39,21 @@ function SplashScreen() {
 }
 
 export function App() {
-  const { checkAuthStatus, isLoading } = useAuthStore()
+  const { checkAuthStatus, isLoading, isAuthenticated } = useAuthStore()
+  const { initialize: initWallet, teardown: teardownWallet } = useWalletStore()
 
   useEffect(() => {
     checkAuthStatus()
   }, [checkAuthStatus])
+
+  // Initialize wallet data once after authentication succeeds
+  useEffect(() => {
+    if (isAuthenticated) {
+      initWallet()
+    } else {
+      teardownWallet()
+    }
+  }, [isAuthenticated, initWallet, teardownWallet])
 
   if (isLoading) return <SplashScreen />
 
@@ -58,6 +70,7 @@ export function App() {
       <Route path="/add-funds" element={<ProtectedRoute><AddFunds /></ProtectedRoute>} />
       <Route path="/agents" element={<ProtectedRoute><AgentsList /></ProtectedRoute>} />
       <Route path="/agents/:agentId" element={<ProtectedRoute><AgentDetail /></ProtectedRoute>} />
+      <Route path="/transactions" element={<ProtectedRoute><AllTransactions /></ProtectedRoute>} />
       <Route path="/transactions/:txId" element={<ProtectedRoute><TransactionDetail /></ProtectedRoute>} />
       <Route path="/stats" element={<ProtectedRoute><Stats /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
